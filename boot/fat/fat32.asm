@@ -65,7 +65,7 @@ comment |*******************************************************************
 
 outfile 'fat32.bin'                ; target filename
 
-include boot.inc                   ;
+include ../boot.inc                ;
 include fat.inc                    ;
 
 .code                              ;
