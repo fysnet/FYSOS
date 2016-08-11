@@ -58,7 +58,7 @@ comment |*******************************************************************
 
 outfile 'ext2_hd.bin'              ; the target file name
 
-include boot.inc                   ;
+include ..\boot.inc                ;
 include ext2.inc                   ; equates and structures
 
 .code                              ;
