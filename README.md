@@ -60,5 +60,8 @@ Please note that there are other things I have forgotten to mention that you wil
   
 If you find any errors or have any questions, please feel free to send me an email at:
   fys [at] fysnet [dot] net
+
+For more information on how to write an Operating System, have a look at the following book series:
+  http://www.fysnet.net/osdesign_book_series.htm
   
 Ben
