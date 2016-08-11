@@ -51,7 +51,7 @@ comment |*******************************************************************
 
 .model tiny                        ;
 
-include boot.inc                   ;
+include ..\boot.inc                ;
 include lean.inc                   ; equates and structures
 
 outfile 'lean_hd.bin'              ; out file
