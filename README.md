@@ -53,4 +53,9 @@ These files are released as is.
  At this time, the kernel.sys and system.sys files are not included.  However, this boot and loader
   code is written to allow any kernel and system file to be loaded.  Create your own  :-)
   
+ Please note that there are other things I have forgotten to mention that you will need to take
+  into consideration when using this code.  One thing is the 0x400 offset of the kernel file I use,
+  though I don't think it matters here, but do check.  I will make note of things as I update the
+  code and remember other things.
+  
   Ben
