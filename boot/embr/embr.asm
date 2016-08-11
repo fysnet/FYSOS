@@ -28,7 +28,7 @@ comment |*******************************************************************
 * BUILT WITH:   NewBasic Assembler                                         *
 *                 http://www.fysnet/newbasic.htm                           *
 *               NBASM ver 00.26.59                                         *
-*          Command line: nbasm embr<enter>                                 *
+*          Command line: nbasm embr -d<enter>                              *
 *                                                                          *
 * Last Updated: 10 Aug 2016                                                *
 *                                                                          *

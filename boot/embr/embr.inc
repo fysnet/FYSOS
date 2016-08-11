@@ -23,7 +23,7 @@ comment |*******************************************************************
 *            https://github.com/fysnet/FYSOS                               *
 *                                                                          *
 * DESCRIPTION:                                                             *
-*   embr boot code                                                         *
+*   embr EQUates                                                           *
 *                                                                          *
 * BUILT WITH:   NewBasic Assembler                                         *
 *                 http://www.fysnet/newbasic.htm                           *
