@@ -17,45 +17,48 @@ For example, after making the kernel.sys file (currently not included here, but 
  correct place, in this case, 0x00800000.
  See the makehdr.c file for more information on what the command line switches are.
  
- Your kernel file must then have an origin of 0x00800000 and have the first instruction ready to be executed at
-  that location.
+Your kernel file must then have an origin of 0x00800000 and have the first instruction ready to be executed at
+ that location.
   
-These files are released as is.
+These files are released as is:
   Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt
   This code is freeware, not public domain.  Please use respectfully.
 
-  You may:
+You may:
    - use this code for learning purposes only.
    - use this code in your own Operating System development.
    - distribute any code that you produce pertaining to this code
      as long as it is for learning purposes only, not for profit,
      and you give credit where credit is due.
 
-  You may NOT:
+You may NOT:
    - distribute this code for any purpose other than listed above.
    - distribute this code for profit.
 
-  You MUST:
+You MUST:
    - include this whole comment block at the top of this file.
    - include contact information to where the original source is located.
              https://github.com/fysnet/FYSOS
 
- These files are built with the NewBasic Compiler and Assembler
+These files are built with the NewBasic Compiler and Assembler
     http://www.fysnet/newbasic.htm
          NBC   ver 00.20.25
          NBASM ver 00.26.59
 
- You use these files at your own risk.
+You use these files at your own risk.
  
- If you have any questions, please contact me at the email address shown at the top of:
-   http://www.fysnet.net/fysos.htm
-   
- At this time, the kernel.sys and system.sys files are not included.  However, this boot and loader
-  code is written to allow any kernel and system file to be loaded.  Create your own  :-)
+If you have any questions, please contact me at the email address shown at the top of:
+  http://www.fysnet.net/fysos.htm
+ 
+At this time, the kernel.sys and system.sys files are not included.  However, this boot and loader
+ code is written to allow any kernel and system file to be loaded.  Create your own  :-)
   
- Please note that there are other things I have forgotten to mention that you will need to take
-  into consideration when using this code.  One thing is the 0x400 offset of the kernel file I use,
-  though I don't think it matters here, but do check.  I will make note of things as I update the
-  code and remember other things.
+Please note that there are other things I have forgotten to mention that you will need to take
+ into consideration when using this code.  One thing is the 0x400 offset of the kernel file I use,
+ though I don't think it matters here, but do check.  I will make note of things as I update the
+ code and remember other things.
   
-  Ben
+If you find any errors or have any questions, please feel free to send me an email at:
+  fys [at] fysnet [dot] net
+  
+Ben
