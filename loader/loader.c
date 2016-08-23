@@ -452,17 +452,17 @@ _naked int main(void) {
   apm_bios_check(&apm);
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-  // move the 2048 byte block of data to just before the kernel
+  // move the 4096 byte block of data to just before the kernel
   // kernel base should be on a meg boundary and since is a PE file,
   //  will have the first 0x400 bytes free for our use.  Therefore,
-  //  we back up 0x400 from the base and this is how we have 0x800
+  //  we back up 0xC00 from the base and this is how we have 0x1000
   //  bytes of space for use.
   _asm (
     "  cld                     \n"
     "  mov  esi,offset gdtoff  \n"
     "  mov  edi,_kernel_base   \n"
-    "  sub  edi,0400h          \n"
-    "  mov  ecx,(800h>>2)      \n"
+    "  sub  edi,0C00h          \n"
+    "  mov  ecx,(1000h>>2)     \n"
     "@@: lodsd                 \n"
     "  mov  fs:[edi],eax       \n"
     "  add  edi,4              \n"
@@ -475,7 +475,7 @@ _naked int main(void) {
   _asm (
     "  mov  esi,offset act_gdt \n"
     "  mov  edi,[gdtoff+2]     \n"
-    "  mov  cx,((3 * 8) >> 2)  \n"
+    "  mov  ecx,((3 * 8) >> 2) \n"
     "@@: lodsd                 \n"
     "  mov  fs:[edi],eax       \n"
     "  add  edi,4              \n"
@@ -570,6 +570,9 @@ _naked int main(void) {
     "  mov  eax,cr4  \n"
     "  and  al,(~3)  \n"
     "  mov  cr4,eax  \n"
+    "  ; we need to add to _kernel_base now, before we\n"
+    "  ; change the ds register/selector below.\n"
+    "  add  dword _kernel_base,400h  \n"
   );
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -597,8 +600,6 @@ _naked int main(void) {
   // Here is the jump.
   // We will jump to physical address 'kernel_base' + 400h
   _asm (
-    "  add  dword _kernel_base,400h  \n"
-    "                                \n"
     "             db  0EAh           \n"
     "_kernel_base dd  ?  ; *in* pmode, so *dword* sized \n"
     "             dw  " #FLATCODE "  \n"
@@ -820,6 +821,7 @@ bool get_memory(struct S_MEMORY *memory) {
     memory->block[memory->blocks].size[0] = bios_memE820->size[0];
     memory->block[memory->blocks].size[1] = bios_memE820->size[1];
     memory->block[memory->blocks].type = bios_memE820->type;
+    memory->block[memory->blocks].attrib = 0;
     
     // add to the accumulator
     add64(memory->size, memory->block[memory->blocks].size);
@@ -2405,11 +2407,12 @@ bit32u crc32_reflect(bit32u reflect, char ch) {
 
 bit32u crc32(void *data, bit32u len) {
   bit32u crc = 0xFFFFFFFF;
-  crc32_partial(&crc, (bit8u *) data, len);
+  crc32_partial(&crc, data, len);
   return (crc ^ 0xFFFFFFFF);
 }
 
-void crc32_partial(bit32u *crc, bit8u *data, bit32u len) {
+void crc32_partial(bit32u *crc, void *ptr, bit32u len) {
+  bit8u *data = (bit8u *) ptr;
   while (len--)
     *crc = (*crc >> 8) ^ crc32_table[(*crc & 0xFF) ^ *data++];
 }
@@ -2455,7 +2458,7 @@ _asm (
 );
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-//  This is the 2048 byte block that we will move to ('kernel_base'-0400h) for
+//  This is the 4096 byte block that we will move to ('kernel_base'-0C00h) for
 //  the kernel.sys file *after we load the kernel.sys file*
 // ***** don't forget to update S_LOADER in fysos.h ************
 #pragma pack(push, 1)
@@ -2489,30 +2492,30 @@ _asm (
   " \n"
 );
 
-struct S_BOOT_DATA boot_data; // booted data                                         //  48
-bit8u  resv0[32];             // reserved                                            //  32
-struct S_BIOS_PCI bios_pci;   // PCI information from the BIOS                       //   8
-bit32u org_int1e;             // original INT1Eh address                             //   4
-struct S_FLOPPY1E floppy_1e;  // floppies status                                     //  11
-struct S_TIME time;         // current time passed to kernel                         //  14
-struct S_APM apm;           // Advanced Power Management                             //  44
-bit8u  resv1[3];            // dword alignment                                       //   3
-bit16u bios_equip;          // bios equipment list at INT 11h (or 0040:0010h)        //   2
-bit8u  kbd_bits;            // bits at 0x00417                                       //   1
-struct S_MEMORY memory;     // memory blocks returned by INT 15h memory services     // 172
-bit8u  a20_tech;            // the technique number used to enable the a20 line      //   1
-bit8u  vesa_video[VESA_INFO_SIZE]; // the vesa video informtion from int 10h/4f00h   // 256
-bit16u vesa_modes[VESA_MODE_SIZE]; // 63 16-bit mode values + ending 0FFFFh          // 128
-bit8u  vesa_oem_name[33];   // 32 + null vesa oem name string                        //  33
-bit8u  resv2[41];           // reserved                                              //  41
-struct S_DRV_PARAMS drive_params[10];  // up to 10 hard drive parameter tables       // 960
-bit8u  padding[278];        // padding to 2048 bytes                                 // 278
+struct S_BOOT_DATA boot_data; // booted data                                         //   48
+bit8u  resv0[32];             // reserved                                            //   32
+struct S_BIOS_PCI bios_pci;   // PCI information from the BIOS                       //    8
+bit32u org_int1e;             // original INT1Eh address                             //    4
+struct S_FLOPPY1E floppy_1e;  // floppies status                                     //   11
+struct S_TIME time;         // current time passed to kernel                         //   14
+struct S_APM apm;           // Advanced Power Management                             //   44
+bit8u  resv1[3];            // dword alignment                                       //    3
+bit16u bios_equip;          // bios equipment list at INT 11h (or 0040:0010h)        //    2
+bit8u  kbd_bits;            // bits at 0x00417                                       //    1
+struct S_MEMORY memory;     // memory blocks returned by INT 15h memory services     // 1164
+bit8u  a20_tech;            // the technique number used to enable the a20 line      //    1
+bit8u  vesa_video[VESA_INFO_SIZE]; // the vesa video informtion from int 10h/4f00h   //  256
+bit16u vesa_modes[VESA_MODE_SIZE]; // 63 16-bit mode values + ending 0FFFFh          //  128
+bit8u  vesa_oem_name[33];   // 32 + null vesa oem name string                        //   33
+bit8u  resv2[41];           // reserved                                              //   41
+struct S_DRV_PARAMS drive_params[10];  // up to 10 hard drive parameter tables       //  960
+bit8u  padding[1334];       // padding to 4096 bytes                                 // 
 
 #pragma pack(pop)
 
 _asm (
-  ".ifne ($ - gdtoff) 2048                            \n"
-  " %error 1 'transfer block not 2048 bytes in size'  \n"
+  ".ifne ($ - gdtoff) 4096                            \n"
+  " %error 1 'transfer block not 4096 bytes in size'  \n"
   " %print ($ - gdtoff)                               \n"
   ".endif                                             \n"
   " \n"
