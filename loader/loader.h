@@ -98,7 +98,7 @@ void put_progress(const bit32u lo, const bit32u hi);
 
 void crc32_initialize(void);
 bit32u crc32(void *, bit32u);
-void crc32_partial(bit32u *, bit8u *, bit32u);
+void crc32_partial(bit32u *, void *, bit32u);
 bit32u crc32_reflect(bit32u, char);
 
 struct REGS {
@@ -144,7 +144,8 @@ struct S_MEMORY {
      bit32u base[2];
      bit32u size[2];
      bit32u type;
-   } block[8];
+     bit32u attrib;
+   } block[48];
 };
 
 struct S_BIOS_PCI {
