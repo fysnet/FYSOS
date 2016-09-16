@@ -238,6 +238,9 @@ _naked int main(void) {
   // initialize the crc32 stuff
   crc32_initialize();
   
+  // mark that we use a Legacy BIOS
+  bios_type = 'BIOS';
+  
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // now we need to make sure the a20 line is active
   //  and save the technique number used
@@ -279,10 +282,10 @@ _naked int main(void) {
     //  (this will give us a stack size of 4meg - (LOADSEG * 4))
     // we also set ds and es to use all of the 4 gig space, with a
     //  base of 0x30000
-    "  mov  eax," #LOADDATA16 "  ; Selector for 4Gb stack seg\n"
+    "  mov  eax," #LOADDATA16 "  ; Selector for 4Gb data seg\n"
     "  mov  ds,ax                ; \n"
     "  mov  es,ax                ; \n"
-    "  mov  eax," #LOADSTACK16 " ; Selector for 4Gb stack seg\n"
+    "  mov  eax," #LOADSTACK16 " ; Selector for 64k stack seg\n"
     "  mov  ss,ax                ; \n"
     "  \n"
     // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -324,10 +327,6 @@ _naked int main(void) {
   get_memory(&memory);
   
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-//  Now get the vesa video info from the BIOS.
-  get_vesa_info(vesa_video);
-  
-// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 //  Now get the PCI information. (Detection only)
   get_pci_info(&bios_pci);
   
@@ -363,17 +362,17 @@ _naked int main(void) {
         ret_size = fs_lean(&boot_data, system_files[main_i], decomp_buf_loc);
         break;
         
-      case FS_EXT2:
-        ret_size = fs_ext2(&boot_data, system_files[main_i], decomp_buf_loc);
-        break;
+//      case FS_EXT2:
+//        ret_size = fs_ext2(&boot_data, system_files[main_i], decomp_buf_loc);
+//        break;
         
       case FS_FYSFS:
         ret_size = fs_fysfs(&boot_data, system_files[main_i], decomp_buf_loc);
         break;
         
-      case FS_EXFAT:
-        ret_size = fs_exfat(&boot_data, system_files[main_i], decomp_buf_loc);
-        break;
+//      case FS_EXFAT:
+//        ret_size = fs_exfat(&boot_data, system_files[main_i], decomp_buf_loc);
+//        break;
         
       default:
         printf("\n1st stage boot sent unknown file system identifier: (%i)", boot_data.file_system);
@@ -451,18 +450,74 @@ _naked int main(void) {
   // see if we have and APM BIOS
   apm_bios_check(&apm);
   
+  // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+  //  Now get the vesa video info from the BIOS.
+  vid_mode_cnt = get_video_info(mode_info);
+  if (vid_mode_cnt > 0) {
+    // see if a key was pressed (F8 maybe) and if so,
+    //  let the user choose a mode, else choose one
+    //  for them
+    cur_vid_index = get_video_mode(mode_info, vid_mode_cnt, 1024, 768, 16);
+    if (cur_vid_index == 0xFFFF)
+      cur_vid_index = get_video_mode(mode_info, vid_mode_cnt, 1024, 768, 15);
+    if (cur_vid_index == 0xFFFF)
+      cur_vid_index = get_video_mode(mode_info, vid_mode_cnt, 800, 600, 16);
+    if ((cur_vid_index == 0xFFFF) || (kbhit() && getscancode() == 0x4200)) {
+      // print the available modes and ask for a selection of one of them.
+      // if there are more modes than will fit on the screen, an 'enter' key
+      //  will scroll to the next page.
+      // the ESC key will exit
+      main_i = 0;
+next_entry:
+      printf("\n");
+      for (main_j=0; main_i<vid_mode_cnt && main_j<23; main_i++) {
+        printf(" %c: %4i x %4i %2i bits\n", main_j + 'A', mode_info[main_i].xres, mode_info[main_i].yres, mode_info[main_i].bits_per_pixel);
+        main_avail[main_j] = main_i;
+        main_j++;
+      }
+      if (main_i < vid_mode_cnt)
+        printf(" ** 'Enter' for more\n");
+      do {
+        printf("Please select a video mode to use [A-%c]: ", main_j + 'A' - 1);
+        main_ch = getscancode();
+        if (main_ch == 0x011B)  { // esc (start over)
+          main_i = 0;
+          goto next_entry;
+        }
+        if ((main_ch == 0x1C0D) && (main_i < vid_mode_cnt)) {
+          printf("\n");
+          goto next_entry;
+        }
+        main_ch = toupper(main_ch & 0xFF);
+        printf("%c\n", main_ch);
+        main_ch -= 'A';
+      } while ((main_ch < 0) || (main_ch >= main_j));
+      cur_vid_index = main_avail[main_ch];
+    }
+  } else {
+    puts("FYSOS requires a VESA capable video card with a Linear Base Frame Buffer...\n");
+    freeze();
+  }
+  
+  //printf(" (%i) %ix%i %i %i 0x%08X\n", 
+  //  cur_vid_index,
+  //  mode_info[cur_vid_index].xres, mode_info[cur_vid_index].yres, 
+  //  mode_info[cur_vid_index].bits_per_pixel, mode_info[cur_vid_index].memory_model,
+  //  mode_info[cur_vid_index].lfb);
+  //freeze();
+  
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-  // move the 4096 byte block of data to just before the kernel
+  // move the 1400h byte block of data to just before the kernel
   // kernel base should be on a meg boundary and since is a PE file,
   //  will have the first 0x400 bytes free for our use.  Therefore,
-  //  we back up 0xC00 from the base and this is how we have 0x1000
+  //  we back up 0x1000 from the base and this is how we have 0x1400
   //  bytes of space for use.
   _asm (
     "  cld                     \n"
-    "  mov  esi,offset gdtoff  \n"
+    "  mov  esi,offset _gdtoff \n"
     "  mov  edi,_kernel_base   \n"
-    "  sub  edi,0C00h          \n"
-    "  mov  ecx,(1000h>>2)     \n"
+    "  sub  edi,1000h          \n"
+    "  mov  ecx,(1400h>>2)     \n"
     "@@: lodsd                 \n"
     "  mov  fs:[edi],eax       \n"
     "  add  edi,4              \n"
@@ -474,7 +529,7 @@ _naked int main(void) {
   // move the actual GDT entries (first 3)
   _asm (
     "  mov  esi,offset act_gdt \n"
-    "  mov  edi,[gdtoff+2]     \n"
+    "  mov  edi,[_gdtoff+2]    \n"
     "  mov  ecx,((3 * 8) >> 2) \n"
     "@@: lodsd                 \n"
     "  mov  fs:[edi],eax       \n"
@@ -506,15 +561,20 @@ _naked int main(void) {
   floppy_off();
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-  // clear the screen
+  // Change to that screen mode
   // Note: We can no longer simply use INT 10h, since our
   //  stack is a BIG stack.  We must call our interrupter.
-  main_regs.eax = 0x00000003;
+  main_regs.eax = 0x00004F02;
+  main_regs.ebx = mode_info[cur_vid_index].bios_mode_num | (1<<14);
   intx(0x10, &main_regs);
   
+  // if it is 8-bit, we have to set the VGA palette
+  //  we currently assume a VGA compatible
+  if (mode_info[cur_vid_index].bits_per_pixel == 8)
+    vid_set_256_palette(TRUE);
+  
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-  // turn off the cursor.
-  // FYSOS turns it back on after keyboard initialization.
+  // turn off the hardware cursor.
   main_regs.eax = 0x00000103;
   main_regs.ecx = 0x00002000;
   intx(0x10, &main_regs);
@@ -523,7 +583,7 @@ _naked int main(void) {
   // load the actual GDT and IDT
   _asm (
     "  cli             \n"
-    "  lgdtf [gdtoff]  \n"
+    "  lgdtf [_gdtoff]  \n"
     "  lidtf [idtoff]  \n"
   );
   
@@ -547,7 +607,8 @@ _naked int main(void) {
     "still_in_16bit:  \n"
   );
 
-  printf("\nWe didn't make it into pmode...");
+  // screen is in graphics mode...
+  //printf("\nWe didn't make it into pmode...");
   freeze();
 
 #pragma ptype(pmode)  //.pmode
@@ -565,10 +626,10 @@ _naked int main(void) {
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // we need to make sure that CR4.TSD = 0 (bit 2)
   // i.e.: allows the RDTSC instruction
-  // we need to make sure that CR4.VME = 0 (bit 1)
+  // we need to make sure that CR4.VME = 0 (bit 0)
   _asm (
     "  mov  eax,cr4  \n"
-    "  and  al,(~3)  \n"
+    "  and  al,(~5)  \n"
     "  mov  cr4,eax  \n"
     "  ; we need to add to _kernel_base now, before we\n"
     "  ; change the ds register/selector below.\n"
@@ -608,12 +669,14 @@ _naked int main(void) {
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   //  Kernel file should have taken over from here
   //   but to be sure
-  printf("\n We didn't make it dude...");
+  // screen is in graphics mode...
+  //printf("\n We didn't make it dude...");
   freeze();
 } // end of _main()
 
 // remain global
-int main_i, ret_size;
+int main_i, main_j, main_avail[24], ret_size;
+bit16u main_ch;
 struct REGS main_regs;
 struct S_LDR_HDR farF *ldr_hdr;
 
@@ -742,6 +805,7 @@ _naked bool is_64bit_cpu() {
 // TODO: use a cs: override on saved_esp incase we need to pass ds to a service.
 #define SMALL_STACK_SIZE 1024  // INT 1Ah/B101h may require up to 1024 bytes
 bit32u saved_esp;
+_asm ( ".align 4" );
 bit8u  small_stack[SMALL_STACK_SIZE];
 bool intx(int i, struct REGS *regs) {
   _asm (
@@ -780,7 +844,7 @@ bool intx(int i, struct REGS *regs) {
 // 
 // get the memory size from the bios (int 15h/e820/e801/88 or cmos)
 bool get_memory(struct S_MEMORY *memory) {
-  bit32u temp[2] = { 0, 0 };
+  bit32u temp[2];
   int  i;
   bool r, present;
   struct REGS regs;
@@ -821,7 +885,8 @@ bool get_memory(struct S_MEMORY *memory) {
     memory->block[memory->blocks].size[0] = bios_memE820->size[0];
     memory->block[memory->blocks].size[1] = bios_memE820->size[1];
     memory->block[memory->blocks].type = bios_memE820->type;
-    memory->block[memory->blocks].attrib = 0;
+    memory->block[memory->blocks].attrib[0] = 0;
+    memory->block[memory->blocks].attrib[1] = 0;
     
     // add to the accumulator
     add64(memory->size, memory->block[memory->blocks].size);
@@ -861,6 +926,7 @@ bool get_memory(struct S_MEMORY *memory) {
     }
     
     temp[0] = regs.eax + (1 << 20);  // add a meg for the first meg of the address space
+    temp[1] = 0;
     add64(memory->size, temp);
     temp[0] = regs.ebx;
     add64(memory->size, temp);
@@ -945,13 +1011,116 @@ check_mem_limits:
   return TRUE;
 }
 
-bool get_vesa_info(bit8u *vesa_info) {
+bool kbhit(void) {
+  struct REGS regs;
+  
+  regs.eax = 0x00000100;
+  intx(0x16, &regs);
+  return (regs.eflags & (1<<6)) == 0;
+}
+
+bit16u getscancode(void) {
+  struct REGS regs;
+  
+  regs.eax = 0x00000000;
+  intx(0x16, &regs);
+  return (bit16u) (regs.eax & 0x0000FFFF);
+}
+
+/*  vsync()
+ *     no parameters
+ * 
+ *   wait for the vertical sync to start
+ */
+void vsync(void) {
+  // wait until any previous retrace has ended
+  while (inpb(0x3DA) & (1<<3));
+  
+  // wait until a new retrace has just begun
+  while (!(inpb(0x3DA) & (1<<3)));
+}
+
+/*  vid_set_256_palette()
+ *         port_io = use port I/O
+ *
+ *  this sets the 256 bpp mode palette
+ *  if the card isn't VGA compatible, we have
+ *   to use the VESA BIOS to set the palette
+ *
+ *  The RGB components can be 0 - 63 each, with 256 entries
+ *   within the table to choose from.
+ */
+void vid_set_256_palette(const bool port_io) {
+  int i;
+  //bit8u palette256_info[256 * 4], *p;
+  //struct REGS regs;
+  
+  // some controllers are not VGA compatible
+  //if (port_io) {
+    // wait for the retrace to start (older video cards require this)
+    vsync();
+    // mode is VGA compatible, so use the VGA regs
+    for (i=0; i<255; i++) {
+      outpb(0x3C8, (bit8u) i);
+      outpb(0x3C9, (bit8u) (i & 0xE0) >> 2);
+      outpb(0x3C9, (bit8u) (i & 0x1C) << 1);
+      outpb(0x3C9, (bit8u) (i & 0x03) << 4);
+    }
+    // white
+    outpb(0x3C8, (bit8u) 255);
+    outpb(0x3C9, 0xFF);
+    outpb(0x3C9, 0xFF);
+    outpb(0x3C9, 0xFF);
+  //} else {
+    /*
+    // must use VBE to set the DAC (palette)
+    
+    // ax = 0x4F09
+    // bl = 0x80  set palette info while vertical retrace
+    // cx = number of registers (256)
+    // dx = start (0)
+    // es:di -> address to buffer
+    //  buffer is:
+    //    {
+    //     db  blue
+    //     db  green
+    //     db  red
+    //     db  resv
+    //    } [256];
+    
+    p = palette256_info;
+    for (i=0; i<255; i++) {
+      *p++ = (bit8u) (i & 0xE0) >> 2;
+      *p++ = (bit8u) (i & 0x1C) << 1;
+      *p++ = (bit8u) (i & 0x03) << 4;
+      *p++ = 0;
+    }
+    // white
+    *p++ = 0xFF;
+    *p++ = 0xFF;
+    *p++ = 0xFF;
+    *p++ = 0;
+    
+    // call the service
+    regs.edi = palette256_info;
+    regs.eax = 0x00004F09;
+    regs.ebx = 0x00000080;
+    regs.ecx = 256;
+    regs.edx = 0;
+    intx(0x10, &regs);
+    */
+  //}
+}
+
+bit16u get_video_info(struct S_MODE_INFO *modeinfo) {
+  int i, j;
   bit16u *p;
   struct REGS regs;
+  bit16u vesa_modes[VESA_MODE_SIZE];
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // clear the buffer first
-  memset(vesa_info, 0, VESA_INFO_SIZE);
+  memset(local_buffer, 0, 256);
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // call the BIOS, first setting the first 4 bytes to 'VBE2'
@@ -961,8 +1130,7 @@ bool get_vesa_info(bit8u *vesa_info) {
   regs.eax = 0x00004F00;
   intx(0x10, &regs);
   if ((regs.eax & 0x0000FFFF) != 0x004F)
-    memset(local_buffer, 0, 4);
-  memcpy(vesa_info, local_buffer, VESA_INFO_SIZE);
+    return 0;
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // now get the supported modes.  We have to do this incase
@@ -972,15 +1140,48 @@ bool get_vesa_info(bit8u *vesa_info) {
   vesa_modes[(VESA_MODE_SIZE - 1)] = 0xFFFF;
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-  // now get the oem name.  We have to do this incase the BIOS
-  // builds the list on the fly.
-  p = (bit16u *) (local_buffer + 0x06);
-  memcpy_ds(vesa_oem_name, (void *) p[0], p[1], 32);
-  vesa_oem_name[32] = 0;
-  
-  // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-  // since we got the modes, let's zero out the mode list ptr
-  *((bit32u *) (vesa_info + 0x0E)) = 0x00000000;
+  // Now scroll through the list of modes to see if we find any
+  //  capable for our use.
+  i = 0; j = 0;
+  struct S_VIDEO_MODE_INFO *info = (struct S_VIDEO_MODE_INFO *) local_buffer;
+  while (vesa_modes[i] < 0xFFFF) {
+    memset(info, 0, sizeof(struct S_VIDEO_MODE_INFO));
+    regs.eax = 0x00004F01;
+    regs.ecx = vesa_modes[i];
+    regs.edi = info;
+    intx(0x10, &regs);
+    if ((regs.eax & 0x0000FFFF) == 0x004F) {
+      if ((info->mode_attrb & 0x01) &&  // supported by the current hardware (video card and monitor)
+          (info->bits_pixel >= 8) &&
+         ((info->mode_attrb & (1<<7)) && (info->linear_base > 0)) &&
+        (
+          (info->memory_model == 4) || // model = 4 = packed pixel
+          (info->memory_model == 6)    // model = 6 = direct color
+        )
+       ) {
+        modeinfo[j].lfb = info->linear_base;
+        modeinfo[j].xres = info->x_res;
+        modeinfo[j].yres = info->y_res;
+        modeinfo[j].bytes_per_scanline = info->bytes_scanline;
+        modeinfo[j].bits_per_pixel = info->bits_pixel;
+        modeinfo[j].bios_mode_num = vesa_modes[i];
+        modeinfo[j].memory_model = info->memory_model;
+        if (++j == VIDEO_MAX_MODES)
+          break;
+      }
+    }
+    i++;
+  }
+  return j;
+}
+
+// see if there is a mode in the list of modes that matches the resolution indicated
+//  and return that index if so.
+bit16u get_video_mode(struct S_MODE_INFO *modeinfo, bit16u cnt, int x, int y, int bits) {
+  for (bit16u i=0; i<cnt; i++)
+    if ((modeinfo[i].xres == x) && (modeinfo[i].yres == y) && (modeinfo[i].bits_per_pixel == bits))
+      return i;
+  return 0xFFFF;
 }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -1148,6 +1349,12 @@ int read_sectors(bit32u lba, const int cnt, const void *buffer) {
   int count = cnt;
   bit8u *p = (bit8u *) buffer;
   
+  _asm (
+    "  push es              \n"
+    "  mov  ax," #LOADSEG  "\n"
+    "  mov  es,ax           \n"
+  );
+  
   if (large_disk) {
     while (count) {
       long_packet.size = sizeof(struct S_READ_PACKET);
@@ -1159,6 +1366,7 @@ int read_sectors(bit32u lba, const int cnt, const void *buffer) {
       add64(long_packet.lba, boot_data.base_lba);
       regs.eax = 0x00004200;
       regs.edx = boot_data.drive;
+      regs.esi = &long_packet;
       if (intx(0x13, &regs))
         break;
       
@@ -1170,12 +1378,6 @@ int read_sectors(bit32u lba, const int cnt, const void *buffer) {
       lba++;
     }
   } else {
-    _asm (
-      "  push es              \n"
-      "  mov  ax," #LOADSEG  "\n"
-      "  mov  es,ax           \n"
-    );
-    
     /* It is unknown if the BIOS can span heads and cylinders, so we just read all (remaining) sectors
      * from the current track.  For example, if we start on sector 5, and there are 18 spt, we read
      * sectors 5 through 18 as long as count requires that many.  This is faster than reading a single
@@ -1204,9 +1406,9 @@ int read_sectors(bit32u lba, const int cnt, const void *buffer) {
       ret += scnt;
       lba += scnt;
     }
-    
-    _asm ("  pop  es \n");
   }
+  
+  _asm ("  pop  es \n");
   
   return ret;
 }
@@ -1362,7 +1564,7 @@ also look at
  // say so and freeze.
  printf("\nUnable to set the a20 line.  Halting..."
         "\nPlease report this to me at fys@fysnet.net"
-        "\nAlso include as much information about your computer"
+        "\nInclude as much information about your computer"
         "\n along with brand and version of BIOS."
         "\n"
         "\nThank you.");
@@ -1593,9 +1795,9 @@ bit32u calc_crc(void *location, const int size) {
 // include the file system code
 #include "fat.c"
 #include "lean.c"
-#include "ext2.c"
+//#include "ext2.c"
 #include "fysfs.c"
-#include "exfat.c"
+//#include "exfat.c"
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // We need to move the current INT 1Eh table to RAM
@@ -2090,8 +2292,9 @@ int puts(const char *s) {
 
 void freeze(void) {
   _asm (
+    "halt: \n"
     "  hlt\n"
-    "  jmp short $\n"
+    "  jmp short halt\n"
   );
 }
 
@@ -2193,11 +2396,16 @@ int stricmp(const char *targ, const char *src) {
 	const bit8u *t = (const bit8u *) targ;
   const bit8u *s = (const bit8u *) src;
   
-	while (tolower(*t) == tolower(*s++))
+  while (tolower(*t) == tolower(*s)) {
 		if (*t++ == '\0')
 			return 0;
+    s++;
+  }
   
-	return (tolower(*t) - tolower(*s));  
+  if (tolower(*t) < tolower(*s))
+    return -1;
+  else
+    return 1;
 }
 /*
 unsigned char __chartype__[1 + 256] = {
@@ -2439,7 +2647,7 @@ _asm (
   "            db     8Fh     ; |   F (limit), avl = 0, 0, 16-bit, gran = 1    \n"
   "            db     00h     ; /                                           \n"
   " \n"
-  "            ; stack16 desc                         \n"
+  "            ; stack16 desc  ; LOADSTACK16  \n"
   "            dw  0FFFFh     ; -------------> limit 4gig + (byte below)   \n"
   "            dw   0000h     ; ______/------> base at LOADSEG             \n"
   "            db     03h     ; /----/                                     \n"
@@ -2447,7 +2655,7 @@ _asm (
   "            db    0CFh     ; |   F (limit), avl = 0, 0, 32-bit, gran = 1    \n"
   "            db     00h     ; /                                           \n"
   " \n"
-  "            ; loaddata16 desc                      \n"
+  "            ; loaddata16 desc  ; LOADDATA16  \n"
   "            dw  0FFFFh     ; -------------> limit 4gig + (byte below)   \n"
   "            dw   0000h     ; ______/------> base at LOADSEG             \n"
   "            db     03h     ; /----/                                     \n"
@@ -2484,7 +2692,7 @@ _asm (
   "  db     00h     ;/  \n"
 
   " .para  ; make sure to align on a 16-byte boundary  \n"
-  "gdtoff     dw  ((256*8)-1)         ; Address of our GDT    \n"
+  "_gdtoff    dw  ((256*8)-1)         ; Address of our GDT    \n"
   "           dd  00110000h           ;  KERN_GDT in memory.h \n"
   " \n"
   "idtoff     dw  ((256*8)-1)         ; 256 = number of interrupts we allow  \n"
@@ -2492,6 +2700,9 @@ _asm (
   " \n"
 );
 
+bit32u bios_type;             // 'BIOS' = legacy BIOS, 'UEFI' = UEFI booted          //    4
+bit32u uefi_image_handle;     // UEFI Image Handle                                   //    4
+bit32u uefi_system_table;     // UEFI System Table Pointer                           //    4
 struct S_BOOT_DATA boot_data; // booted data                                         //   48
 bit8u  resv0[32];             // reserved                                            //   32
 struct S_BIOS_PCI bios_pci;   // PCI information from the BIOS                       //    8
@@ -2504,19 +2715,19 @@ bit16u bios_equip;          // bios equipment list at INT 11h (or 0040:0010h)   
 bit8u  kbd_bits;            // bits at 0x00417                                       //    1
 struct S_MEMORY memory;     // memory blocks returned by INT 15h memory services     // 1164
 bit8u  a20_tech;            // the technique number used to enable the a20 line      //    1
-bit8u  vesa_video[VESA_INFO_SIZE]; // the vesa video informtion from int 10h/4f00h   //  256
-bit16u vesa_modes[VESA_MODE_SIZE]; // 63 16-bit mode values + ending 0FFFFh          //  128
-bit8u  vesa_oem_name[33];   // 32 + null vesa oem name string                        //   33
-bit8u  resv2[41];           // reserved                                              //   41
+bit16u vid_mode_cnt;        // count of video mode info blocks found                 //    2
+bit16u cur_vid_index;       // index into mode_info[] of chosen/default/current mode //    2
+struct S_MODE_INFO mode_info[VIDEO_MAX_MODES]; // video modes information for kernel             //   VIDEO_MAX_MODES * 16
+bit8u  resv2[29];           // reserved                                              //   29
 struct S_DRV_PARAMS drive_params[10];  // up to 10 hard drive parameter tables       //  960
-bit8u  padding[1334];       // padding to 4096 bytes                                 // 
+bit8u  padding[2067];       // padding to 4096 bytes                                 // 
 
 #pragma pack(pop)
 
 _asm (
-  ".ifne ($ - gdtoff) 4096                            \n"
-  " %error 1 'transfer block not 4096 bytes in size'  \n"
-  " %print ($ - gdtoff)                               \n"
+  ".ifne ($ - _gdtoff) 1400h                          \n"
+  " %error 1 'transfer block not 1400h bytes in size' \n"
+  " %print ($ - _gdtoff)                              \n"
   ".endif                                             \n"
   " \n"
 );
@@ -2567,3 +2778,4 @@ int puts16(const char *s) {
 //  (18 sectors per track is a 1.44meg)
 // (however, we are near the 64k limit here, so we limit it to LOCAL_BUFF_SECT_SIZE sectors)
 bit8u local_buffer[LOCAL_BUFF_SECT_SIZE * 512];
+

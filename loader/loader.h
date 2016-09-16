@@ -79,6 +79,8 @@ bit8u set_a20_line();
 bool test_a20();
 extern bit8u a20_tech;
 
+extern bit32u bios_type;
+
 bool wait_kbd_status(const int);
 
  bit8u inpb(int);
@@ -144,7 +146,7 @@ struct S_MEMORY {
      bit32u base[2];
      bit32u size[2];
      bit32u type;
-     bit32u attrib;
+     bit32u attrib[2];
    } block[48];
 };
 
@@ -166,12 +168,77 @@ bool get_memory(struct S_MEMORY *);
 
 bool intx(const int, struct REGS *);
 
-#define VESA_INFO_SIZE  256
+bool kbhit(void);
+bit16u getscancode(void);
+
+#define VIDEO_MAX_MODES  32
 #define VESA_MODE_SIZE  64
-extern bit8u vesa_video[];
-extern bit16u vesa_modes[];
-extern bit8u  vesa_oem_name[];
-bool get_vesa_info(bit8u *);
+
+struct S_VIDEO_MODE_INFO {
+  bit16u mode_attrb;           // mode attributes
+  bit8u  wina_attrb;           // window A attributes
+  bit8u  winb_attrb;           // window B attributes
+  bit16u win_granularity;      // window granularity (in k)
+  bit16u win_size;             // window size
+  bit16u wina_segment;         // window A start segment
+  bit16u winb_segment;         // window B start segment
+  bit32u win_func_ptr;         // pointer to window function
+  bit16u bytes_scanline;       // bytes per scan line
+  bit16u x_res;                // horizontal resolution
+  bit16u y_res;                // vertical resolution
+  bit8u  x_char_size;          // character cell width
+  bit8u  y_char_size;          // character cell height
+  bit8u  num_planes;           // number of memory planes
+  bit8u  bits_pixel;           // bits per pixel
+  bit8u  num_banks;            // number of banks
+  bit8u  memory_model;         // memory model type
+  bit8u  bank_size;            // bank size in kb
+  bit8u  num_image_pages;      // number of images
+  bit8u  resv1;                // reserved for page function
+  bit8u  red_mask_size;        // size of direct color red mask in bits
+  bit8u  red_field_pos;        // bit position of LSB of red mask
+  bit8u  green_mask_size;      // size of direct color green mask in bits
+  bit8u  green_field_pos;      // bit position of LSB of green mask
+  bit8u  blue_mask_size;       // size of direct color blue mask in bits
+  bit8u  blue_field_pos;       // bit position of LSB of blue mask
+  bit8u  rsvd_mask_size;       // size of direct color reserved mask in bits
+  bit8u  rsvd_field_pos;       // bit position of LSB of reserved mask
+  bit8u  direct_color_mode;    // Direct Color mode attributes
+  // vesa 2.0+
+  bit32u linear_base;          // physical address of linear video buffer
+  bit32u offscreen;            // pointer to start of offscreen memory
+  bit16u offscreen_size;       // size of offscreen memory in k's
+  // vesa 3.0+
+  bit16u linear_b_scanline;    // bytes per scan line in linear modes
+  bit8u  num_imgs_banked;      // number of images (less one) for banked video modes
+  bit8u  num_imgs_linear;      // number of images (less one) for linear video modes
+  bit8u  lm_red_mask_s;        // size of direct color red mask (in bits)
+  bit8u  lm_red_mask_pos;      // bit position of red mask LSB (e.g. shift count)
+  bit8u  lm_grn_mask_s;        // size of direct color green mask (in bits)
+  bit8u  lm_grn_mask_pos;      // bit position of green mask LSB (e.g. shift count)
+  bit8u  lm_blue_mask_s;       // size of direct color blue mask (in bits)
+  bit8u  lm_blue_mask_pos;     // bit position of blue mask LSB (e.g. shift count)
+  bit8u  lm_resv_mask_s;       // size of direct color reserved mask (in bits)
+  bit8u  lm_resv_mask_pos;     // bit position of reserved mask LSB (e.g. shift count)
+  bit32u max_pixel_cnt;        // maximum pixel clock for graphics video mode, in Hz
+  bit8u  resv2[190];           // reserved
+};
+
+struct S_MODE_INFO {
+  bit32u lfb;
+  bit16u xres;
+  bit16u yres;
+  bit16u bytes_per_scanline;
+  bit16u bits_per_pixel;
+  bit16u bios_mode_num;
+  bit8u  memory_model;
+  bit8u  resv;
+};
+extern bit16u vid_mode_cnt;
+extern bit16u cur_vid_index;
+extern struct S_MODE_INFO mode_info[];
+bool get_video_info(struct S_MODE_INFO *);
+bit16u get_video_mode(struct S_MODE_INFO *, bit16u, int, int, int);
 
 extern bool large_disk;
 bool large_disk_support(const int drv);
@@ -187,7 +254,8 @@ struct S_READ_PACKET {
 //                  //  used if DWORD at 04h is FFFFh:FFFFh
 };
 
-extern int main_i;
+extern int main_i, main_j, main_avail[];
+extern bit16u main_ch;
 extern int ret_size;
 extern struct S_LDR_HDR farF *ldr_hdr;
 extern struct REGS main_regs;
@@ -196,6 +264,8 @@ extern char system_files[][11];
 extern bit32u decomp_buf_loc;   // buffer where the compressed file is stored
 extern bit32u decomp_mem_loc;   // buffer ptr to allocated buffers during decompression
 extern bit32u kernel_base;      // base of our kernel, loaded from kernel.sys' header
+
+extern bit16u gdtoff;
 
 int decompressor(const bit32u, const bit32u);
 bit32u calc_crc(const bit32u, const int);
@@ -270,7 +340,8 @@ struct S_LDR_HDR {
   bit32u file_crc;       // uncompressed/moved files crc
   bit8u  comp_type;      // compression type (0=none, 1 = bz2)
   bit8u  hdr_crc;        // byte sum check sum of hdr
-  bit8u  resv[14];       // reserved
+  bit32u file_size;      // size of uncompressed file
+  bit8u  resv[10];       // reserved
 };
 
 struct S_BIOS_DRV_PARAMS {

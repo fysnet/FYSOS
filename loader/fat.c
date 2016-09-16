@@ -107,7 +107,7 @@ int fs_fat(struct S_BOOT_DATA *boot_data, const char *filename, const bit32u buf
   
   // initialize the progress bar
   init_progress(root->filesize);
-  
+
   while (cur_clust < 0xFFFFFFFF) {
     clust_cnt = 1;
     next_clust = cur_clust;
@@ -174,11 +174,11 @@ bit32u fat_get_next_cluster(struct S_BOOT_DATA *boot_data, bit32u cur_clust) {
       test = 0x0FF8;
       break;
     case FS_FAT16:
-      cur_clust = * (bit16u farG *) cur_clust;
+      cur_clust = * (bit16u farG *) (cur_clust * 2);
       test = 0xFFF8;
       break;
     case FS_FAT32:
-      cur_clust = * (bit32u farG *) (cur_clust << 1);
+      cur_clust = * (bit32u farG *) (cur_clust * 4);
       test = 0x0FFFFFF8;
       break;
   }
