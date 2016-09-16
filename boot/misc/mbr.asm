@@ -106,6 +106,7 @@ PART_ENTRY ends
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; Now move out of the way, so later we can load
            ;  the partition's boot code to here
+           mov  ax,ds
            mov  es,ax                   ; set es = ds from above
            cld
            xor  si,si
