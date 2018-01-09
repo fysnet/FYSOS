@@ -2,11 +2,12 @@
 The FYSOS Operating System
   http://www.fysnet.net/fysos.htm
   
-<<< 09 Jan 2018 
-Please note that this code is outdated compared to the documentation within the books.
-Please watch for updates soon as well as my blog for updates. 
-http://www.fysnet.net/blog/index.html
-<<<
+=-=-=-=-=-<br />
+09 Jan 2018<br />
+Please note that this code is outdated compared to the documentation within the books.<br />
+Please watch for updates soon as well as my blog for updates.<br />
+http://www.fysnet.net/blog/index.html<br />
+=-=-=-=-=-
 
 The included files are the boot process for the FYSOS Operating System.
 
