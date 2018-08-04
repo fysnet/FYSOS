@@ -1,53 +1,9 @@
-/***************************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
-*                                                                          *
-*                            FYS OS version 2.0                            *
-* FILE: fysfs.h                                                            *
-*                                                                          *
-* This code is freeware, not public domain.  Please use respectfully.      *
-*                                                                          *
-* You may:                                                                 *
-*  - use this code for learning purposes only.                             *
-*  - use this code in your own Operating System development.               *
-*  - distribute any code that you produce pertaining to this code          *
-*    as long as it is for learning purposes only, not for profit,          *
-*    and you give credit where credit is due.                              *
-*                                                                          *
-* You may NOT:                                                             *
-*  - distribute this code for any purpose other than listed above.         *
-*  - distribute this code for profit.                                      *
-*                                                                          *
-* You MUST:                                                                *
-*  - include this whole comment block at the top of this file.             *
-*  - include contact information to where the original source is located.  *
-*            https://github.com/fysnet/FYSOS                               *
-*                                                                          *
-* DESCRIPTION:                                                             *
-*   #defines for fysfs.c                                                   *
-*                                                                          *
-* BUILT WITH:   NewBasic Compiler and Assembler                            *
-*                 http://www.fysnet/newbasic.htm                           *
-*               NBC   ver 00.20.25                                         *
-*          Command line: nbc loader<enter>                                 *
-*               NBASM ver 00.26.59                                         *
-*          Command line: nbasm loader loader.sys -d<enter>                 *
-*                                                                          *
-* Last Updated: 10 Aug 2016                                                *
-*                                                                          *
-****************************************************************************
-* Notes:                                                                   *
-*                                                                          *
-*  If we modify this file, we need to modify the fysfs.inc file to match   *
-*                                                                          *
-***************************************************************************/
 
 #ifndef _FYSFS_H
 #define _FYSFS_H
 
-// boot_data:
-//   root_loc = far pointer to root (seg:off with off in low word and seg in high word of dword)
-//  other_loc = far pointer to super (seg:off with off in low word and seg in high word of dword) (seg: is assumed same a root_loc)
-
+#include "loader.h"
+#include "sys.h"      // for S_GUID
 
 #pragma pack(push, 1)
 
@@ -126,13 +82,15 @@ struct S_FYSFS_CONT {
 
 #pragma pack(pop)
 
-bool fysfs_get_name(const int, char *, const struct S_FYSFS_ROOT farE *);
+struct S_FYSFS_DATA {
+  void *super;
+  void *root_dir;
+};
+
+bool fysfs_load_data(struct S_FYSFS_DATA *);
+
+bool fysfs_get_name(const int, char *, const struct S_FYSFS_ROOT *);
 bool fysfs_good_crc(void *);
-int fysfs_get_fat_entries(int, bit32u *, const struct S_FYSFS_ROOT farE *);
+int fysfs_get_fat_entries(int, bit32u **, int, const struct S_FYSFS_ROOT *);
 
-
-
-
-
-#endif  // _FYSFS_H
-
+#endif   // _FYSFS_H

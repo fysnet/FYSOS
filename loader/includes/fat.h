@@ -1,58 +1,63 @@
-/***************************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
-*                                                                          *
-*                            FYS OS version 2.0                            *
-* FILE: fat.h                                                              *
-*                                                                          *
-* This code is freeware, not public domain.  Please use respectfully.      *
-*                                                                          *
-* You may:                                                                 *
-*  - use this code for learning purposes only.                             *
-*  - use this code in your own Operating System development.               *
-*  - distribute any code that you produce pertaining to this code          *
-*    as long as it is for learning purposes only, not for profit,          *
-*    and you give credit where credit is due.                              *
-*                                                                          *
-* You may NOT:                                                             *
-*  - distribute this code for any purpose other than listed above.         *
-*  - distribute this code for profit.                                      *
-*                                                                          *
-* You MUST:                                                                *
-*  - include this whole comment block at the top of this file.             *
-*  - include contact information to where the original source is located.  *
-*            https://github.com/fysnet/FYSOS                               *
-*                                                                          *
-* DESCRIPTION:                                                             *
-*   #defines for fat.c                                                     *
-*                                                                          *
-* BUILT WITH:   NewBasic Compiler and Assembler                            *
-*                 http://www.fysnet/newbasic.htm                           *
-*               NBC   ver 00.20.25                                         *
-*          Command line: nbc loader<enter>                                 *
-*               NBASM ver 00.26.59                                         *
-*          Command line: nbasm loader loader.sys -d<enter>                 *
-*                                                                          *
-* Last Updated: 10 Aug 2016                                                *
-*                                                                          *
-****************************************************************************
-* Notes:                                                                   *
-*                                                                          *
-*  If we modify this file, we need to modify the fat.inc file to match     *
-*                                                                          *
-***************************************************************************/
-
 #ifndef _FAT_H
 #define _FAT_H
 
-// boot_data:
-//   root_loc = far pointer to root (seg:off with off in low word and seg in high word of dword)
-//  other_loc = far pointer to fat (seg:off with off in low word and seg in high word of dword)
+#include "loader.h"
 
-// size in sectors
-#define  FAT_ROOTSEG_SIZE  32
-#define  FAT_FATSEG_SIZE  127   // 127 * 512 = (65536-512)
 
 #pragma pack(push, 1)
+
+struct S_FAT1216_BPB {
+	bit8u  jmp[3];
+	char   oem_name[8];
+	bit16u bytes_per_sect;
+	bit8u  sect_per_clust;
+	bit16u sect_reserved;
+	bit8u  fats;
+	bit16u root_entrys;
+	bit16u sectors;
+	bit8u  descriptor;
+	bit16u sect_per_fat;
+	bit16u sect_per_trk;
+	bit16u heads;
+	bit32u hidden_sects;
+	bit32u sect_extnd;
+	bit8u  drive_num;  // not FAT specific
+	bit8u  resv;
+	bit8u  sig;
+	bit32u serial;
+	char   label[11];
+	char   sys_type[8];
+};
+
+struct S_FAT32_BPB {
+	bit8u  jmp[3];
+	char   oem_name[8];
+	bit16u bytes_per_sect;
+	bit8u  sect_per_clust;
+	bit16u sect_reserved;
+	bit8u  fats;
+	bit16u root_entrys;
+	bit16u sectors;
+	bit8u  descriptor;
+	bit16u sect_per_fat;
+	bit16u sect_per_trk;
+	bit16u heads;
+	bit32u hidden_sects;
+	bit32u sect_extnd;
+	bit32u sect_per_fat32;
+	bit16u ext_flags;      // bit 8 = write to all copies of FAT(s).  bit0:3 = which fat is active
+	bit16u fs_version;
+	bit32u root_base_cluster;
+	bit16u fs_info_sec;
+	bit16u backup_boot_sec;
+	bit8u  reserved[12];
+	bit8u  drive_num;       // not FAT specific
+	bit8u  resv;
+	bit8u  sig;
+	bit32u serial;
+	char   label[11];
+	char   sys_type[8];
+};
 
 struct S_FAT_ROOT {
   bit8u  name[8];    // name
@@ -75,25 +80,22 @@ struct S_FAT_ROOT {
   bit32u filesize;   // file size in bytes
 };
 
-/*
-struct S_FAT_LFN_ROOT {
-  bit8u  sequ_flags;
-  bit8u  name0[10];
-  bit8u  attrb;
-  bit8u  resv;
-  bit8u  sfn_crc;
-  bit8u  name1[12];
-  bit16u clust_zero;
-  bit8u  name2[4];
-};
-*/
-
-bit32u fat_get_next_cluster(struct S_BOOT_DATA *, bit32u);
-void convert_fat83(struct S_FAT_ROOT farE *, char *);
-
-
-
-
 #pragma pack(pop)
 
-#endif  // _FAT_H
+struct S_FAT_DATA {
+  void *root_dir;
+  void *fat_loc;
+  int  root_entries;
+  int  sec_per_fat;
+  int  sect_per_clust;
+  int  sec_resv;
+  int  num_fats;
+};
+
+
+bool fat_load_data(struct S_FAT_DATA *);
+
+void convert_fat83(const struct S_FAT_ROOT *, char *);
+bit32u fat_get_next_cluster(void *, bit32u);
+
+#endif   // _FAT_H

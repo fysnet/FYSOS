@@ -1,55 +1,10 @@
-/***************************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
-*                                                                          *
-*                            FYS OS version 2.0                            *
-* FILE: ext2.h                                                             *
-*                                                                          *
-* This code is freeware, not public domain.  Please use respectfully.      *
-*                                                                          *
-* You may:                                                                 *
-*  - use this code for learning purposes only.                             *
-*  - use this code in your own Operating System development.               *
-*  - distribute any code that you produce pertaining to this code          *
-*    as long as it is for learning purposes only, not for profit,          *
-*    and you give credit where credit is due.                              *
-*                                                                          *
-* You may NOT:                                                             *
-*  - distribute this code for any purpose other than listed above.         *
-*  - distribute this code for profit.                                      *
-*                                                                          *
-* You MUST:                                                                *
-*  - include this whole comment block at the top of this file.             *
-*  - include contact information to where the original source is located.  *
-*            https://github.com/fysnet/FYSOS                               *
-*                                                                          *
-* DESCRIPTION:                                                             *
-*   #defines for ext2.c                                                    *
-*                                                                          *
-* BUILT WITH:   NewBasic Compiler and Assembler                            *
-*                 http://www.fysnet/newbasic.htm                           *
-*               NBC   ver 00.20.25                                         *
-*          Command line: nbc loader<enter>                                 *
-*               NBASM ver 00.26.59                                         *
-*          Command line: nbasm loader loader.sys -d<enter>                 *
-*                                                                          *
-* Last Updated: 10 Aug 2016                                                *
-*                                                                          *
-****************************************************************************
-* Notes:                                                                   *
-*                                                                          *
-*  If we modify this file, we need to modify the ext2.inc file to match    *
-*                                                                          *
-***************************************************************************/
 
 #ifndef _EXT2_H
 #define _EXT2_H
 
-// boot_data:
-//   root_loc = far pointer to root (seg:off with off in low word and seg in high word of dword)
-//  other_loc = far pointer to super (seg:off with off in low word and seg in high word of dword) (seg: is assumed same a root_loc)
-//      misc0 = root size
-//      misc1 = first group
-//      misc2 = block size
+#include "loader.h"
+#include "sys.h"      // for S_GUID
+
 
 #pragma pack(push, 1)
 
@@ -79,16 +34,6 @@ struct S_EXT2_GROUP_DESC {
   bit16u used_dirs_count_hi;   // Directories count MSB
   bit16u pad;
   bit8u  reserved2[12];
-};
-
-// ex: 3F2504E0-4F89-11D3-9A0C-0305E82C3301
-//       data1    2    3    4     5[6]
-struct S_GUID {
-  bit32u data1;
-  bit16u data2;
-  bit16u data3;
-  bit16u data4;
-  bit8u  data5[6];
 };
 
 struct S_EXT2_SUPER {
@@ -192,8 +137,8 @@ struct S_EXT3_EXTENT {
 #define  EXT2_S_IFCHR   0x2000  // character device 
 #define  EXT2_S_IFIFO   0x1000  // fifo 
 
-#define  EXT4_HUGE_FILE_FL  0x40000  // Set to each huge file
-#define  EXT4_EXTENTS_FL    0x80000  // Inode uses extents
+#define  EXT4_HUGE_FILE_FL  0x00040000  // Set to each huge file
+#define  EXT4_EXTENTS_FL    0x00080000  // Inode uses extents
 
 struct S_EXT2_INODE {
   bit16u mode;
@@ -234,12 +179,19 @@ struct S_EXT2_INODE {
 
 #pragma pack(pop)
 
+int ext2_load_file(struct S_EXT2_INODE *, void *, const bit32u);
+void *ext2_direct(const bit32u *, const bit32u, bit32u *, const int, void *);
+void *ext2_indirect(const bit32u, const bit32u, bit32u *, void *);
 
-#define LARGEST_BLOCK_SIZE   8  // largest block size we support here
-int ext2_load_file(struct S_EXT2_INODE *, const bit32u, const bit32u);
-bit32u ext2_direct(const bit32u *, const bit32u, bit32u *, const int, bit32u farF *);
-bit32u ext2_indirect(const bit32u, const bit32u, bit32u *, bit32u farF *);
+struct S_EXT2_DATA {
+  void *root_dir;     // root directory
+  void *super;        // super block
+  void *group;
+  bit32u root_size;   // in sectors
+  bit32u block_size;  // in sectors
+};
+
+bool ext2_load_data(struct S_EXT2_DATA *);
 
 
-
-#endif  // _EXT2_H
+#endif   // _EXT2_H
