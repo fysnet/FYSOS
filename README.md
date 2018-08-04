@@ -2,13 +2,6 @@
 The FYSOS Operating System
   http://www.fysnet.net/fysos.htm
   
-=-=-=-=-=-<br />
-09 Jan 2018<br />
-Please note that this code is outdated compared to the documentation within the books.<br />
-Please watch for updates soon as well as my blog for updates.<br />
-http://www.fysnet.net/blog/index.html<br />
-=-=-=-=-=-
-
 The included files are the boot process for the FYSOS Operating System.
 
 Within the /boot directory are the boot sector source code files for various techniques and file systems.
@@ -28,7 +21,7 @@ Your kernel file must then have an origin of 0x00800000 and have the first instr
  that location.
   
 These files are released as is:
-  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt
+  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt
   This code is freeware, not public domain.  Please use respectfully.
 
 You may:
@@ -47,11 +40,13 @@ You MUST:
    - include contact information to where the original source is located.
              https://github.com/fysnet/FYSOS
 
-These files are built with the NewBasic Compiler and Assembler
+The assembly files are built with the NewBasic Assembler
     http://www.fysnet/newbasic.htm
-         NBC   ver 00.20.25
          NBASM ver 00.26.59
 
+The C files are built with Alex's SmallerC
+    https://github.com/alexfru/SmallerC
+    
 You use these files at your own risk.
  
 If you have any questions, please contact me at the email address shown at the top of:
