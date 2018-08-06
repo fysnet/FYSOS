@@ -7,6 +7,7 @@
 bit8u inpb(int d) {
   asm (
     "  mov  edx,[ebp+8] \n"
+    "  xor  eax,eax     \n"
     "  in   al,dx       \n"
   );
 }
@@ -14,6 +15,7 @@ bit8u inpb(int d) {
 bit16u inpw(int d) {
   asm (
     "  mov  edx,[ebp+8] \n"
+    "  xor  eax,eax     \n"
     "  in   ax,dx       \n"
   );
 }

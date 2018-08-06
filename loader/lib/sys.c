@@ -32,12 +32,11 @@ void freeze(void) {
 // Return TRUE = carry set
 bool intx(int i, struct REGS *regs) {
   asm (
-    "  pushfd                 ; \n"
-    "  cli                    ; \n"
     "  push ds                ; \n"  // save ds
     "  push es                ; \n"  // save es
     "  mov  eax,[ebp+8]       ; self modify code to interrupt number\n"
     "  mov [dword .intx1 + 1], al\n"
+    "  cpuid                  ; \n"  // self mod code needs serialization...
     "  mov  esi,[ebp+12]      ; \n"
     "  push ebp               ; \n"  // save ebp
     "  push esi               ; \n"  // save the pointer to our regs data
@@ -49,7 +48,7 @@ bool intx(int i, struct REGS *regs) {
     "  mov  ebp,[esi+24]      ; \n"
     "  mov  es,[esi+34]       ; \n"
     "  mov  ds,[esi+32]       ; \n"
-    "  mov  esi,[fs:esi+16]   ; \n"
+    "  mov  esi,[fs:esi+16]   ; \n"  // fs should already be zero (flat at 0x00000000)
     ".intx1:                  ; \n"
     "  int  0                 ; zero will be replaced with value above \n"
     "  xchg esi,[esp]         ; swap the esi values (before and after values) \n"
@@ -69,7 +68,6 @@ bool intx(int i, struct REGS *regs) {
     "  pop  ebp               ; \n"
     "  pop  es                ; \n"
     "  pop  ds                ; \n"
-    "  popfd                  ; \n"
   );
   
   return (bool) (regs->eflags & 1);
@@ -80,10 +78,14 @@ bool intx(int i, struct REGS *regs) {
 //  on entry: nothing
 //  on exit:
 //    returns
-//         0 = 8086, 1 = 186, 2 = 286, 3 = 386,
+//         0 = 8086, 1 = 186, 2 = 286, (see note)
+//         3 = 386+
 //         4 = 486+ without CPUID, 
 //         5 = 486+ with CPUID but not RDTSC,
 //         6 = 486+ with CPUID and RDTSC
+//  Note: we have already checked for at least an 80x386 via the boot code
+//   that loaded this loader.sys file.  i.e.: it won't return less than '3'
+//   since if it was, wouldn't have gotten this far anyway.
 int chk_486(void) {
   asm (
     "  pushf                   ; save the original flags value\n"
@@ -158,6 +160,7 @@ int chk_486(void) {
     "  mov  ax,06              ; is 486+ with CPUID and RDTSC\n"
     "  \n"
     "chk486done: \n"
+    "  movzx eax,ax \n" 
     "  popf                    ; restore the original flags value\n"
   );
 }
@@ -179,21 +182,46 @@ void get_bios_equ_list(bit16u *bios_equip, bit8u *kbd_bits) {
   *kbd_bits = * (bit8u *) 0x00417;
 }
 
+// disable interrupts  (using 'cli')
+bool disable_ints(void) {
+  asm (
+    " pushfd      \n"
+    " cli         \n"
+    " pop  eax    \n"
+    " and  eax,0x00000200 \n"
+    " shr  eax,9  \n"
+  );
+}
+
+// enable interrupts  (using 'sti')
+bool enable_ints(void) {
+  asm (
+    " pushfd      \n"
+    " pop  eax    \n"
+    " and  eax,0x00000200 \n"
+    " shr  eax,9  \n"
+    " sti         \n"
+  );
+}
+
+// restore interrupts  (using 'sti')
+bool restore_ints(const bool state) {
+  if (state) 
+    return enable_ints();
+  return disable_ints();
+}
+
 // hook a BIOS vector
 void *hook_vector(const int i, const void *addr) {
   void *old_isr;
+  bool ints;
   
-  asm (
-    " pushfd  \n"
-    " cli     \n"
-  );
+  ints = disable_ints();
   
   old_isr = (void *) * (bit32u *) (i * sizeof(bit32u));
   * (bit32u *) (i * sizeof(bit32u)) = (((bit32u) addr & 0x000FFFF0) << 12) | ((bit32u) addr & 0xF);
   
-  asm (
-    " popfd   \n"
-  );
+  restore_ints(ints);
   
   return old_isr;
 }
@@ -207,7 +235,7 @@ bool spc_key_F1 = FALSE,  // help screen
      spc_key_F6 = FALSE,  // nothing at this time
      spc_key_F7 = FALSE,  // nothing at this time
      spc_key_F8 = FALSE,  // choose screen mode
-     spc_key_F9 = FALSE;   // stay in text mode
+     spc_key_F9 = FALSE;  // stay in text mode
 
 struct S_SPC_KEYS {
   bit8u keycode;

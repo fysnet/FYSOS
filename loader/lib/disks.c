@@ -314,6 +314,7 @@ void get_drv_parameters(struct S_DRV_PARAMS *drive_params) {
 void floppy_off(void) {
   bit8u *running = (bit8u *) 0x0043F;
   bit8u *status = (bit8u *) 0x00440;
+  bool ints;
   
   if (spc_key_F2)
     para_printf("Ensuring that the floppy motors are off.\n");
@@ -330,17 +331,12 @@ void floppy_off(void) {
     // we need to wait for this to actually happen since
     //  the later 'cli' won't allow the timer tick interrupt to fire
     // make sure the interrupt flag is set or we will wait forever
-    asm (
-      "  pushfd \n"
-      "  sti    \n"
-    );
+    ints = enable_ints();
     
     // TODO: May want to do a timeout or something
     while (*status)
       ;
     
-    asm (
-      "  popf  \n"
-    );
+    restore_ints(ints);
   }
 }

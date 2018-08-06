@@ -316,7 +316,6 @@ bool get_memory(struct S_MEMORY *memory) {
             temp[1] = 0;
             add64(memory->size, temp);
             memory->word = 3; // type goes here
-            asm ( "  pop  es  \n" );  // restore es register
             goto check_mem_limits;
           }
         }
