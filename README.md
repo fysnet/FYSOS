@@ -46,6 +46,7 @@ The assembly files are built with the NewBasic Assembler
 
 The C files are built with Alex's SmallerC
     https://github.com/alexfru/SmallerC
+(Please see the note in the readme file for the EFI code)
     
 You use these files at your own risk.
  
