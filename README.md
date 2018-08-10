@@ -17,7 +17,7 @@ For example, after making the kernel.sys file (currently not included here, but 
  correct place, in this case, 0x00800000.
  See the makehdr.c file for more information on what the command line switches are.
  
-Your kernel file must then have an origin of 0x00800000 and have the first instruction ready to be executed at
+Your kernel file must then have an origin of 0x00800400 and have the first instruction ready to be executed at
  that location.
   
 These files are released as is:
