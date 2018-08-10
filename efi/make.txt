@@ -1,0 +1,23 @@
+-Wall -o boot.efi -stack 65500 -I . -I ./includes -I ./bz2 -pe -pesubsys 11 -entry _efi_main
+
+boot.c
+efi_32.c
+
+./lib/ctype.c
+./lib/conin.c
+./lib/conout.c
+./lib/memory.c
+./lib/stdlib.c
+./lib/string.c
+./lib/video.c
+
+./lib/cpu_io.c
+./lib/file_io.c
+./lib/mouse.c
+./lib/path.c
+./lib/pci.c
+./lib/volume.c
+
+./lib/progress.c
+
+./bz2/loaderbz.c

@@ -1,0 +1,3 @@
+
+
+http://wiki.phoenix.com/wiki/index.php/EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL
