@@ -46,6 +46,26 @@
 #include "video.h"
 #include "volume.h"
 
+/*  The Firmware that QEMU uses, places the firmware code/data at 0x0080000,
+ *   right were we place our Kernel.sys file.  Therefore, we can't use the
+ *   firmware to allocate this memory to copy our kernel.sys file to it.
+ *  However:
+ *  We can't exit boot services, then copy the data to the physical locations,
+ *   because we don't know if we would be overwriting SystemFiles[1].Data with
+ *   SystemFiles[0]'s physical location.  i.e.: The firmware could have allocated
+ *   the space to store another file at SystemFiles[0]'s physical location.
+ *  Luckily, it allocates near top of memory so this doesn't happen.
+ *  Therefore, we can safely move the data *after* we exit boot services.
+ *  However, this is an assumption and a hack just to get QEMU to work.
+ *  
+ *  The best thing to do then is to make kernel.sys relocatable as well as all
+ *   other files we load.  This will be a lot of work to the kernel's source files though...
+ *  
+ *  Uncomment the line below to get this code to work with QEMU.
+ */
+#define DO_QEMU_HACK
+
+
 #if MEM_DEBUG
   wchar_t *efi_memory_types[EfiMaxMemoryType] = {
     L"EfiReservedMemoryType",
@@ -322,14 +342,8 @@ next_entry:
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // copy the files to their physical memory locations
   // (all updates to LOADER block must be done before here)
-  /*
-     Ben: We can't exit boot services, then copy the data to the physical locations,
-          because we don't know if we would be overwriting SystemFiles[1].Data with
-          SystemFiles[0]'s physical location.
-          The best thing to do then is to make kernel.sys relocatable as well as all
-          other files we load.  This will be a lot of work to the kernel.cpp file though...
-   */
   void *PhysAddr;
+#ifndef DO_QEMU_HACK
   for (i=0; i<FILE_COUNT; i++) {
     if (SystemFiles[i].IsKernel) {
       // we need to allocate the page before it too, so that we
@@ -353,6 +367,7 @@ next_entry:
       } else freeze();
     }
   }
+#endif
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // move the actual GDT entries (first 3)
@@ -391,6 +406,22 @@ next_entry:
 //EfiBootServicesData, and EfiConventionalMemory. An EFI-compatible loader and
 //operating system must preserve the memory marked as EfiRuntimeServicesCode and
 //EfiRuntimeServicesData.
+
+#ifdef DO_QEMU_HACK
+  void _memcpy(void *targ, void *src, UINTN len);
+  
+  for (i=0; i<FILE_COUNT; i++) {
+    _memcpy((void *) SystemFiles[i].Target, SystemFiles[i].Data, SystemFiles[i].Size);
+    if (SystemFiles[i].IsKernel) {
+      // move the 0x1400 byte block of data to just before the kernel
+      // kernel base should be on a meg boundary and since is a PE file,
+      //  will have the first 0x400 bytes free for our use.  Therefore,
+      //  we back up 0x1000 from the base and this is how we have 0x1400
+      //  bytes of space for use.
+      _memcpy((void *) (SystemFiles[i].Target - 0x1000), &sys_block.magic0, 0x1400);
+    }
+  }
+#endif
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
