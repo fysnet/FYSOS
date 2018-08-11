@@ -1,6 +1,5 @@
 # FYSOS
-### The FYSOS Operating System
-#### http://www.fysnet.net/fysos.htm
+### [The FYSOS Operating System](http://www.fysnet.net/fysos.htm)
 
 The included files are the boot process for the FYSOS Operating System.
 
@@ -60,9 +59,6 @@ If you have any questions, please contact me at the email address shown at the t
 
 #### http://www.fysnet.net/fysos.htm
  
-At this time, the kernel.sys and system.sys files are not included.  However, this boot and loader
- code is written to allow any kernel and system file to be loaded.  Create your own  :-)
-  
 Please note that there are other things I have forgotten to mention that you will need to take
  into consideration when using this code.  One thing is the 0x400 offset of the kernel file I use,
  though I don't think it matters here, but do check.  I will make note of things as I update the
