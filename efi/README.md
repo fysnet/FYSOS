@@ -17,7 +17,8 @@ For example, after making the kernel.sys file (currently not included here, but 
 Your kernel file must then have an origin of 0x00800400 and have the first instruction ready to be executed at
  that location.
  
-* This code is a work in progress and is not complete and may be inaccurate.  Please use at your own risk *
+* This code is a work in progress and is not complete and may be inaccurate.  Please use at your own risk
+* Place the BOOT.efi file in the \efi\boot\BOOT.efi folder of a properly formated UEFI GUID partition.
   
 These files are released as is:
   Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt
