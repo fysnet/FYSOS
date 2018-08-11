@@ -17,12 +17,11 @@ For example, after making the kernel.sys file (currently not included here, but 
  
  See the makehdr.c file for more information on what the command line switches are.
  
-Your kernel file must then have an origin of 0x00800400 and have the first instruction ready to be executed at
+Your kernel file must then have an origin of **0x00800400** and have the first instruction ready to be executed at
  that location.
 
-* This code is a work in progress and is not complete and may be inaccurate.  Please use at your own risk
-
-* Place the BOOT.efi file in the \efi\boot\BOOT.efi folder of a properly formated UEFI GUID partition.
+- [ ] This code is a work in progress and is not complete and may be inaccurate.  Please use at your own risk
+- [ ] Place the BOOT.efi file in the \efi\boot\BOOT.efi folder of a properly formated UEFI GUID partition.
 
 These files are released as is:
 - [X] Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt
@@ -35,7 +34,7 @@ You may:
 - [X] as long as it is for learning purposes only, not for profit, 
      and you give credit where credit is due.
 
-You may NOT:<br />
+You may NOT:
 - [X] distribute this code for any purpose other than listed above.
 - [X] distribute this code for profit.
 
@@ -47,7 +46,7 @@ You MUST:
 
 The C files are built with Alex's SmallerC
 #### https://github.com/alexfru/SmallerC
-Please note that since this code uses Wide Chars (wchar_t), you *MUST* have the modified version
+Please note that since this code uses Wide Chars (wchar_t), you **MUST** have the modified version
  of SmallerC I have just for this purpose.  Contact me for more information on this modified version.
 
 You use these files at your own risk.
@@ -61,7 +60,7 @@ Please note that there are other things I have forgotten to mention that you wil
  code and remember other things.
 
 If you find any errors or have any questions, please feel free to send me an email at:
-#### fys [at] fysnet [dot] net<br />
+#### fys [at] fysnet [dot] net
 
 For more information on how to write an Operating System, have a look at the following book series:
 #### http://www.fysnet.net/osdesign_book_series.htm
