@@ -16,9 +16,9 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  10 Aug 2018
+ * Last update:  14 Aug 2018
  *
- * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
+ * compile using SmallerC  (https://github.com/fysnet/SmallerC)
  *  smlrcc @make.txt
  */
 
@@ -53,13 +53,18 @@ void freeze(void) {
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Call an interrupt
 // Return TRUE = carry set
+// Note: On 80486's and before, for Self-modifying code, we need to do a serialization instruction
+//  after the write and before the instruction that is written to.  One of the instructions that can
+//  do this is the CPUID instruction.  However, we have not checked to see if this machine has this
+//  instruction yet, so we must do something else.  An unconditional jump should work just fine.
 bool intx(int i, struct REGS *regs) {
   asm (
     "  push ds                ; \n"  // save ds
     "  push es                ; \n"  // save es
     "  mov  eax,[ebp+8]       ; self modify code to interrupt number\n"
     "  mov [dword .intx1 + 1], al\n"
-    "  cpuid                  ; \n"  // self mod code needs serialization...
+    "  jmp .next_instruct     ; \n"  // self mod code needs serialization...
+    ".next_instruct:          ; \n"
     "  mov  esi,[ebp+12]      ; \n"
     "  push ebp               ; \n"  // save ebp
     "  push esi               ; \n"  // save the pointer to our regs data
