@@ -18,12 +18,13 @@
  *
  * Last update:  10 Aug 2018
  *
- * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
+ * compile using SmallerC  (https://github.com/fysnet/SmallerC)
  *  smlrcc @make.txt
  */
 
 #include "ctype.h"
 
+#include "loader.h"
 #include "malloc.h"
 
 #include "bz2.h"
@@ -1384,7 +1385,7 @@ errhandler:
 //
 int bz2_decompressor(void *targ, const void *src, const int *size) {
   struct S_BZ_STREAM strm;
-  int targ_size = 0x01000000;  // 1 meg
+  int targ_size = DECOMP_BUFFER_SIZE;
   int ret = 0;
   
   // initialize the progress proc
