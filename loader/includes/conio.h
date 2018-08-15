@@ -18,7 +18,7 @@
  *
  * Last update:  10 Aug 2018
  *
- * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
+ * compile using SmallerC  (https://github.com/fysnet/SmallerC)
  *  smlrcc @make.txt
  */
 #ifndef CONIO_H

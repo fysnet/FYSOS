@@ -18,7 +18,7 @@
  *
  * Last update:  10 Aug 2018
  *
- * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
+ * compile using SmallerC  (https://github.com/fysnet/SmallerC)
  *  smlrcc @make.txt
  */
 
@@ -26,8 +26,6 @@
 #define MALLOC_H
 
 //#define MEM_DEBUG_ON
-
-#define MEMORY_MIN_REQUIRED  0x08000000  // 128 meg
 
 #define MEM_START    0x0000BE00           // must preserve 0x07C00 -> ~33 sectors
 #define MEM_END      MEMORY_MIN_REQUIRED  // 128 meg (assumed)
