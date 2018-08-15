@@ -18,7 +18,7 @@
  *
  * Last update:  10 Aug 2018
  *
- * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
+ * compile using SmallerC  (https://github.com/fysnet/SmallerC)
  *  smlrcc @make.txt
  */
 
@@ -32,12 +32,24 @@
 #include "time.h"
 #include "video.h"
 
-#define LOADSEG   0x6000   // segment of loader code
+// Set this define to allow for older machines with:
+//  - no CPUID or RDTSC instruction
+//  - less memory (16 Meg required)
+// Still requires a 80x386 (32-bit) machine...
+#define  ALLOW_SMALL_MACHINE  1  // 0 = error on 486 or less (486+ w/ CPUID *and* RDTSC required)
+                                 // 1 = allow 486 without CPUID and/or RDTSC
+#if ALLOW_SMALL_MACHINE
+  #define MEMORY_MIN_REQUIRED  0x01000000  // 16 meg
+  #define DECOMP_BUFFER_SIZE   0x00400000  //  4 meg
+#else
+  #define MEMORY_MIN_REQUIRED  0x08000000  // 128 meg
+  #define DECOMP_BUFFER_SIZE   0x01000000  // 16 meg
+#endif
 
 // if one or more of these are defined, that respected fs code is
 //  included with this loader.  If one or more lines are commented
 //  out, that fs system is also commented out.
-#define FS_LEAN     1
+//#define FS_LEAN     1
 //#define FS_EXT2     2
 //#define FS_SFS      3
 #define FS_FAT12   12
@@ -101,7 +113,9 @@ struct S_SYS_BLOCK {
   struct S_FLOPPY1E floppy_1e;  // floppies status                                     //   11
   struct S_TIME time;         // current time passed to kernel                         //   14
   struct S_APM apm;           // Advanced Power Management                             //   44
-  bit8u  resv1[3];            // dword alignment                                       //    3
+  bool   has_cpuid;           // set if we detect a 486+ with a CPUID instruction      //    1
+  bool   has_rdtsc;           // set if we detect a 486+ with a RDTSC instruction      //    1
+  bit8u  resv1;               // dword alignment                                       //    1
   bit16u bios_equip;          // bios equipment list at INT 11h (or 0040:0010h)        //    2
   bit8u  kbd_bits;            // bits at 0x00417                                       //    1
   bit32u magic2;  // third magic number                                                //    4

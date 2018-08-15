@@ -18,7 +18,7 @@
  *
  * Last update:  10 Aug 2018
  *
- * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
+ * compile using SmallerC  (https://github.com/fysnet/SmallerC)
  *  smlrcc @make.txt
  */
 
@@ -112,10 +112,12 @@ int main(struct REGS *boot_regs) {
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   //  Check for 386+ machine.  If not, give error and halt
   //   Returns processor type
+  sys_block.has_cpuid = 0;
+  sys_block.has_rdtsc = 0;
   puts("\nChecking for a 486+ processor with the RDTSC instruction...");
   i = chk_486();
   if (i < 6) {
-    puts("A 486+ compatible processor with the CPUID and RDTSC instructions is required.\n"
+    puts("A 486+ compatible processor w/the CPUID and RDTSC instructions is recommended.\n"
          " Processor detected is a: ");
     switch (i) {
       case 0:
@@ -135,19 +137,25 @@ int main(struct REGS *boot_regs) {
         break;
       case 5:
         puts(" 80486 or compatible with CPUID but without RDTSC.");
+        sys_block.has_cpuid = 1;
         break;
     }
-    puts("\nPress a key to reboot system.");
-    
+#if ALLOW_SMALL_MACHINE
+    puts("\nPress a key to continue.");
+    getscancode();
+#else
+    puts("\nPress a key to reboot machine.");
+    getscancode();
     asm (
-      "  xor  ah,ah              ; Wait for keypress\n"
-      "  int  16h                ; \n"
       "  mov  dl,80h             ; \n"
       "  int  18h                ; boot specs say that 'int 18h'\n"
-      "                          ;  should be issued here.\n"
     );
+#endif
+  } else {
+    sys_block.has_cpuid = 1;
+    sys_block.has_rdtsc = 1;
   }
-  
+
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // save our boot_data code
   memcpy(&sys_block.boot_data, (void *) boot_regs->ebx, sizeof(struct S_BOOT_DATA));
@@ -240,7 +248,7 @@ int main(struct REGS *boot_regs) {
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // allocate the compressed data buffer (used for each file found)
-  void *buffer = malloc(0x01000000);  // 16 meg
+  void *buffer = malloc(DECOMP_BUFFER_SIZE);
   if (buffer == NULL) {
     win_printf(main_win, "Error allocating compressed data buffer...\n");
     freeze();
@@ -434,11 +442,13 @@ int main(struct REGS *boot_regs) {
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   //  Now get the vesa video info from the BIOS.
+  win_status_update(main_win, " Getting Video Information...", FALSE);
   //get_video_eedid();
   //freeze();
   if (spc_key_F1) help_screen();  // check to see if the help screen has been requested
   sys_block.vid_mode_cnt = get_video_info(sys_block.mode_info);
-  if (sys_block.vid_mode_cnt > 0) {
+  if (0) {
+  //if (sys_block.vid_mode_cnt > 0) {
     // if we haven't selected to stay in text mode, ask for a mode to change to
     if (!spc_key_F9) {
       sys_block.cur_vid_index = get_video_mode(sys_block.mode_info, sys_block.vid_mode_cnt, 1024, 768, 16);
@@ -495,8 +505,17 @@ next_entry:
     }
   } else {
     if (!spc_key_F9) {
-      win_printf(main_win, "FYSOS requires a VESA capable video card with a Linear Base Frame Buffer...\n");
-      freeze();
+      void *vesa_alert = win_create(main_win, "Video Screen Alert", "Press a key to continue", ((80 - 42) / 2) - 1, 5, 40, 8,
+        WIN_HAS_TITLE | WIN_HAS_STATUS | WIN_HAS_BORDER | WIN_HAS_SHADDOW | WIN_IS_DIALOG);
+      win_printf(vesa_alert, "\n"
+                             "FYSOS recommends a VESA capable video\n"
+                             "card with a Linear Base Frame Buffer.\n"
+                             "\n"
+                             "Setting Text Only...\n");
+      getscancode();
+      spc_key_F9 = TRUE;
+      win_destroy(vesa_alert);
+      win_status_update(main_win, " Setting Text Only Mode", FALSE);
     }
   }
   if (spc_key_F1) help_screen();  // check to see if the help screen has been requested
@@ -555,10 +574,11 @@ next_entry:
     // however, we do need to clear the screen turning the "cursor" off.
     // we use the "scroll screen" BIOS function to clear the screen.
     regs.eax = 0x00000600;  // ah = 6 = scroll up, al = 0 = entire window
-    regs.ebx = 0x00000000;  // attribute = 0
+    regs.ebx = 0x00000000;  // attribute
     regs.ecx = 0x00000000;  // row/column of upper-left corner
     regs.edx = 0x00001950;  // row/column of lower-right corner
     intx(0x10, &regs);
+    // can't write anyting now, since the attribute is 0
   }
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
