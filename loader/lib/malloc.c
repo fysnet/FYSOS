@@ -18,7 +18,7 @@
  *
  * Last update:  10 Aug 2018
  *
- * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
+ * compile using SmallerC  (https://github.com/fysnet/SmallerC)
  *  smlrcc @make.txt
  */
 
@@ -42,8 +42,13 @@ struct MEM_INIT {
   { 0,          MAGIC_USED },  // base of LOADSEG to size of loader    (used)
   { 0,          MAGIC_FREE },  // base just after loader to 0x00080000 (free)
   { 0x0009FC00, MAGIC_USED },  // base of 0x00080000 to 1 meg          (used) (EBDA)
+#if ALLOW_SMALL_MACHINE
+  { 0x00100000, MAGIC_USED },  // base of 1meg to 7.5meg               (used) (FYSOS)
+  { 0x00780000, MAGIC_FREE },  // base of 7.5meg to ???                (free)
+#else
   { 0x00100000, MAGIC_USED },  // base of 1meg to 32meg                (used) (FYSOS)
   { 0x02000000, MAGIC_FREE },  // base of 32meg to ???                 (free)
+#endif
   { MEM_END, 0 }
 };
 
@@ -271,7 +276,7 @@ bool get_memory(struct S_MEMORY *memory) {
   
   if (spc_key_F2)
     para_printf("Trying service E881 and E801.\n");
-    
+  
   // service E881 is identical to E801 except that E881 returns
   //  the values as 32-bits while E801 returns them as 16-bits
   regs.eax = 0x00000E881;
@@ -301,7 +306,6 @@ bool get_memory(struct S_MEMORY *memory) {
     add64(memory->size, temp);
     
     memory->word = 2; // type goes here
-    
     goto check_mem_limits;
   }
   
@@ -316,7 +320,8 @@ bool get_memory(struct S_MEMORY *memory) {
   
   regs.eax = 0x000008800;
   if (!intx(0x15, &regs)) {
-    temp[0] = (regs.eax & 0x0000FFFF) << 10;
+    // AX = number of contiguous KB starting at absolute address 100000h
+    temp[0] = ((regs.eax & 0x0000FFFF) + 1024) << 10;
     temp[1] = 0;
     add64(memory->size, temp);
     
@@ -326,9 +331,11 @@ bool get_memory(struct S_MEMORY *memory) {
     //   es:bx->rom table
     regs.eax = 0x00000C000;
     if (!intx(0x15, &regs)) {
-      if ((regs.eax & 0x0000FF00) == 0) {
+      if ((regs.eax & 0x0000FF00) == 0) {  // ah = 0 = successful
         // service C7h is available if bit 4 in feature_byte 2 (offset 06h) is set.
-        if (* (bit8u *) (regs.ebx & 0x0000FFFF) & 0x10) {
+        // (We are in unreal mode, flat address space, so convert es:bx to 32-bit flat address)
+        bit8u *ptr = (bit8u *) ((regs.es << 4) + (regs.ebx & 0x0000FFFF));
+        if (ptr[6] & (1<<4)) {
           regs.eax = 0x0000C700;
           regs.esi = MK_OFF((bit32u) local);
           regs.es = MK_SEG((bit32u) local);
@@ -338,12 +345,12 @@ bool get_memory(struct S_MEMORY *memory) {
             temp[0] = (* (bit32u *) &local[0x0E]) << 10;
             temp[1] = 0;
             add64(memory->size, temp);
-            memory->word = 3; // type goes here
-            goto check_mem_limits;
           }
         }
       }
     }
+    memory->word = 3; // type goes here   3 = serive 88h or older
+    goto check_mem_limits;
   }
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -365,25 +372,23 @@ bool get_memory(struct S_MEMORY *memory) {
   // if anything in the hi dword of memory.size, we have plenty :)
 check_mem_limits:
   // calculate the amount of conventional memory found
-  temp[0] = temp[1] = 0;  // total
   for (i=0; i<memory->blocks; i++) {
     //win_printf(main_win, " %i %i\n", memory->block[i].size[0], memory->block[i].type);
     switch (memory->block[i].type) {
-      case BIOSAvailable:
       case BIOSACPIReclaimMemory:
-        add64(temp, memory->block[i].size);
+        add64(memory->size, memory->block[i].size);
         break;
     }
   }
   
   // if not at least MEMORY_MIN_REQUIRED, then give error and halt
-  if (temp[1] == 0) {  // if high dword > 0, we have enough memory, else
-    if (temp[0] < MEMORY_MIN_REQUIRED) {
+  if (memory->size[1] == 0) {  // if high dword > 0, we have enough memory, else
+    if (memory->size[0] < MEMORY_MIN_REQUIRED) {
       // not enough memory for preset limits, so adjust to compensate.
       // first, we need to make sure we have at least the min allowed.
       win_printf(main_win, "\n\n  *** Not enough physical memory ***"
              "\n   Size in megabytes found: %i"
-             "\n     Size of memory needed: %i", temp[0] >> 20, MEMORY_MIN_REQUIRED >> 20);
+             "\n     Size of memory needed: %i (in Megs)", memory->size[0] >> 20, MEMORY_MIN_REQUIRED >> 20);
       freeze();
     }
   }
