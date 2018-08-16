@@ -47,9 +47,9 @@ The assembly files are built with the NewBasic Assembler
 
 #### [NBASM ver 00.26.59](http://www.fysnet/newbasic.htm)
 
-The C files are built with Alex's SmallerC
+The C files are built with a fork of Alex's SmallerC
 
-#### https://github.com/alexfru/SmallerC
+#### https://github.com/fysnet/SmallerC
 
 (Please see the note in the readme file for the EFI code)
     
