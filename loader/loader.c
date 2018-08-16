@@ -447,8 +447,7 @@ int main(struct REGS *boot_regs) {
   //freeze();
   if (spc_key_F1) help_screen();  // check to see if the help screen has been requested
   sys_block.vid_mode_cnt = get_video_info(sys_block.mode_info);
-  if (0) {
-  //if (sys_block.vid_mode_cnt > 0) {
+  if (sys_block.vid_mode_cnt > 0) {
     // if we haven't selected to stay in text mode, ask for a mode to change to
     if (!spc_key_F9) {
       sys_block.cur_vid_index = get_video_mode(sys_block.mode_info, sys_block.vid_mode_cnt, 1024, 768, 16);
