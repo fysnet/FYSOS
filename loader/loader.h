@@ -96,12 +96,10 @@ struct S_BOOT_DATA {
 
 struct S_SYS_BLOCK {
   bit32u magic0;  // first magic number                                                //    4
-  bit16u gdtoff;  // = ((256*8)-1);  // Address of our GDT
-  bit32u gdtoffa; // = 0x00110000;  // KERN_GDT in memory.h
-  
-  bit16u idtoff;  // = ((256*8)-1);  // 256 = number of interrupts we allow
-  bit32u idtoffa; // = 0x00110800;  // KERN_IDT in memory.h
-  
+  bit16u gdtoff;  // = ((256*8)-1);  // Address of our GDT                             //    2
+  bit32u gdtoffa; // = 0x00110000;  // KERN_GDT in memory.h                            //    4
+  bit16u idtoff;  // = ((256*8)-1);  // 256 = number of interrupts we allow            //    2
+  bit32u idtoffa; // = 0x00110800;  // KERN_IDT in memory.h                            //    4
   bit32u bios_type;             // 'BIOS' = legacy BIOS, 'UEFI' = UEFI booted          //    4
   bit32u uefi_image_handle;     // UEFI Image Handle                                   //    4
   bit32u uefi_system_table;     // UEFI System Table Pointer                           //    4

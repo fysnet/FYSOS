@@ -36,12 +36,15 @@ _finish:
     
     ; Load GDTR
     mov     eax,_sys_block
+    mov     cl,[eax+193]  ; get has_cpuid flag  (TODO: need not hardcode the offset)
     add     eax,4       ; skip over magic0
     lgdt    [eax]
     add     eax,6
     lidt    [eax]
     
     mov     eax,CR0      ; get the CR0 value
+    or      cl,cl        ; do we have a CPUID instruction?
+    jz      short .noCPUID
     push    eax          ; save it
     mov     eax,1        ; if we support SSE, we need to...
     cpuid 
@@ -56,6 +59,7 @@ _finish:
     mov     cr4,eax
 .noSSE:
     pop     eax          ; restore the cr0 value
+.noCPUID:
     and     eax,~60000000h  ; clear CR0.CD and CR0.NW bits (Cache Disable, Non-Write through)
     or      al,21h       ; and set the NE and PE bits
     mov     CR0,eax
@@ -66,7 +70,6 @@ _finish:
 .still_in_16bit:
     hlt
     jmp short .still_in_16bit
-    
 
 bits 32
   ; let's make sure we made it here.
