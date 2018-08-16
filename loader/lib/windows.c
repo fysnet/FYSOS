@@ -46,9 +46,27 @@ void win_initialize(void) {
   win_sys.height = 25;
   
   // http://scatcat.fhsu.edu/~jplang2/asm-blink.html
-  inpb(0x3DA);             // reset the flip-flop
-  outpb(0x3C0, 0x30);      // index 0x10  (20h + 10h)?
-  outpb(0x3C0, inpb(0x3C1) & ~(1<<3));  // clear bit 3 to disable blink
+  // this only works if this is a VGA ????
+  //inpb(0x3DA);             // reset the flip-flop
+  //outpb(0x3C0, 0x30);      // index 0x10  (20h + 10h)?
+  //outpb(0x3C0, inpb(0x3C1) & ~(1<<3));  // clear bit 3 to disable blink
+  
+  // BIOS function to turn off blinking.  Probably only works for EGA+.
+  regs.eax = 0x00001003;
+  regs.ebx = 0x00000000;
+  intx(0x10, &regs);
+  
+  // for CGA, we use port 0x3D8.  However, it is write only on most CGAs.
+  // Also, I am not willing to write to this register on the only CGA I have
+  //  incase it destroys the hardware.
+  // 3D8h (W): Mode Control register
+  //    bit   0  80x25 Alpha mode if set, 40x25 else
+  //          1  Graphics mode if set, alpha else.
+  //          2  BW mode if set, color else
+  //          3  Video Enable. Enable video signal if set
+  //          4  640x200 Graphics mode if set, 320x200 else
+  //          5  if set bit 7 of the attribute controls background, else blink
+  //    Note: this register is Read/Write on the CT82c425/6.
   
   // hook into the BIOS Timer interrupt.
   // Then if main_win != NULL, and main_win->status_timer != 0, decrement the timer.
