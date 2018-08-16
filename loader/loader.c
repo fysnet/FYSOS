@@ -155,7 +155,8 @@ int main(struct REGS *boot_regs) {
     sys_block.has_cpuid = 1;
     sys_block.has_rdtsc = 1;
   }
-
+  sys_block.is_small_machine = ALLOW_SMALL_MACHINE;
+  
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // save our boot_data code
   memcpy(&sys_block.boot_data, (void *) boot_regs->ebx, sizeof(struct S_BOOT_DATA));
@@ -443,8 +444,7 @@ int main(struct REGS *boot_regs) {
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   //  Now get the vesa video info from the BIOS.
   win_status_update(main_win, " Getting Video Information...", FALSE);
-  //get_video_eedid();
-  //freeze();
+  //get_video_eedid();  // not implemented yet
   if (spc_key_F1) help_screen();  // check to see if the help screen has been requested
   sys_block.vid_mode_cnt = get_video_info(sys_block.mode_info);
   if (sys_block.vid_mode_cnt > 0) {

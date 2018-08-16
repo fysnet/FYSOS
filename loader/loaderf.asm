@@ -36,8 +36,8 @@ _finish:
     
     ; Load GDTR
     mov     eax,_sys_block
-    mov     cl,[eax+193]  ; get has_cpuid flag  (TODO: need not hardcode the offset)
-    add     eax,4       ; skip over magic0
+    mov     cl,[eax+193] ; get has_cpuid flag  (TODO: need to not hardcode the offset)
+    add     eax,4        ; skip over magic0
     lgdt    [eax]
     add     eax,6
     lidt    [eax]
@@ -98,7 +98,7 @@ bits 32
     
     ; set up a stack at STACK_BASE (physical) of 4 meg size
     mov     esp,((0x01000000 + 00400000h) - 4)
-            
+    
     ; We now have PMODE setup and all our segment selectors correct.
     ; CS              = 0x00000000
     ; SS & remaining  = 0x00000000
