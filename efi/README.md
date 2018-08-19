@@ -45,6 +45,10 @@ You MUST:
 
 The C files are built with Alex's SmallerC
 #### https://github.com/alexfru/SmallerC
+    The current version of SmallerC does not have a large enough Symbol Table to compile this
+    EFI code.  However, if you compile SmallerC with itself using the following make line:
+      smlrcc -Wall -win smlrc.c -o smlrcwbig.exe -DMAX_IDENT_TABLE_LEN=16384 -DSYNTAX_STACK_MAX=8192 -DMAX_CASES=257 -DSTACK_SIZE=256
+    the new smlrcwbig.exe will then have enough room. (assuming you are using Windows as your host)
 
 You use these files at your own risk.
 
