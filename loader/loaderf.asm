@@ -18,7 +18,7 @@
 ; *
 ; * Last update:  10 Aug 2018
 ; *
-; * compile using SmallerC  (https://github.com/fysnet/SmallerC)
+; * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
 ; *  smlrcc @make.txt
 ; */
 
