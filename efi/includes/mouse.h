@@ -20,9 +20,6 @@
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
- *
- * Note:  Since this code uses wide chars (wchar_t), you *MUST* have my modified 
- *        version of SmallerC.  Contact me for more information.
  *        
  */
 
