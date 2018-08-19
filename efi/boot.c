@@ -21,9 +21,6 @@
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
  *
- * Note:  Since this code uses wide chars (wchar_t), you *MUST* have my modified 
- *        version of SmallerC.  Contact me for more information.
- *        
  */
 
 #include "config.h"
@@ -134,7 +131,9 @@ struct SYSTEM_BLOCK {
   struct S_FLOPPY1E floppy_1e;  // floppies status                                     //   11
   struct S_TIME time;         // current time passed to kernel                         //   14
   struct S_APM apm;           // Advanced Power Management                             //   44
-  bit8u  resv1[3];            // dword alignment                                       //    3
+  bool   has_cpuid;           // set if we detect a 486+ with a CPUID instruction      //    1
+  bool   has_rdtsc;           // set if we detect a 486+ with a RDTSC instruction      //    1
+  bool   is_small_machine;    // set if we detect/set for a "small" machine            //    1
   bit16u bios_equip;          // bios equipment list at INT 11h (or 0040:0010h)        //    2
   bit8u  kbd_bits;            // bits at 0x00417                                       //    1
   bit32u magic2;
@@ -234,6 +233,8 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, struct EFI_SYSTEM_TABLE *SystemTable
   sys_block.gdtoffa = 0x00110000;
   sys_block.idtoff  = ((256*8)-1);
   sys_block.idtoffa = 0x00110800;
+  sys_block.has_cpuid = 1;  // if we have UEFI, we have CPUID
+  sys_block.has_rdtsc = 1;  // if we have UEFI, we have RDTSC ?????
   
   // Mark that we are using a UEFI BIOS to boot
   sys_block.bios_type = 0x55454649;  // 'UEFI'
