@@ -45,8 +45,6 @@ You MUST:
 
 The C files are built with Alex's SmallerC
 #### https://github.com/alexfru/SmallerC
-Please note that since this code uses Wide Chars (wchar_t), you **MUST** have the modified version
- of SmallerC I have just for this purpose.  Contact me for more information on this modified version.
 
 You use these files at your own risk.
 
