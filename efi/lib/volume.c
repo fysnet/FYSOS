@@ -134,11 +134,11 @@ EFI_STATUS GetVolumeInfo(struct S_DRV_PARAMS *drive_params, struct S_BOOT_DATA *
         
         if (!EFI_ERROR(ioStatus) && (blockIOProtocol != NULL)) {
           printf(L"MediaID = 0x%08X\r\n", blockIOProtocol->Media->MediaId);
-          printf(L"Removable = %i, ", blockIOProtocol->Media->RemovableMedia > 0);
-          printf(L"Present = %i, ", blockIOProtocol->Media->MediaPresent > 0);
-          printf(L"Log Part = %i, ", blockIOProtocol->Media->LogicalPartition > 0);
-          printf(L"Read Only = %i, ", blockIOProtocol->Media->ReadOnly > 0);
-          printf(L"WriteCaching = %i\r\n", blockIOProtocol->Media->WriteCaching > 0);
+          printf(L"Removable = %i, ", blockIOProtocol->Media->RemovableMedia);
+          printf(L"Present = %i, ", blockIOProtocol->Media->MediaPresent);
+          printf(L"Log Part = %i, ", blockIOProtocol->Media->LogicalPartition);
+          printf(L"Read Only = %i, ", blockIOProtocol->Media->ReadOnly);
+          printf(L"WriteCaching = %i\r\n", blockIOProtocol->Media->WriteCaching);
           printf(L"Block Size = %i\r\n", blockIOProtocol->Media->BlockSize);
           printf(L"  IO Align = %i\r\n", blockIOProtocol->Media->IoAlign);
           printf(L"Last Block = %i\r\n", blockIOProtocol->Media->LastBlock[0]);
@@ -158,7 +158,7 @@ EFI_STATUS GetVolumeInfo(struct S_DRV_PARAMS *drive_params, struct S_BOOT_DATA *
             if (Buffer != NULL) {
               Status = blockIOProtocol->ReadBlocks(blockIOProtocol, blockIOProtocol->Media->MediaId, 0, 0, 512, Buffer);
               if (!EFI_ERROR(Status))
-                boot_data->signature = * (bit32u *) &Buffer[0x01B8];
+                boot_data->signature = * (bit32u *) &Buffer[0x01F2];
               FreePool(Buffer);
             }
           }
@@ -183,7 +183,6 @@ EFI_STATUS GetVolumeInfo(struct S_DRV_PARAMS *drive_params, struct S_BOOT_DATA *
     }
     
     // update our saved fields
-    /*  // I don't know why this won't return the LastBlock and other fields...????
     Status = gBS->HandleProtocol(handles[i], &BlockIOProtocolGUID, (void **) &blockIOProtocol);
     if (!EFI_ERROR(Status) && (blockIOProtocol != NULL)) {
       printf(L" Revision %08X.%08X\r\n", blockIOProtocol->Revision[1], blockIOProtocol->Revision[0]);
@@ -193,7 +192,6 @@ EFI_STATUS GetVolumeInfo(struct S_DRV_PARAMS *drive_params, struct S_BOOT_DATA *
       drive_params[i].bios_params.tot_sectors[1] = blockIOProtocol->Media->LastBlock[1];
       drive_params[i].bios_params.bytes_per_sector = (bit16u) blockIOProtocol->Media->BlockSize;
     }
-    */
   }
   FreePool(handles);
   
