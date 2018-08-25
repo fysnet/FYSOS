@@ -30,9 +30,6 @@
 #define MEDIA_HARDDRIVE_DP     0x01
 #define MEDIA_CDROM_DP         0x02
 
-
-#pragma pack(push, 1)
-
 struct HARDDRIVE_DEVICE_PATH {
   struct EFI_DEVICE_PATH Header;
   /// Describes the entry in a partition table, starting with entry 1.
@@ -78,7 +75,6 @@ struct EFI_BLOCK_IO_MEDIA {
   UINT32  LogicalBlocksPerPhysicalBlock;     // added after Revision 2.1
   UINT32  OptimalTransferLengthGranularity;  // added after Revision 2.1
 };
-#pragma pack(pop)
 
 struct EFI_BLOCK_IO_PROTOCOL {
   bit32u Revision[2];
