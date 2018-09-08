@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: fysfs.inc                                                          *
@@ -45,14 +45,6 @@ FYSFS_ROOTSEG    equ  1000h          ; segment to load ROOT to (0x10000 = 64k)
 
 ; size in sectors
 FYSFS_ROOTSEG_SIZE  equ  128
-
-; the last 16 bytes of the first 512 byte sector
-S_BOOT_SIG struct
-           sig         dword   ; signature "FYSB"
-           base_lba    qword   ; LBA of the first sector of this volume
-           resv         word   ; reserved
-           boot_sig     word   ; 0xAA55
-S_BOOT_SIG ends
 
 ; the super block is at 2000h (17th sector)
 FYSFS_SUPER_BLOCK   equ 2000h

@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: fysfs_common.inc                                                   *
@@ -27,10 +27,10 @@ comment |*******************************************************************
 *                                                                          *
 * BUILT WITH:   NewBasic Assembler                                         *
 *                 http://www.fysnet/newbasic.htm                           *
-*               NBASM ver 00.26.59                                         *
+*               NBASM ver 00.26.74                                         *
 *          Command line: nbasm exfat<enter>                                *
 *                                                                          *
-* Last Updated: 10 Aug 2016                                                *
+* Last Updated: 28 Sept 2017                                               *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -51,10 +51,10 @@ comment |*******************************************************************
 ;   else
 ;     carry set
 get_name   proc near uses eax ebx ecx dx si edi es
-
            ; ds:di-> passed buffer
            mov  si,di              ;
-
+           
+           xchg bx,bx
            push FYSFS_ROOTSEG      ; es -> to ROOT memory area
            pop  es                 ;
            
@@ -82,7 +82,7 @@ get_name   proc near uses eax ebx ecx dx si edi es
 next_slot: mov  ebx,es:[ebx + S_FYSFS_ROOT->name_continue]
            or   ebx,ebx
            jz   short get_name_done
-
+           
 next_cont: shl  ebx,7              ; multiply by 128
            
            mov  edi,S_FYSFS_ROOT->crc ; offset of this slots crc
@@ -94,18 +94,18 @@ next_cont: shl  ebx,7              ; multiply by 128
            
            movzx cx,byte es:[ebx + S_FYSFS_CONT->count]
            jcxz short get_name_done
-
+           
            xor  edi,edi
 @@:        mov  al,es:[ebx + edi + S_FYSFS_CONT->name_fat]
            mov  [si],al
            inc  si
            inc  di
            loop @b
-
+           
            mov  ebx,es:[ebx + S_FYSFS_CONT->next]
            or   ebx,ebx
            jnz  short next_cont
-
+           
 get_name_done:
            mov  byte [si],0   ; asciiz it
            clc
