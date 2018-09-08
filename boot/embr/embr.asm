@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: embr.asm                                                           *
@@ -30,12 +30,10 @@ comment |*******************************************************************
 *               NBASM ver 00.26.59                                         *
 *          Command line: nbasm embr -d<enter>                              *
 *                                                                          *
-* Last Updated: 10 Aug 2016                                                *
+* Last Updated: 29 May 2017                                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
-*                                                                          *
-*  If we modify this file, we need to modify the boot.inc file to match    *
 *                                                                          *
 * This code and the eMBR technique is copyrighted.  You may use this       *
 *  and the eMBR technique as you would like as long as you do not change   *
@@ -62,6 +60,7 @@ comment |*******************************************************************
 ***************************************************************************|
 
 .model tiny                        ;
+.diag 0
 
 include 'embr.inc'                 ; our include file
 outfile 'embr.bin'                 ; declare the out filename
@@ -123,8 +122,9 @@ start:     mov  ax,07C0h           ; 07C0:0000h = 0000:7C00h = 0x07C00
            mov  dl,drive
            int  13h
            jc   short @f
-           cmp  bx,0AA55h
-           je   short read_remaining
+           shr  cx,1                    ; carry = bit 0 of cl
+           adc  bx,55AAh                ; AA55 + 55AA + carry = 0 if supported
+           jz   short read_remaining
 @@:        mov  si,offset no_extentions_found
            jmp  short display_error
 
@@ -144,7 +144,7 @@ read_remaining:
            xor  edx,edx        ;
            mov  eax,2          ; always at LBA 2
            mov  cx,remaining   ;
-           mov  bx,sector_size ; es:sect_size
+           mov  ebx,07E00h     ; physical address 0x07E00
            mov  si,4201h       ; read service
            call transfer_sectors_long
            
@@ -166,7 +166,7 @@ display_error:
 ; On entry:
 ;  edx:eax = starting sector in LBA format
 ;       cx = count of sectors to read/write (doesn't check for > 7Fh)
-;    es:bx = offset to store data, es:offset
+;      ebx = physical address to store data
 ; NOTE: This should get called with <= 7Fh sectors to read
 transfer_sectors_long proc near uses eax ebx ecx edx si di
            
@@ -174,8 +174,16 @@ transfer_sectors_long proc near uses eax ebx ecx edx si di
            mov  si,offset packet
            mov  word [si],0010h
            mov  [si+2],cx
-           mov  [si+04h],bx
-           mov  [si+06h],es
+
+           ; ebx = physical address.  We need
+           ;  to convert to a segmented address.
+           push bx
+           and  bx,0Fh
+           mov  [si+04h],bx  ; offset
+           pop  bx
+           shr  ebx,4
+           mov  [si+06h],bx  ; segment
+           
            mov  [si+08h],eax
            mov  [si+0Ch],edx
            pop  ax         ; restore service number
@@ -300,6 +308,24 @@ remaining_code:
            int  10h                     ;
 
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; make sure the 'blink' bit is off
+           ; this is so we can print bright colors instead of the
+           ;  vga using bit 7 as the blink bit.
+           ; http://scatcat.fhsu.edu/~jplang2/asm-blink.html
+           mov  dx,3DAh             ; reset the flip-flop
+           in   al,dx
+           
+           mov  dx,3C0h             ; index 0x10  (20h + 10h)?
+           mov  al,30h
+           out  dx,al
+           
+           inc  dx                  ;  clear bit 3 to disable blink
+           in   al,dx
+           and  al,(~(1<<3))
+           dec  dx
+           out  dx,al
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate the crc32 and see if it is correct
            ; no need to restore the original CRC32 since we will
            ;  calculate a new one when we update the date
@@ -316,7 +342,7 @@ remaining_code:
            mov  cx,ax
            add  cx,sizeof(S_EMBR)
            call crc32
-
+           
            cmp  ebx,eax
            je   short @f
 
@@ -349,7 +375,9 @@ remaining_code:
            dec  word col
            pop  eax
            call display_hex16
-
+           
+           cli
+           hlt
            jmp  short $
 
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -421,23 +449,28 @@ again:     call update_scroll_bar
            mov  word cur_display,0
            mov  di,offset entry_hdr
            add  di,sizeof(S_EMBR)
-
+           
 first:     mov  ax,cur_entry
            cmp  ax,cur_start
            jb   next_entry
-
+           
            mov  byte color,07h
            mov  ax,cur_selected
            sub  ax,cur_start
            cmp  ax,cur_display
            jne  short @f
            mov  byte color,70h
-
-@@:        cmp  byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
+           
+@@:        ; check to see if we are past the count of entries
+           mov  ax,cur_entry
+           cmp  ax,tot_entries
+           jae  short empty_line
+           
+           cmp  byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            jne  short not_valid
            
            ; check the signature field too
-           cmp  dword [di + S_EMBR_ENTRY->signature],'eMBR'
+           cmp  dword [di + S_EMBR_ENTRY->signature],'RBMe'
            jne  short not_valid
            
            ; is a valid entry
@@ -466,6 +499,16 @@ first:     mov  ax,cur_entry
            call display_hex64
            
            jmp  short next
+
+; no more entries to display, so print an empty line/entry
+empty_line:
+           mov  word col,7
+           mov  si,offset blank_line
+           call display_string
+           inc  word row
+           mov  word col,7
+           call display_string
+           jmp  short next
            
 not_valid: mov  word col,7
            mov  si,offset blank_line
@@ -490,9 +533,6 @@ next:      inc  word row   ; move to next row
 next_entry:
            add  di,sizeof(S_EMBR_ENTRY)
            inc  word cur_entry
-           mov  ax,cur_entry
-           cmp  ax,tot_entries
-           jae  short get_user_input
            cmp  word cur_display,TOTAL_DISPLAY
            jae  short get_user_input
            
@@ -580,14 +620,14 @@ not_enter: cmp  ax,1769h  ; 'I'
            jne  short not_i
 @@:        mov  ax,cur_selected
            call display_info
-           jmp  short do_again
-
+           jmp  do_again
+           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; 'T' key (change seconds to wait for boot)
 not_i:     cmp  ax,1474h  ; 'T'
            je   short @f
            cmp  ax,1454h  ; 't'
-           jne  not_t
+           jne  short not_t
 @@:        mov  word col,5
            mov  word row,23
            mov  si,offset enter_dec_number
@@ -611,17 +651,28 @@ not_i:     cmp  ax,1474h  ; 'T'
 save_delay_count:
            mov  boot_delay,ax
            mov  cx,1
-           mov  bx,offset entry_hdr  ; es:entries
+           xor  ebx,ebx
+           mov  bx,es
+           shl  ebx,4
+           add  ebx,offset entry_hdr
            mov  eax,offset entry_hdr
            shr  eax,9
            cdq
            mov  si,4301h       ; write service
            call transfer_sectors_long
            jmp  short do_again
-
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; 'R' key (Reboot)
+not_t:     cmp  ax,1372h  ; 'R'
+           je   short @f
+           cmp  ax,1352h  ; 'r'
+           jne  short not_r
+@@:        int  18h
+           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; 
-not_t:     
+not_r:     
            ; another key would go here.
 
 
@@ -707,7 +758,11 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            jz   short @f
            inc  ax
 @@:        push ax                   ; ax = sectors to write
-           mov  bx,offset entry_hdr  ; es:entries
+
+           xor  ebx,ebx
+           mov  bx,es
+           shl  ebx,4
+           add  ebx,offset entry_hdr
            
            xor  edx,edx
            mov  eax,offset entry_hdr
@@ -731,16 +786,12 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            ;  (We can't read it to 0x07C00 since our transfer_sectors_long
            ;   routine is in that sector.  Read it into memory at 0x07A00
            ;   then move it to 0x07C00, then at the last thing jump to it
-           push es
-           mov  ax,07A0h
-           mov  es,ax
            mov  cx,1
-           xor  bx,bx        ; es:0000h = 07A0:0000
+           mov  ebx,07A00h     ; physical address 0x07A00
            mov  eax,[di + S_EMBR_ENTRY->starting_sector + 0] ; edx:eax = starting sector (LBA)
            mov  edx,[di + S_EMBR_ENTRY->starting_sector + 4]
            mov  si,4201h       ; read service
            call transfer_sectors_long
-           pop  es
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; make sure dl = disk booted from
@@ -757,7 +808,7 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            mov  es,ax
            mov  si,7A00h
            mov  di,7C00h
-           mov  cx,(512>>2)
+           mov  cx,(SECT_SIZE>>2)
            rep
              movsd
            pop es
@@ -772,38 +823,52 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
 ; display a 32-bit decimal number to the screen
 ;
 display_dec proc near uses eax ecx edx
-
+           ; preserve the color and then print all integers in white
+           movzx cx,byte color
+           push cx
+           and  byte color,(~0Fh)
+           or   byte color,0Fh
+           
            or   eax,eax
-           jns  short pnot_neg
-           push eax
+           jns  short @f
+           push ax
            mov  al,'-'
            call display_char
-           pop  eax
+           pop  ax
            neg  eax
-
-pnot_neg:  mov  cx,0FFFFh               ; Ending flag
+           
+@@:        mov  cx,0FFFFh               ; Ending flag
            push cx
            mov  ecx,10
-PD1:       xor  edx,edx
+@@:        xor  edx,edx
            div  ecx                     ; Divide by 10
            add  dl,30h                  ; Convert to ASCII
            push dx                      ; Store remainder
            or   eax,eax                 ; Are we done?
-           jnz  short PD1               ; No, so continue
-PD2:       pop  ax                      ; Character is now in DL
+           jnz  short @b                ; No, so continue
+@@:        pop  ax                      ; Character is now in DL
            cmp  ax,0FFFFh               ; Is it the ending flag?
-           je   short PD3               ; Yes, so continue
+           je   short @f                ; Yes, so continue
            call display_char
-           jmp  short PD2               ; Keep doing it
-
-PD3:       ret
+           jmp  short @b                ; Keep doing it
+           
+@@:        ; restore the color
+           pop  cx
+           mov  color,cl
+           ret
 display_dec endp
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; display a 64-bit hex number to the screen
 ;
 display_hex64 proc near uses eax ebx ecx
-
+           
+           ; preserve the color and then print all integers in white
+           movzx cx,byte color
+           push cx
+           and  byte color,(~0Fh)
+           or   byte color,0Fh
+           
            mov  si,offset hex_str
            push eax
            push edx
@@ -826,6 +891,10 @@ hex_loop:  pop  eax
            mov  al,'h'
            call display_char
            
+           ; restore the color
+           pop  cx
+           mov  color,cl
+           
            ret
 display_hex64 endp
 
@@ -834,6 +903,12 @@ display_hex64 endp
 ;
 display_hex16 proc near uses eax ebx
 
+           ; preserve the color and then print all integers in white
+           movzx cx,byte color
+           push cx
+           and  byte color,(~0Fh)
+           or   byte color,0Fh
+           
            mov  si,offset hex_str
            rol  eax,16
            mov  cx,4
@@ -848,7 +923,11 @@ display_hex16 proc near uses eax ebx
            
            mov  al,'h'
            call display_char
-
+           
+           ; restore the color
+           pop  cx
+           mov  color,cl
+           
            ret
 display_hex16 endp
 
@@ -1123,9 +1202,11 @@ disp_it1:  ; di -> entry
 
 @@:        mov  word row,4
            mov  word col,7
+           mov  byte color,0Fh
            lea  si,[di + S_EMBR_ENTRY->description]
            call display_string
 
+           mov  byte color,07h
            mov  word row,5
            mov  word col,7
            mov  si,offset start_sect_str
@@ -1133,7 +1214,16 @@ disp_it1:  ; di -> entry
            mov  eax,[di + S_EMBR_ENTRY->starting_sector+0]
            mov  edx,[di + S_EMBR_ENTRY->starting_sector+4]
            call display_hex64
-
+           push ax
+           mov  al,' '
+           call display_char
+           mov  al,'('
+           call display_char
+           pop  ax
+           call display_dec  ; we assume edx:eax <= 32-bits
+           mov  al,')'
+           call display_char
+           
            mov  word row,6
            mov  word col,7
            mov  si,offset sect_count_str
@@ -1141,7 +1231,16 @@ disp_it1:  ; di -> entry
            mov  eax,[di + S_EMBR_ENTRY->sector_count+0]
            mov  edx,[di + S_EMBR_ENTRY->sector_count+4]
            call display_hex64
-
+           push ax
+           mov  al,' '
+           call display_char
+           mov  al,'('
+           call display_char
+           pop  ax
+           call display_dec  ; we assume edx:eax <= 32-bits
+           mov  al,')'
+           call display_char
+           
            mov  word row,7
            mov  word col,7
            mov  si,offset date_created_str
@@ -1167,6 +1266,13 @@ disp_it1:  ; di -> entry
            call display_OS_Sig
 
 info_not_valid:
+           mov  byte color,0Fh
+           mov  word row,14
+           mov  word col,20
+           mov  si,offset press_a_key_str
+           call display_string
+           mov  byte color,07h
+           
            xor  ah,ah
            int  16h
 
@@ -1184,12 +1290,17 @@ month_name  db 'Jan',0, 'Feb',0, 'Mar',0, 'Apr',0, 'May',0
 ; on entry:
 ;   edx:eax = seconds since 1 Jan 1980
 display_date proc near uses eax ebx ecx edx esi edi
-
+           
+           ; preserve the color and then print date in white
+           movzx cx,byte color
+           push cx
+           and  byte color,(~0Fh)
+           or   byte color,0Fh
 
            ; save in esi:edi
            mov  esi,edx
            mov  edi,eax
-
+           
            ; calculate the year
            mov  ebx,31536000
            div  ebx
@@ -1200,7 +1311,7 @@ display_date proc near uses eax ebx ecx edx esi edi
            mov  al,' '
            call display_char
            pop  eax
-
+           
            ; remaining = esi:edi - (year * 31536000)
            mul  ebx
            sub  edi,eax
@@ -1229,24 +1340,23 @@ display_date proc near uses eax ebx ecx edx esi edi
 @@:        mov  si,offset month_name
            add  si,bx
            call display_string
-           push eax
+           push ax
            mov  al,' '
            call display_char
-           pop  eax
+           pop  ax
 
            ; eax should now have days left over
            cmp  eax,9
            ja   short @f
-           push eax
+           push ax
            mov  al,'0'
            call display_char
-           pop  eax
+           pop  ax
 @@:        call display_dec
            mov  al,' '
            call display_char
            call display_char
-
-
+           
            ; edi should now have seconds left
            mov  cl,'a'       ; assume am
            mov  eax,edi
@@ -1254,49 +1364,57 @@ display_date proc near uses eax ebx ecx edx esi edi
            div  ebx
            push eax
            cmp  eax,12
-           jbe  short @f
+           jb   short @f
            mov  cl,'p'
+@@:        jbe  short @f
            sub  eax,12
+@@:        or   eax,eax       ; if midnight, print 12 instead of 00.
+           jnz  short @f
+           mov  eax,12
 @@:        cmp  eax,9
            ja   short @f
-           push eax
+           push ax
            mov  al,'0'
            call display_char
-           pop  eax
+           pop  ax
 @@:        call display_dec   ; hours
            pop  eax
            mul  ebx
            sub  edi,eax
            mov  al,':'
            call display_char
-
+           
            mov  eax,edi
            mov  ebx,60
            div  ebx
            cmp  eax,9
            ja   short @f
-           push eax
+           push ax
            mov  al,'0'
            call display_char
-           pop  eax
+           pop  ax
 @@:        call display_dec  ; minutes
            mul  ebx
            sub  edi,eax
            mov  al,':'
            call display_char
-
+           
            mov  eax,edi
            cmp  eax,9
            ja   short @f
-           push eax
+           push ax
            mov  al,'0'
            call display_char
-           pop  eax
+           pop  ax
 @@:        call display_dec
-
+           
            mov  al,cl
            call display_char
-
+           
+           ; restore the color
+           pop  cx
+           mov  color,cl
+           
            ret
 display_date endp
 
@@ -1309,6 +1427,7 @@ OS_sig_str0      db '    OS signature:  OS sig: ',0
 OS_sig_str1      db '                   FS sig: ',0
 OS_sig_str2      db '                    Usage: ',0
 OS_sig_str3      db '              OS specific: ',0
+press_a_key_str  db ' Press a key to return...',0
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; displays information about the given OS signature
@@ -1525,8 +1644,6 @@ crc32      proc near
 crc32      endp
 
 
-
-
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; remaining data needed
 
@@ -1566,7 +1683,7 @@ menu_start  db        'ีอออออออออออออออ  FYS OS (aka Konan) Multi-boot EMBR v0.9
             db  13,10,'ณ                                                                             ณ'
             db  13,10,'ณ                                                                             ณ'
             db  13,10,'ณ                                                                             ณ'
-            db  13,10,'ณ    Will boot entry   in    seconds.                                         ณ'
+            db  13,10,'ณ    Will boot entry   in    seconds.  Press any key to stop.                 ณ'
             db  13,10,'ณ                                                                             ณ'
             db  13,10,'ิอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออพ',0
 
@@ -1599,53 +1716,138 @@ legend      db        'ณ     ENTER = Boot current selected partition entry.     
            ; must start on a sector boundary
            org (($ + (SECT_SIZE-1)) & ~(SECT_SIZE-1))
 
+DEMO_THIS   equ 0  ; change '1' to '0' when not demonstrating 10 entries...
+
 entry_hdr   db  'EMBR'        ; sig0
-            dd  612C2474h     ; crc32
-            dw  2             ; total entries in table
+.if DEMO_THIS
+            dd  59828E59h     ; crc32
+            dw  10            ; total entries in table
+.else
+            dd  9F03423Fh     ; crc32
+            dw  1             ; total entries in table
+.endif
 boot_delay  db  20            ; boot delay
             dup 17,0          ; reserved
             db  'RBME'        ; sig1
-
+            
             ; entry 1
             dd  ENTRY_VALID   ; flags
             db  'eMBR'        ; signature
-            dq  OCCUPY        ; starting sector (MBR + eMBR) (32)
-            dq  (100800-OCCUPY) ; sector count (100 cylinders)
-            db  'FYSOS / FYSFS Filesystem used with the FYSOS:SYSCORE book.     ',0
-            dq  3ED0B027h     ; date created  (24 May 2013, noon)
-            dq  3ED0B027h     ; last booted   (24 May 2013, noon)
+            dq  63            ; starting sector (MBR + eMBR + blank to next track) (63)
+            dq  (100800-63)   ; sector count (100 cylinders)
+            db  'FYSOS / LEAN Filesystem used with the FYSOS:SYSCORE book.      ',0
+            dq  465D6740h     ; date created  (29 May 2017, noon)
+            dq  465D6E48h     ; last booted   (29 May 2017, noon thirty)
             dq  1111222233334444h ; OS signature
             dup 16,0          ; reserved
             
+.if DEMO_THIS
             ; entry 2
             dd  ENTRY_VALID   ; flags
             db  'eMBR'        ; signature
-            dq  100800        ; starting sector
-            dq  103824        ; sector count
-            db  'Empty Partition ready for formatting to a file system.         ',0
-            dq  3ED0B026h     ; date created  (24 May 2013, noon)
-            dq  3ED0B026h     ; last booted   (24 May 2013, noon)
-            dq  2B2BB2B200010002h ; OS signature
+            dq  24567         ; starting sector
+            dq  25184954      ; sector count
+            db  'Entry #2 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  46516740h     ; date created
+            dq  46546E48h     ; last booted
+            dq  4568751657532121h ; OS signature
+            dup 16,0          ; reserved
+            
+            ; entry 3
+            dd  ENTRY_VALID   ; flags
+            db  'eMBR'        ; signature
+            dq  124567        ; starting sector
+            dq  125184954     ; sector count
+            db  'Entry #3 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  46416740h     ; date created
+            dq  46446E48h     ; last booted
+            dq  4231876854489457h ; OS signature
             dup 16,0          ; reserved
 
+            ; entry 4
+            dd  ENTRY_VALID   ; flags
+            db  'eMBR'        ; signature
+            dq  2845          ; starting sector
+            dq  2545844       ; sector count
+            db  'Entry #4 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  46416040h     ; date created
+            dq  46446E08h     ; last booted
+            dq  3135487646878746h ; OS signature
+            dup 16,0          ; reserved
 
+            ; entry 5
+            dd  0             ; flags *Not Valid* *Empty slot*
+            db  'eMBR'        ; signature
+            dq  111121111     ; starting sector
+            dq  22544         ; sector count
+            db  'Entry #5 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  46415040h     ; date created
+            dq  46445E08h     ; last booted
+            dq  46546A456D746446h ; OS signature
+            dup 16,0          ; reserved
+
+            ; entry 6
+            dd  ENTRY_VALID   ; flags
+            db  'eMBR'        ; signature
+            dq  1AAAAAAAAh    ; starting sector
+            dq  22548855      ; sector count
+            db  'Entry #6 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  46413040h     ; date created
+            dq  46443E08h     ; last booted
+            dq  46546A46456D5446h ; OS signature
+            dup 16,0          ; reserved
+
+            ; entry 7
+            dd  ENTRY_VALID   ; flags
+            db  'eMBR'        ; signature
+            dq  1111111111    ; starting sector
+            dq  2222222222    ; sector count
+            db  'Entry #7 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  46403040h     ; date created
+            dq  46433E08h     ; last booted
+            dq  4673A1213AA1A34Dh ; OS signature
+            dup 16,0          ; reserved
+
+            ; entry 8
+            dd  ENTRY_VALID   ; flags
+            db  'eMBR'        ; signature
+            dq  333333333     ; starting sector
+            dq  444444444     ; sector count
+            db  'Entry #8 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  46401040h     ; date created
+            dq  46431E08h     ; last booted
+            dq  47799A4654D444AAh ; OS signature
+            dup 16,0          ; reserved
+
+            ; entry 9
+            dd  0             ; flags *Not Valid* *Empty slot*
+            db  'eMBR'        ; signature
+            dq  2255225522    ; starting sector
+            dq  5522552255    ; sector count
+            db  'Entry #9 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  36401040h     ; date created
+            dq  36431E08h     ; last booted
+            dq  9999A99AAA4A45AAh ; OS signature
+            dup 16,0          ; reserved
+
+            ; entry 10
+            dd  ENTRY_VALID   ; flags
+            db  'eMBR'        ; signature
+            dq  0DEADBEEFh    ; starting sector
+            dq  0A5A5A5A5A5h  ; sector count
+            db  'Entry #10 Demo entry.  Will not have anything.  Do not boot... ',0
+            dq  26401040h     ; date created
+            dq  26431E08h     ; last booted
+            dq  44DDDDDDDDAAAAAAh ; OS signature
+            dup 16,0          ; reserved
+.endif
+            
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  fill the remaining with 90h's
 
-;%print ((OCCUPY * SECT_SIZE)-$)  ; xx bytes here
+;%print ((OCCUPY * SECT_SIZE)-$)  ; 8544 bytes here
 
             org (OCCUPY * SECT_SIZE)
-
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; the following is simply to create an image that is large enough to use
-;  as a hard disk image.  This does not need to be in your code at all.
-; it is simply to add length to the image for testing purposes.
-
- ;.pmode
- ;
- ;            ; 24 cyl * 16 heads * 63 spt - 1 MBR
- ;            org ((24*16*63*SECT_SIZE)-SECT_SIZE)
 
 .end
 

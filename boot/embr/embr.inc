@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: embr.inc                                                           *
@@ -23,13 +23,14 @@ comment |*******************************************************************
 *            https://github.com/fysnet/FYSOS                               *
 *                                                                          *
 * DESCRIPTION:                                                             *
-*   embr EQUates                                                           *
+*   embr boot code                                                         *
 *                                                                          *
 * BUILT WITH:   NewBasic Assembler                                         *
 *                 http://www.fysnet/newbasic.htm                           *
 *               NBASM ver 00.26.59                                         *
+*          Command line: nbasm embr -d<enter>                              *
 *                                                                          *
-* Last Updated: 10 Aug 2016                                                *
+* Last Updated: 29 May 2017                                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
