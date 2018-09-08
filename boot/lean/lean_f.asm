@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: lean_f.asm                                                         *
@@ -23,14 +23,14 @@ comment |*******************************************************************
 *            https://github.com/fysnet/FYSOS                               *
 *                                                                          *
 * DESCRIPTION:                                                             *
-*   EQUates for lean.asm                                                   *
+*   Boot sector code for a leanfs file system.                             *
 *                                                                          *
 * BUILT WITH:   NewBasic Assembler                                         *
 *                 http://www.fysnet/newbasic.htm                           *
-*               NBASM ver 00.26.59                                         *
+*               NBASM ver 00.26.74                                         *
 *          Command line: nbasm lean_f<enter>                               *
 *                                                                          *
-* Last Updated: 10 Aug 2016                                                *
+* Last Updated: 27 Sept 2017                                               *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -39,7 +39,8 @@ comment |*******************************************************************
 *                                                                          *
 * Loading of files:                                                        *
 *  The loader file can be placed anywhere on disk, and does not need to    *
-*   be continuous on the disk, as long as it is in the ROOT directory.     *
+*   be continuous on the disk, as long as it is in the \ (root), \BOOT,    *
+*   or \SYSTEM\BOOT directory.                                             *
 *  Even though the LEAN FS uses 64-bit sectors, since this is for a        *
 *   floppy disk, we only need to worry about the 32-bit part.              *
 *                                                                          *
@@ -83,29 +84,48 @@ start:     cli                     ; don't allow interrupts
 
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ;  Check for 386+ machine.  If not, give error and halt
-           call chk_386            ; check to see if .386+
-           jnc  short is_386       ; carry set = no 386
+           pushf                   ; save the interrupt bit
+           push 0F000h             ; if bits 15:14 are still set
+           popf                    ;  after pushing/poping to/from
+           pushf                   ;  the flags register then we have
+           pop  ax                 ;  a 386+
+           and  ax,0F000h          ;
+           jnz  short @f           ; it's a 386+
            mov  si,offset not386str
-           call display_string
-           xor  ah,ah              ; Wait for keypress
-           int  16h                ;
-           int  18h                ; boot specs say that 'int 18h'
-                                   ;  should be issued here.
-not386str   db  13,10,'Processor is not a 386 compatible processor.',0
+           jmp  short BootErr
+
+not386str  db  13,10,'Processor is not a 386 compatible processor.',0
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; We now can use 386+ code (still in real mode though)
 ;
 .386P   ; allow processor specific code for the 386
-is_386:
+@@:        popf                   ; restore the interrupt bit
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  We need to call the BIOS to get the parameters of the current disk.
-
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; reset the disk services to be sure we are ready
+           xor  ax,ax
+           mov  dl,boot_data.drive
+           int  13h
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; save the Signature and Base LBA to boot_data
+           ; (this assumes that the two items are in the same order
+           ;  and at the first of boot_data for this to work.
+           ;  we do this so that we can save room in the boot code.)
+           mov  di,offset boot_data
+           mov  si,offset boot_sig
+           movsd       ; signature
+           movsd       ; lba low dword
+           movsd       ; lba high dword
+           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ;
            xor  ax,ax           ; this service destroys es:di
-           mov  es,ax           ;  and has a bug? if es:di != 0000h:0000h
+           mov  es,ax           ;  and has a bug (?) if es:di != 0000h:0000h
            xor  di,di           ;
            mov  ah,08h          ;
            mov  dl,boot_data.drive
@@ -113,387 +133,358 @@ is_386:
            xor  ah,ah           ;
            mov  al,dh           ;
            inc  ax              ;
-           mov  boot_data.Heads,ax ; number of heads
+           mov  Heads,ax        ; number of heads
            mov  al,cl           ;
            and  ax,003Fh        ;
-           mov  boot_data.SecPerTrack,ax ; sectors per track
-
+           mov  SecPerTrack,ax  ; sectors per track
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  We need to load the next 32 sectors into memory before we continue.
 ;  The super will be at lba 1, 2, 3, ..., 32.
-
+           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ;
-           mov  ax,07C0h
-           mov  es,ax
-           mov  bx,0200h
-           mov  eax,1
-           mov  ecx,32
+           mov  ebx,0x07E00
+           xor  eax,eax         ; eax = 1  (smaller than  'mov  eax,1')
+           inc  ax              ;
+           mov  cx,32
            call read_sectors
 
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  Bytes per sector is assumed to be 512
-           mov  word boot_data.sect_size,512
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  Load the root directory into memory.  No need to load the bitmap.
-;
-           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-           ;  find the super block.  It will be at lba 1, 2, 3, ..., 32
-           call find_super
-           or   ax,ax
-           jnz  short @f
-           mov  si,offset NoSuperS
-           jmp  short BootErr1
-
-           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-           ;  the ROOT
-@@:        mov  si,ax  ; ax = offset to super from find_super() above
-           mov  eax,[si+S_LEAN_SUPER->root_start]
-           push LEAN_ROOTSEG
-           pop  es
-           xor  bx,bx
-           call load_file
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  Search for loader file in root directory
-;
-           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-           ;
-           mov  si,offset loadname ; lean_fs formatted loader file name
-           mov  ebx,es:[S_LEAN_INODE->file_size]
-           mov  di,LEAN_INODE_SIZE
-           test dword es:[S_LEAN_INODE->attributes],(1<<19)
-           jz   short s_loader
-           mov  di,512
-s_loader:  cmp  byte es:[di+S_LEAN_DIRENTRY->type],1
-           jne  short s_cont
-           mov  cx,es:[di+S_LEAN_DIRENTRY->name_len]
-           push di
-           add  di,12
-           call stricmp
-           pop  di
-           or   al,al
-           jz   f_loader
-
-s_cont:    movzx ax,byte es:[di+S_LEAN_DIRENTRY->rec_len]
-           shl  ax,4
-           add  di,ax
-           sub  bx,ax
-           jnz  short s_loader
-
-           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-           ; if the loader.sys file was not found, display error
-           mov  si,offset noloaderS
-           jmp  short BootErr1
-
+           jmp  remaining_code
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  This is if we have an error of some kind when trying to boot
 ;                        
-BootErr:   mov  si,offset diskerrorS ; loading message
-BootErr1:  call display_string     ;
+BootErr:   call display_string     ;
            xor  ah,ah              ; Wait for keypress
            int  16h
 
            int  18h                ; boot specs say that 'int 18h'
                                    ;  should be issued here.
 
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  The Serial Number required by all FYS bootable bootsectors.
-;  It is a dword sized random number seeded by the time of day and date.
-;  This value should be created at format time, but this address is not
-;  the same depending on the code above.
-           dd  12345678h
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; The following procedures up until the super block *must* remain in the
-;  first sector since they are loaded by the BIOS.
-;
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  Checks for a 386+ machine
-;  on entry: nothing
-;  on exit:
-;    carry set = NOT a 386+, carry clear = 386+
-;    ax = 0 = 8086, 1 = 186, 2 = 286, 3 = 386+
-chk_386    proc near uses bx cx dx
-           pushf                   ; save the interrupt bit
-
-           mov  cx,0121h           ; If CH can be shifted by 21h,
-           shl  ch,cl              ; then it's an 8086, because
-           mov  ax,00h             ; is 8086
-           jz   short @f           ; a 186+ limits shift counts.
-           push sp                 ; If SP is pushed as its
-           pop  ax                 ; original value, then
-           cmp  ax,sp              ; it's a 286+.
-           mov  ax,01h             ; is 186
-           jne  short @f           ;
-           mov  ax,7000h           ; if bits 12,13,14 are still set
-           push ax                 ; after pushing/poping to/from
-           popf                    ; the flags register then we have
-           pushf                   ; a 386+
-           pop  ax                 ;
-           and  ax,7000h           ;
-           cmp  ax,7000h           ;
-           mov  ax,02h             ; is 286
-           jne  short @f           ; it's a 386+
-
-           popf                    ; restore the interrupt bit
-           mov  ax,03h             ; is 386+
-           clc                     ; so clear the carry and 
-           ret                     ;  return
-
-@@:        popf                    ; restore the interrupt bit
-           stc                     ; not a 386+, so set the carry and
-           ret                     ;  return
-chk_386    endp
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; This routine reads in CX sectors using the bios interrupt 13h service
-; Since we don't know if the current bios can span heads and cylinders,
-;  with multiple counts in CX, we will read one sector at a time, manually
-;  updating DH, and CX as we go.
-; On entry:
-;   EAX = starting sector in LBA format
-; ES:BX ->segment:offset to read to
-;    CX = count of sectors to read
-read_sectors proc near uses eax ebx ecx edx es
-           add  eax,[boot_data.base_lba]     ; add base lba
-read_loop: push eax
-           push cx
-           push bx
-           call lba_to_chs         ; eax(lba) -> (ax/cx/dx)(chs)
-           mov  ax,0003h           ; three try's
-chck_loop: push ax
-           mov  dl,boot_data.drive ; dl = drive
-           mov  ax,0201h
-           int  13h                ; do the read/write
-           pop  ax
-           jnc  short int13_no_error
-           push cx
-           push dx
-           xor  ah,ah
-           int  13h                ; reset disk
-           pop  dx
-           pop  cx
-           dec  ax
-           jnz  short chck_loop    ; try again
-
-           jmp  short BootErr      ; do error display and reboot
-
-int13_no_error:
-           pop  bx
-           add  bh,2               ; point to next position
-           pop  cx                 ; restore sector count
-           pop  eax                ; restore current LBA
-           inc  eax                ; inc to next LBA sector
-           loop read_loop          ; decrement counter, read another one
-
-           ret
-read_sectors endp
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; This routine converts LBA (EAX) to CHS
-; Sector   = (LBA mod SPT)+1
-; Head     = (LBA  /  SPT) mod Heads
-; Cylinder = (LBA  /  SPT)  /  Heads
-;    (SPT = Sectors per Track)
-lba_to_chs proc near               ; eax = LBA
-           xor  edx,edx
-           movzx ecx,word boot_data.SecPerTrack ; sectors per track
-           div  ecx                ; eax = edx:eax / ecx  with edx = remdr.
-           push dx                 ; save sectors
-           movzx ecx,word boot_data.Heads ; heads per cylinder
-           xor  edx,edx            ;
-           div  ecx                ; eax = edx:eax / ecx  with edx = remdr.
-           mov  cx,dx              ; save remainder
-           pop  dx                 ; dx = sector
-           inc  dx                 ; sectors are one (1) based
-           mov  dh,cl
-           mov  ch,al
-           mov  cl,ah
-           ror  cl,2
-           and  cl,11000000b
-           and  dl,00111111b
-           or   cl,dl
-           ret
-lba_to_chs endp
+include ..\services\lba2chs.inc    ; include the LBA to CHS routine
+include ..\services\read_chs.inc   ; include the read disk using CHS routine
+include ..\services\conio.inc      ; include the display_char and display_string functions
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  These data items must be in the first sector already loaded by the BIOS
-
 boot_data      st S_BOOT_DATA
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Pad out to fill 512 bytes, including final word 0xAA55
 
-;%PRINT (200h-2-$)               ; 29 bytes free in this area
+%PRINT (200h-$-4-8-2)               ; 75 bytes free in this area
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  The Serial Number required by all FYS bootable bootsectors.
+;   It is a dword sized random number seeded by the time of day and date.
+;   This value should be created at format time
+;  The Base LBA of this boot code.
+;  The formatter will update this data for us.
+           org (200h-2-8-4)
+boot_sig   dd  ?
+base_lba   dq  ?
 
            org (200h-2)
            dw  0AA55h
-
-
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  Load the Root and search for loader file in root directory
+remaining_code:           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ;  find the super block.  It will be at lba 1, 2, 3, ..., 32
+           call find_super
+           or   ax,ax
+           jnz  short @f
+           mov  si,offset NoSuperS
+           jmp  BootErr
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ;  the ROOT
+@@:        mov  si,ax  ; ax = offset to super from find_super() above
+           mov  eax,[si+S_LEAN_SUPER->root_start]
+           mov  root_start,eax
+           
+           ; load the root directory to LEAN_ROOTSEG
+           mov  ebx,(LEAN_ROOTSEG << 4)
+           call load_file
+           
+           ; point es to this data
+           push LEAN_ROOTSEG
+           pop  es
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  the loader file might be in the root directory
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; search the root directory for the loader file
+           mov  si,offset loadname ; lean_fs formatted loader file name
+           mov  dl,S_DIRENTRY_TYPE_FILE
+           call find_name
+           jz   short f_loader
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  if not in the root directory, the loader file might be in the 
+;  \boot directory
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; if not in the root directory, find the 'boot' directory,
+           ; then search within it for the loader file
+           mov  si,offset bootname ; lean_fs formatted boot directory filename
+           mov  dl,S_DIRENTRY_TYPE_DIR
+           call find_name
+           jnz  short f_try_system
+           
+           ; found the boot\ directory, so load it and search for the 
+           ;  loader file within it
+           mov  eax,es:[di+S_LEAN_DIRENTRY->inode]
+           mov  ebx,(LEAN_ROOTSEG << 4)
+           call load_file
+           
+           mov  si,offset loadname ; lean_fs formatted loader file name
+           mov  dl,S_DIRENTRY_TYPE_FILE
+           call find_name
+           jz   short f_loader
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  if not in the \boot directory, the loader file might be in the 
+;  \system\boot directory
+f_try_system:           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; if not in the boot directory, find the 'system\boot' directory,
+           ; then search within it for the loader file
+           ; (need to reload the root directory)
+           mov  eax,root_start
+           mov  ebx,(LEAN_ROOTSEG << 4)
+           call load_file
+           
+           mov  si,offset systemname ; lean_fs formatted system directory filename
+           mov  dl,S_DIRENTRY_TYPE_DIR
+           call find_name
+           jnz  short f_not_found
+           
+           ; found the system\ directory, so load it and search for the 
+           ;  boot\ director within it
+           mov  eax,es:[di+S_LEAN_DIRENTRY->inode]
+           mov  ebx,(LEAN_ROOTSEG << 4)
+           call load_file
+           
+           mov  si,offset bootname ; lean_fs formatted boot directory filename
+           mov  dl,S_DIRENTRY_TYPE_DIR
+           call find_name
+           jnz  short f_not_found
+           
+           ; found the system\boot\ directory, so load it and search for the 
+           ;  loader file within it
+           mov  eax,es:[di+S_LEAN_DIRENTRY->inode]
+           mov  ebx,(LEAN_ROOTSEG << 4)
+           call load_file
+           
+           mov  si,offset loadname ; lean_fs formatted loader file name
+           mov  dl,S_DIRENTRY_TYPE_FILE
+           call find_name
+           jz   short f_loader
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; was not in any of the three directories listed
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; if the loader.sys file was not found, display error
+f_not_found:
+           mov  si,offset noloaderS
+           jmp  BootErr
+                      
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Print 'Starting...' string
-;
+;          
 f_loader:  mov  si,offset os_load_str  ; loading message
            call display_string     ; saves all registers
-
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Load the Loader
-;
+;          
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; "choose" loader.sys base address
+           ;  this returns the address is ebx
+           call set_up_address     ; so that we can loader a loader.sys file
+                                   ;  > 64k, we pass a physical address in ebx.
+           mov  boot_data.loader_base,ebx ; save to our boot_data block too
+           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; Now load the loader file to LOADSEG.
            ; (es:di->found root entry)
            mov  eax,es:[di+S_LEAN_DIRENTRY->inode]
-           mov  cx,LOADSEG
-           mov  es,cx
-           xor  bx,bx
            call load_file  ; returns sector count in ax
-
+           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; Now move the file back to erase the inode
            ;  ax = sectors read
            mov  cx,ax
-           shl  cx,8  ; ax = words to move
-
+           shl  cx,5  ; cx = paragraphs to move (<< 9 for bytes then >> 4 for paragraphs == << 5)
+           
            ; move past INODE and ea's
+           ; since the loader file can be > 64k, we have to allow for roll-over
            mov  si,sizeof(S_LEAN_INODE)
-           test dword es:[S_LEAN_INODE->attributes],(1<<19)
+           test dword es:[S_LEAN_INODE->attributes],LEAN_ATTR_INLINEXTATTR
            jz   short @f
-           mov  si,boot_data.sect_size
-
-@@:        xor  di,di
-           push ds
-           push es
-           pop  ds
-           rep
-           movsw
-           pop  ds
-
+           mov  si,512
+@@:        shr  ebx,4      ; ebx = loader address from above
+@@:        mov  ds,bx
+           mov  es,bx
+           xor  di,di
+           push si
+           movsd
+           movsd
+           movsd
+           movsd
+           pop  si
+           inc  bx
+           loop @b
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  So that we can have a DOS INT 21h stub on the front part of
+;   the loader, we need to "patch" the 21h vector
+           xor  ax,ax
+           mov  ds,ax
+           mov  eax,(07C00000h + int32vector)
+           mov  [(21h * 4)],eax
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  update the Boot Data block
+           mov  ax,07C0h
+           mov  ds,ax
+           mov  byte boot_data.file_system,LEAN
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Now jump to the loader.
 ;  Send the following information in the registers:
-;   ds:si-> boot data (includes  'booted from drive')
+;   ebx-> boot data (includes  'booted from drive') (physical address)
+           mov  eax,boot_data.loader_base
+           shr  eax,4
+           mov  ds,ax
+           
+           cmp  word [0],5A4Dh
+           je   short is_dos_exe
+           
+           push 07C0h              ; 
+           pop  ds                 ; ds = 07C0h again
+           mov  si,offset exe_error
+           jmp  BootErr
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; the loader.sys file is a DOS MZ type .exe file
+is_dos_exe:
+           add  ax,[08h]           ; skip over .exe header
+           mov  bx,ax
+           add  bx,[0Eh]
+           mov  ss,bx              ; ss for EXE
+           mov  sp,[10h]           ; sp for EXE
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; set up cs:ip
+           add  ax,[16h]           ; cs
+           push ax
+           push word [14h]         ; ip
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ;   ebx -> boot data (includes  'booted from drive')
+           mov  ebx,07C00h           ; we pass the physical address of BOOT_DATA
+           add  ebx,offset boot_data ;  to the loader in the EBX register
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           retf
 
-           push 07C0h              ; set up some data for LOADER.BIN
-           pop  ds                 ; ds = 07C0h
-           mov  si,offset boot_data
-           
-           ; fill the boot data struct
-           mov  byte boot_data.file_system,LEAN
-           
-           mov  eax,((LEAN_ROOTSEG << 16) | 0)
-           mov  boot_data.root_loc,eax
-           xor  eax,eax
-           mov  boot_data.other_loc,eax
-           mov  boot_data.misc0,ax
-           mov  boot_data.misc1,ax
-           mov  boot_data.misc2,ax
-           
-           ; jump to the loader
-           push LOADSEG            ; LOADSEG:0000h for RETF below
-           push 0000h              ;
-           retf                    ; jump to LOADSEG:0000h
+include ..\services\address.inc    ; include the "choosing" of the loader.sys base address code
+include ..\services\stricmp.inc    ; include the stricmp function
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; new interrupt vector for INT 21h
+;  this simply (i)returns
+int32vector:
+           iret
 
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; display a char to the screen using the BIOS
-;
-display_char proc near uses ax bx
-           mov  ah,0Eh             ; print char service
-           xor  bx,bx              ; 
-           int  10h                ; output the character
-           ret
-display_char endp
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; display a string to the screen using the BIOS
-;
-display_string proc near uses ax si
-           cld
-display_loop:                      ; ds:si = asciiz message
-           lodsb
-           or   al,al
-           jz   short end_string
-           call display_char
-           jmp  short display_loop
-end_string: ret
-display_string endp
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; this routine compares (case insensitive) two strings
-; ds:si->string0 (asciiz)
-; es:di->string1
-; cx = length of string1
-; returns  al -1 if string0 < string1 (or) string0[cx] != '\0'
-;          al  0 if string0 = string1
-;          al  1 if string0 > string1
-stricmp    proc near uses si di
-
-stricmp_loop:
-           mov  al,es:[di]
+; load a directory, then search for a name
+; on entry:
+;  es = segment where to load the directory (LEAN_ROOTSEG)
+;  ds:si-> filename to find
+;   dl = type of file to find (1 = file, 2 = dir)
+; on return:
+;  zero flag set if found
+;  es:di-> directory entry
+;  
+find_name  proc near uses eax
+           
+           mov  ebx,es:[S_LEAN_INODE->file_size]
+           mov  di,LEAN_INODE_SIZE
+           test dword es:[S_LEAN_INODE->attributes],LEAN_ATTR_INLINEXTATTR
+           jz   short s_loader
+           mov  di,512
+s_loader:  cmp  es:[di+S_LEAN_DIRENTRY->type],dl
+           jne  short n_loader
+           mov  cx,es:[di+S_LEAN_DIRENTRY->name_len]
+           push di
+           add  di,12
+           
+           ; we need to extract the filename and place it
+           ;  into a buffer since it isn't guarenteed to be
+           ;  null terminated
+           push si
+           mov  si,offset buffer
+@@:        mov  al,es:[di]
            inc  di
-           call uppercase
-           mov  ah,al
-
-           lodsb
-           call uppercase
-
-           cmp  al,ah
-           jb   short stricmp_less
-           ja   short stricmp_above
-           loop stricmp_loop
-
-           ; make sure ds:si-> is an asciiz string at this length
-           cmp  byte [si],0
-           jne  short stricmp_less
-
+           mov  [si],al
+           inc  si
+           loop @b
            xor  al,al
-           ret
+           mov  [si],al
+           pop  si
+           
+           push es
+           push ds
+           pop  es
+           mov  di,offset buffer
+           call stricmp            ; returns zero flag set if equal
+           pop  es
+           pop  di
+           jz   short find_done
 
-stricmp_less:
-           mov  al,-1
-           ret
-
-stricmp_above:
-           mov  al,1
-           ret
-
-stricmp    endp
-
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; upper case the letter in al returning it in al
-uppercase  proc near
-           cmp  al,'a'
-           jb   short uppercase_done
-           cmp  al,'z'
-           ja   short uppercase_done
-           sub  al,32
-uppercase_done:
-           ret
-uppercase  endp
-
+n_loader:  movzx ax,byte es:[di+S_LEAN_DIRENTRY->rec_len]
+           shl  ax,4
+           add  di,ax
+           sub  bx,ax
+           jnz  short s_loader
+           
+           or   al,1  ; clear the zero flag
+           
+find_done: ret
+find_name  endp
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; Load a file to given memory
 ; on entry:
-;   es = segment to start (remember that the inode struct is included)
+;  ebx = physical address to start (remember that the inode struct is included)
 ;  eax = sector number to inode (first sector)
 ; on return:
 ;  eax = sectors read
 load_file proc near uses ebx ecx edx ebp si di es
-
+           
            ; we must start by loading at least one sector to get the inode
-           mov  ecx,1
-           xor  bx,bx
-           call read_sectors       ; read in the first cluster of the file
+           mov  cx,1
+           call read_sectors       ; read in the first sector of the file
+           
+           ; get segment of address where the inode was loaded
+           push ebx
+           shr  ebx,4
+           mov  es,bx
+           pop  ebx
+           xor  di,di
+           ; es:di -> inode
            
            ; create a list of sectors from the direct extent list
            ;  and indirect extent list(s)
            ; this works as long as there is 2048 or less extents total
-           xor  di,di
            
            ; extent count in the inode
            movzx cx,byte es:[di+S_LEAN_INODE->extent_count]
@@ -501,15 +492,18 @@ load_file proc near uses ebx ecx edx ebp si di es
            ; get next indirect sector number
            mov  edx,es:[di+S_LEAN_INODE->first_indirect]
            
-           ; save segment and offset to load file to
-           push es
-           push bx
+           ; save address to load file to
+           ; we don't add 512 to the address since we re-read the inode again
+           ;  (it is part of the first extent)
+           push ebx
            
            lea  si,[di+S_LEAN_INODE->extent_start]
            lea  bx,[di+S_LEAN_INODE->extent_size]
            mov  di,INDIRECT_BUFF
            
-           xor  ebp,ebp  ; loop count
+           xor  ebp,ebp  ; loop counter
+           
+           push eax  ; save the next indirect sector
            
            ; move the sectors start and count of sectors fields
 @@:        mov  eax,es:[si]    ; start
@@ -521,17 +515,20 @@ load_file proc near uses ebx ecx edx ebp si di es
            add  di,8
            inc  ebp
            loop @b
-
+           
+           pop  eax
+           
            ; if next indirect sector is zero, no more.
            or   edx,edx
            jz   short @f
-
+           
            ; read in 1 sector of indirect extents
+           push ax
            mov  ax,(SECT_BUFFER >> 4) ; this works since our boot is at 0:7C00h
            mov  es,ax
-           xor  bx,bx
-           mov  eax,ebx
-           mov  ecx,1
+           pop  ax
+           mov  ebx,SECT_BUFFER
+           mov  cx,1
            call read_sectors
            
            ; store the next indirect sector
@@ -545,8 +542,8 @@ load_file proc near uses ebx ecx edx ebp si di es
            mov  bx,(sizeof(S_LEAN_INDIRECT) + 8)
            jmp  short @b
            
-@@:        pop  bx
-           pop  es
+           ; restore original loader address
+@@:        pop  ebx
            
            ; ebp now equals extents to read
            ; so save in ecx
@@ -558,8 +555,6 @@ load_file proc near uses ebx ecx edx ebp si di es
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; now do the loading of the file, an extent at a time
            mov  si,INDIRECT_BUFF
-           xor  ebx,ebx
-           
 @@:        push ecx
            mov  eax,[si]
            mov  ecx,[si+4]
@@ -568,10 +563,7 @@ load_file proc near uses ebx ecx edx ebp si di es
            add  ebp,ecx         ; increment sector count
            
            ; calculate the offset for next read
-           ; This assumes that loader.sys will be less than 64k
-           ; If loader >= 64k, add to ES and leave bx = 0 instead
-           xor  edx,edx
-           movzx eax,word boot_data.sect_size
+           mov  eax,512
            mul  ecx
            add  ebx,eax
            
@@ -632,15 +624,18 @@ os_load_str   db  13,10,'Starting FYSOS...',0
 
 noloaderS     db  13,10,'Could not find loader.sys.',0
 NoSuperS      db  13,10,'Could not find the Super Block.',0
-diskerrorS    db  13,10,07,'Error reading disk or non-system disk.'
-              db  13,10,'Press any key',0
+exe_error     db  13,10,07,'Error with Loader.sys format.',0
 loadname      db  'loader.sys',0
+systemname    db  'system',0        ; \system directory
+bootname      db  'boot',0          ; \boot directory
 
-;%PRINT (600h-$)               ; 488 bytes free in this area
+%PRINT (600h-$)               ; 120 bytes free in this area
 
 ; fill remaining with zeros
               dup  (600h-$),0
 
-end:
+; data and a temp buffer that does not occupy the binary file
+root_start    dup 4,?
+buffer        dup 100,?
 
 .end

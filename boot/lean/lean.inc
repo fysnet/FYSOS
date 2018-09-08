@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: lean.inc                                                           *
@@ -30,7 +30,7 @@ comment |*******************************************************************
 *               NBASM ver 00.26.59                                         *
 *          Command line: nbasm lean<enter>                                 *
 *                                                                          *
-* Last Updated: 10 Aug 2016                                                *
+* Last Updated: 16 Apr 2017                                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -102,7 +102,7 @@ S_LEAN_INODE struct
   links_count           dword    ; The number of hard links (the count of directory entries) referring to this file, at least 1
   uid                   dword    ; currently reserved, set to 0
   gid                   dword    ; currently reserved, set to 0
-  attributes            dword    ; see table below
+  attributes            dword    ; see below
   file_size             qword    ; file size
   sector_count          qword    ; 
   acc_time              qword    ; last accessed: number of seconds elapsed since midnight of 1970-01-01
@@ -116,9 +116,14 @@ S_LEAN_INODE struct
   extent_size           dup (6 * sizeof(dword))
 S_LEAN_INODE ends
 
+LEAN_ATTR_INLINEXTATTR  equ (1<<19) ; Remaining bytes after the inode structure are reserved for inline extended attributes
+
+S_DIRENTRY_TYPE_FILE    equ  1
+S_DIRENTRY_TYPE_DIR     equ  2
+
 S_LEAN_DIRENTRY struct
   inode                 qword    ; The inode number of the file linked by this directory entry, the address of the first cluster of the file.
-  type                  byte     ; see table below (0 = deleted)
+  type                  byte     ; see table above (0 = deleted)
   rec_len               byte     ; len of total record in 16 byte units.
   name_len              word     ; total length of name.
   name                  dup 4    ; (UTF-8) must *not* be null terminated, remaining bytes undefined if not a multiple of 8. UTF-8
