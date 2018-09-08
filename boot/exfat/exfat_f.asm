@@ -2,7 +2,7 @@ comment |*******************************************************************
 *  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
-* FILE: exfat_hd.asm                                                       *
+* FILE: exfat_f.asm                                                        *
 *                                                                          *
 * This code is freeware, not public domain.  Please use respectfully.      *
 *                                                                          *
@@ -35,7 +35,6 @@ comment |*******************************************************************
 ****************************************************************************
 * Notes:                                                                   *
 *                                                                          *
-*   *** Assumes this is for a hard drive ***                               *
 *                                                                          *
 ***************************************************************************|
 
@@ -44,7 +43,7 @@ comment |*******************************************************************
 include ..\boot.inc                ;
 include exfat.inc                  ;
 
-outfile 'exfat_hd.bin'             ; target filename
+outfile 'exfat_f.bin'              ; target filename
 
 .code                              ;
 .rmode                             ; bios starts with (un)real mode
@@ -56,6 +55,9 @@ outfile 'exfat_hd.bin'             ; target filename
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; The following figures are specific to a 1.44M 3 1/2 inch floppy disk
+; Our formatter (mexfat.exe) will fill all of these in for us.
+;  However, we need to have their offsets so that we can access them
+;  here in this code.
 ;
 OEM_Name     db  'EXFAT   '    ; 8 bytes for OEM Name and Version
 
@@ -87,10 +89,6 @@ HeapUse      db  ?             ; percentage of heap in use
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; start of our boot code
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; to save space in the first sector, and since this doesn't have to be
-;  initialized, we reuse this code space for the 26 byte read buffer
 .ifne $ 0x78
   %error 1, 'Offset of start code does not equal 0x78'
 .endif
@@ -122,7 +120,7 @@ start:     cli                     ; don't allow interrupts
            and  ax,0F000h          ;
            jnz  short @f           ; it's a 386+
            mov  si,offset not386str
-           jmp  BootErr
+           jmp  short BootErr
 
 not386str  db  13,10,'Processor is not a 386 compatible processor.',0
 
@@ -131,26 +129,7 @@ not386str  db  13,10,'Processor is not a 386 compatible processor.',0
 ;
 .386P   ; allow processor specific code for the 386
 @@:        popf                   ; restore the interrupt bit
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; We now check for the BIOS disk extentions.
-; We assume we will not be on a floppy disk.
-           mov  ah,41h
-           mov  bx,55AAh
-           int  13h                     ; dl still = drive_num
-           jc   short @f
-           shr  cx,1                    ; carry = bit 0 of cl
-           adc  bx,55AAh                ; AA55 + 55AA + carry = 0 if supported
-           jz   short read_remaining
-@@:        mov  si,offset no_extentions_found
-           jmp  short BootErr
-
-no_extentions_found db  'Requires int 13h extented read service.',0
-
-;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  The next task is to load the remianing 11 sectors of the boot code.
-;
-read_remaining:
+           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; reset the disk services to be sure we are ready
            xor  ax,ax
@@ -169,18 +148,33 @@ read_remaining:
            movsd       ; lba high dword
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ;
+           xor  ax,ax           ; this service destroys es:di
+           mov  es,ax           ;  and has a bug (?) if es:di != 0000h:0000h
+           xor  di,di           ;
+           mov  ah,08h          ;
+           mov  dl,boot_data.drive
+           int  13h             ;
+           xor  ah,ah           ;
+           mov  al,dh           ;
+           inc  ax              ;
+           mov  Heads,ax        ; number of heads
+           mov  al,cl           ;
+           and  ax,003Fh        ;
+           mov  SecPerTrack,ax  ; sectors per track           
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; read in 8 more sectors from base + 1
-           mov  ebx,07E00h     ; physical address 0x07E00
-           xor  eax,eax        ; (smaller than 'mov eax,1')
-           inc  ax             ; eax = 1
-           cdq
-           mov  ecx,8          ; 
-           call read_sectors_long
+           mov  ebx,07E00h      ; physical address 0x07E00
+           xor  eax,eax         ; eax = 1  (smaller than  'mov  eax,1')
+           inc  ax              ;
+           mov  cx,8            ; 
+           call read_sectors
            
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; jump to the rest of the code we just loaded
            jmp  remaining_code
-           
+
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  This is if we have an error of some kind when trying to boot
 ;
@@ -191,20 +185,17 @@ BootErr:   call display_string     ;
            int  18h                ; boot specs say that 'int 18h'
                                    ;  should be issued here.
 
-
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Procedures used with in code follow:
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; The following code and data must remain in the first sector
-
-include ..\services\read_ext.inc   ; include the read_sectors_long function
+include ..\services\lba2chs.inc    ; include the LBA to CHS routine
+include ..\services\read_chs.inc   ; include the read disk using CHS routine
 include ..\services\conio.inc      ; include the display_char and display_string functions
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Pad out to fill 512 bytes, including final word 0xAA55
-%print (200h-$-4-8-2)           ; 12 bytes free in this area
+%print (200h-$-4-8-2)           ; 3 bytes free in this area
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  The Serial Number required by all FYS bootable bootsectors.
@@ -216,7 +207,7 @@ include ..\services\conio.inc      ; include the display_char and display_string
 boot_sig   dd  ?
 base_lba   dq  ?
 
-           org (200h-2)
+           org ((1 * 200h)-2)  ; End of LSN 0
            dw  0AA55h
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -235,28 +226,24 @@ remaining_code:
            mov  si,offset fat_size_err ; loading message
            jmp  BootErr            ;           
 @@:        mov  ebx,(FAT_FATSEG << 4) ; physical address to read it to
-           xor  edx,edx            ;
            mov  eax,FATOffset      ; LSN of FAT
-           call read_sectors_long  ; read in the first FAT
+           call read_sectors       ; read in the first FAT
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ;  next the ROOT
            push FAT_FATSEG         ; fs = segment of fat
            pop  fs                 ;
            mov  cl,logSectClust    ; calculate SPC
-           xor  eax,eax            ; eax = 1
-           inc  ax                 ;
+           mov  eax,1              ;
            shl  eax,cl             ;
            mov  ecx,eax            ; ecx = sectors per cluster
            mov  ebx,(FAT_ROOTSEG << 4) ; -> to ROOT memory area
            mov  eax,RootCluster    ;
 @@:        push eax                ;
-           dec  eax                ; clusters are 2 based
-           dec  eax                ;
+           sub  eax,2              ; clusters are 2 based
            mul  ecx                ; make it sector based
            add  eax,ClustHeapOff   ; from start of heap
-           adc  edx,0
-           call read_sectors_long  ; read in the first cluster
+           call read_sectors       ; read in the first cluster
            mov  eax,512            ; point to next position
            mul  ecx                ;
            add  ebx,eax            ;
@@ -297,7 +284,7 @@ s_loader:  mov  al,es:[edi+S_EXFAT_ROOT->entry_type]
 
 not_found: mov  si,offset loader_error
            jmp  BootErr
-
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Print 'Starting...' string
 ;
@@ -312,7 +299,7 @@ f_loader:  mov  si,offset os_load_str  ; loading message
            ;  this returns the address is ebx
            call set_up_address     ; so that we can loader a loader.sys file
                                    ;  > 64k, we pass a physical address in ebx.
-           mov  [boot_data+S_BOOT_DATA->loader_base],ebx ; save to our boot_data block too
+           mov  boot_data.loader_base,ebx ; save to our boot_data block too
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ;  Walk the FAT chain reading all 'clusters' of
@@ -326,11 +313,9 @@ f_loader:  mov  si,offset os_load_str  ; loading message
            mov  eax,es:[di+S_EXFAT_STRM->first_clust]
 @@:        push eax                ;
            sub  eax,2              ; clusters are 2 based
-           xor  edx,edx            ;
            mul  ecx                ; make it sector based
            add  eax,ClustHeapOff   ; from start of heap
-           adc  edx,0
-           call read_sectors_long  ; read in the first cluster
+           call read_sectors       ; read in the first cluster
            mov  eax,512            ; point to next position
            mul  ecx                ;
            add  ebx,eax            ;
@@ -346,7 +331,7 @@ f_loader:  mov  si,offset os_load_str  ; loading message
            mov  ds,ax
            mov  eax,(07C00000h + int32vector)
            mov  [(21h * 4)],eax
-           
+
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  update the Boot Data block
            mov  ax,07C0h
@@ -403,9 +388,10 @@ loadname      db  'loader.sys',0
 int32vector:
            iret
 
+
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; at the end of every sector, we must place a sig of 0xAA550000
-%print ((2 * 200h)-$-4)          ; 10 bytes free in this area
+%print ((2 * 200h)-$-4)          ; 18 bytes free in this area
            org ((2 * 200h)-4)  ; End of LSN 1
            db  0x00, 0x00, 0x55, 0xAA
 
@@ -442,7 +428,7 @@ include ..\services\stricmp.inc    ; include the stricmp function
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; at the end of every sector, we must place a sig of 0xAA550000
-%print ((3 * 200h)-$-4)        ; 365 bytes free in this area
+%print ((3 * 200h)-$-4)        ; 361 bytes free in this area
            org ((3 * 200h)-4)  ; End of LSN 2
            db  0x00, 0x00, 0x55, 0xAA
 
