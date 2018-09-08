@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: boot.inc                                                           *
@@ -29,7 +29,7 @@ comment |*******************************************************************
 *                 http://www.fysnet/newbasic.htm                           *
 *               NBASM ver 00.26.59                                         *
 *                                                                          *
-* Last Updated: 10 Aug 2016                                                *
+* Last Updated: 10 Apr 2017                                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -39,42 +39,26 @@ comment |*******************************************************************
 ; FS types
 LEAN    equ   1
 EXT2    equ   2
+SFS     equ   3
 
+ExFAT   equ  11
 FAT12   equ  12
 FAT16   equ  16
 FAT32   equ  32
 
 FYSFS   equ  22
 
-
-; loadseg  128k  This is the max size of our loader file
-LOADSEG    equ  3000h          ; start of loader load area   (0x30000 = 192k)
-;LOADSEG_SIZE  equ  256
-
 ; initial stack location
-STACK_OFFSET  equ 4400h        ; first push at 07C0:43FEh
+STACK_OFFSET  equ 4400h        ; first push at 07C0:4400h (0x0C000) minus size of pushed value
 
-; save location of the boot sector for the kernel to find the booted from drive
-SAVE_SEG      equ 07A0h
-
+; first two items must remain at top and in that order
 S_BOOT_DATA struct
-           SecPerFat    dword  ;  FAT: Sectors per FAT
-           FATs         byte   ;  FAT: Number of FATs
-           SecPerClust  word   ;  FAT: Sectors per Cluster
-           SecRes       word   ;  FAT: Sectors reserved for Boot Record
-           SecPerTrack  word   ;  FAT: Sectors per Track
-           Heads        word   ;  FAT: Number of Heads
-           root_entries dword  ;  FAT: Root entries
-           base_lba     qword  ;  ALL: base lba of partition
-           file_system  byte   ;  ALL: filesystem number
-           drive        byte   ;  ALL: BIOS drive number
-           sect_size    word   ;  ALL: Sector size: 512, 1024, etc.
-           root_loc     dword  ;  ALL: Far pointer (seg:off) to current root location (loaded by the boot code)
-           other_loc    dword  ; SOME: Far pointer (seg:off) to current super/fat/etc location
-           misc0        word   ; SOME: Misc word used buy some file systems
-           misc1        word   ; SOME: Misc word used buy some file systems
-           misc2        word   ; SOME: Misc word used buy some file systems
-           reserved     dup 5  ; padding/reserved
+           signature    dword  ; signature used for finding booted from partition
+           base_lba     qword  ; base lba of partition
+           loader_base  dword  ; physical address of loader.sys
+           file_system  byte   ; filesystem number
+           drive        byte   ; BIOS drive number
+           reserved     dup 30 ; padding/reserved
 S_BOOT_DATA ends
 
 S_INT13_PARMS struct
