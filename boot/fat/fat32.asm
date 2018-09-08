@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: fat32.asm                                                          *
@@ -27,10 +27,10 @@ comment |*******************************************************************
 *                                                                          *
 * BUILT WITH:   NewBasic Assembler                                         *
 *                 http://www.fysnet/newbasic.htm                           *
-*               NBASM ver 00.26.59                                         *
-*          Command line: nbasm exfat<enter>                                *
+*               NBASM ver 00.26.74                                         *
+*          Command line: nbasm fat32<enter>                                *
 *                                                                          *
-* Last Updated: 10 Aug 2016                                                *
+* Last Updated: 28 Sept 2017                                               *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -41,7 +41,8 @@ comment |*******************************************************************
 *                                                                          *
 * Loading of files:                                                        *
 *  The loader file can be placed anywhere on disk, and does not need to    *
-*   be continuous on the disk, as long as it is in the ROOT directory.     *
+*   be continuous on the disk, as long as it is in the \ (root), \BOOT,    *
+*   or \SYSTEM\BOOT directory.                                             *
 *                                                                          *
 * Hardware Requirements:                                                   *
 *  This code uses commands that are valid for a 186 or later Intel x86     *
@@ -68,6 +69,8 @@ outfile 'fat32.bin'                ; target filename
 include ../boot.inc                ;
 include fat.inc                    ;
 
+RESVD_SECTS  equ  32
+
 .code                              ;
 .rmode                             ; bios starts with (un)real mode
 .186                               ; we assume 80x186 for boot sector
@@ -82,7 +85,7 @@ include fat.inc                    ;
 OEM_Name     db  'FYSOS2.0'    ; 8 bytes for OEM Name and Version
 nBytesPerSec dw  0200h         ; 512 bytes per Sector
 nSecPerClust db  01            ; Sectors per Cluster
-nSecRes      dw  32            ; Sectors reserved for Boot Record, info sect, etc.
+nSecRes      dw  RESVD_SECTS   ; Sectors reserved for Boot Record, info sect, etc.
 nFats        db  NUM_FATS      ; Number of FATs
              dw  0             ; reserved
              dw  0             ; reserved
@@ -107,6 +110,17 @@ VolName      db  'NO NAME    ' ; Volume Label
 FSType       db  'FAT32   '    ; File system type
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; since we need all the room we can get, *and* 'boot_data' does not
+;  need to be pre initialized, we use the area where our code first
+;  starts since once it is exectued, we don't need it anymore.
+; however, we must make sure that we do not access any members of
+;  S_BOOT_DATA until sizeof(S_BOOT_DATA) bytes have been executed.
+; which means we also have to tell 'services/read_ext.inc' we are
+;  doing this:
+BOOT_DATA_IS_PTR  equ  1
+boot_data:
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; start of our boot code
 
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -122,28 +136,34 @@ start:     cli                     ; don't allow interrupts
                                    ;    under 0C00:0000h where ROOT resides)
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-           mov  boot_data.drive,dl ; Store drive number
-                                   ; (supplied by BIOS startup code)
-           sti                     ; allow interrupts again
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  The next task is to check for a 386
+           ;  Check for 386+ machine.  If not, give error and halt
            pushf                   ; save the interrupt bit
-           push 7000h              ; if bits 12,13,14 are still set
-           popf                    ; after pushing/poping to/from
-           pushf                   ; the flags register then we have
-           pop  ax                 ; a 386+
-           and  ax,7000h           ;
-           cmp  ax,7000h           ;
-           je   short @f           ; it's a 386+
+           push 0F000h             ; if bits 15:14 are still set
+           popf                    ;  after pushing/poping to/from
+           pushf                   ;  the flags register then we have
+           pop  ax                 ;  a 386+
+           and  ax,0F000h          ;
+           jnz  short @f           ; it's a 386+
            mov  si,offset not386str
            jmp  short BootErr
-
+           
+not386str  db  13,10,'Processor is not a 386 compatible processor.',0
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; We now can use 386+ code (still in real mode though)
 ;
 .386P   ; allow processor specific code for the 386
-@@:        popf
+@@:        popf                   ; restore the interrupt bit
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; we have moved this down here (as opposed to our
+           ;  other boot sectors) since we cannot access
+           ;  S_BOOT_DATA until after sizeof(S_BOOT_DATA)
+           ;  bytes above.
+           ; this also assumes ds = 0x07C0, which it should
+           mov  [boot_data+S_BOOT_DATA->drive],dl ; Store drive number
+                                   ; (suplied by BIOS startup code)
+           sti                     ; allow interrupts again
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; We now check for the BIOS disk extentions.
@@ -152,51 +172,11 @@ start:     cli                     ; don't allow interrupts
            mov  bx,55AAh
            int  13h                     ; dl still = drive_num
            jc   short @f
-           cmp  bx,0AA55h
-           jne  short @f
-           test cl,1
-           jnz  short read_remaining
+           shr  cx,1                    ; carry = bit 0 of cl
+           adc  bx,55AAh                ; AA55 + 55AA + carry = 0 if supported
+           jz   short read_remaining
 @@:        mov  si,offset no_extentions_found
-           jmp  short BootErr
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  The next task is to load the rest of the boot code
-;
-read_remaining:
-           push 07C0h
-           pop  es
-           mov  bx,0200h       ; address 0x07E00
-           mov  eax,1          ;
-           mov  cx,nSecRes     ; doesn't matter that it reads 31 as long
-         ; dec  cx             ;   as it reads the 3 we have here
-           call read_sectors_long
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; get the size of a sector.  i.e.: bytes per sector
-           mov  ah,48h
-           mov  dl,boot_data.drive
-           mov  si,offset start
-           int  13h
-           mov  ax,[si+S_INT13_PARMS->sect_size]
-           mov  boot_data.sect_size,ax
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  The next task is to load the root directory and the FAT into memory
-;
-           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-           ;  first, the FAT
-           push FATSEG             ;
-           pop  es                 ; es-> FAT table
-           movzx eax,word nSecRes  ; eax = logical sector of start of
-           mov  cx,nSecPerFat      ; sectors per FAT (only need to load one fat)
-           cmp  cx,FATSEG_SIZE     ; if sectors > FATSEG_SIZE, error
-           jbe  short @f           ;
-           mov  cx,FATSEG_SIZE     ; only load FATSEG_SIZE sectors
-@@:        xor  bx,bx              ; es:0000h
-           call read_sectors_long  ; read in the first FAT
-
-           jmp  skip_info_block
-
+         ; jmp  short BootErr
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  This is if we have an error of some kind when trying to boot
@@ -209,82 +189,97 @@ BootErr:   call display_string     ;
                                    ;  should be issued here.
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  The next task is to load the rest of the boot code
+;
+read_remaining:
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; reset the disk services to be sure we are ready
+           xor  ax,ax
+           mov  dl,[boot_data+S_BOOT_DATA->drive] ; this assumes ds = 0x07C0, which it should
+           int  13h
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; save the Signature and Base LBA to boot_data
+           ; (this assumes that the two items are in the same order
+           ;  and at the first of boot_data for this to work.
+           ;  we do this so that we can save room in the boot code.)
+           mov  di,offset boot_data ; this assumes es = 0x07C0, which it should
+           mov  si,offset boot_sig
+           movsd       ; signature
+           movsd       ; lba low dword
+           movsd       ; lba high dword
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ;
+           mov  ebx,07E00h     ; physical address 0x07E00
+           xor  eax,eax        ; (smaller than 'mov eax,1')
+           inc  ax             ; eax = 1
+           cdq
+           mov  cx,nSecRes     ; doesn't matter that it reads 31 as long
+         ; dec  cx             ;   as it reads the 3 we have here
+           call read_sectors_long
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; jump over info block
+           jmp  skip_info_block
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Procedures used with in code follow:
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; This routine reads in CX sectors using the bios interrupt 13h extended
-;  read service. 
-; On entry:
-;      eax = starting sector in LBA format
-;       cx = count of sectors to read (doesn't check for > 7Fh)
-;    es:bx = offset to store data, es:offset
-; NOTE: This should get called with <= 7Fh sectors to read
-read_sectors_long proc near uses eax ebx ecx edx si di
+include ..\services\read_ext.inc   ; include the read_sectors_long function
+include ..\services\conio.inc      ; include the display_char and display_string functions
 
-           mov  si,offset start    ; okay to use 0x07C00 (0x07C0:xxxx)
-           mov  word [si],0010h    ; [si+0] = 10h, [si+1] = 0
-           mov  [si+02h],cx        ; size ( < 7F) (byte0 = count, byte1 = 0)
-           mov  [si+04h],bx        ; es:bx
-           mov  [si+06h],es        ;
-           xor  edx,edx            ;
-           add  eax,[boot_data.base_lba]   ; base lba
-           adc  edx,[boot_data.base_lba+4]
-           mov  [si+08h],eax       ;
-           mov  [si+0Ch],edx       ;
-           
-           mov  ah,42h             ; read
-           mov  dl,boot_data.drive ; dl = drive
-           int  13h
-           mov  si,offset diskerrorS
-           jc   short BootErr
-           
-           ret
-read_sectors_long endp
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; display a string to the screen using the BIOS
-;
-display_string proc near
-           mov  ah,0Eh             ; print char service
-           xor  bx,bx              ; ds:si = asciiz message
-@@:        lodsb
-           or   al,al
-           jz   short @f
-           int  10h                ; output the character
-           jmp  short @b
-@@:        ret
-display_string endp
+loadname      db  'LOADER  SYS'
+bootname      db  'BOOT       '
+sys_name      db  'SYSTEM     '
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  start of our data that must be in the first sector
-
-boot_data     st  S_BOOT_DATA  ; booted data to pass to loader.sys
-
 no_extentions_found db  'Require int 13h extented read service',0
-not386str     db  13,10,'Not 386 compatible processor',0
-diskerrorS    db  13,10,'Error reading disk or non-system disk'
-              db  13,10,'Press a key..',0
 
-%print (200h-$-2)  ; 6 bytes here
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  Pad out to fill 512 bytes, including final word 0xAA55
+%PRINT (200h-$-4-8-2)           ; 13 byte(s) free in this area
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  The Serial Number required by all FYS bootable bootsectors.
+;   It is a dword sized random number seeded by the time of day and date.
+;   This value should be created at format time
+;  The Base LBA of this boot code.
+;  The formatter will update this data for us.
+           org (200h-2-8-4)
+boot_sig   dd  ?
+base_lba   dq  ?
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  End of 1st sector. Pad out to fill 512 bytes, including final word 0xAA55
            org (200h-2)
            dw  0AA55h
 
-
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Start of 2nd Sector.
 ;  This is the Info Sector
            dup 512,0
 
-
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Start of 3nd Sector.
 ;  Any code here must not be used until we load this sector to memory
 skip_info_block:
-
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  The next task is to load the root directory and the FAT into memory
+;
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ;  first, the FAT
+           movzx eax,word nSecRes  ; eax = logical sector of start of
+           cdq                     ; edx = 0
+           mov  cx,nSecPerFat      ; sectors per FAT (only need to load one fat)
+           cmp  cx,FATSEG_SIZE     ; if sectors > FATSEG_SIZE, error
+           jbe  short @f           ;
+           mov  cx,FATSEG_SIZE     ; only load FATSEG_SIZE sectors
+@@:        mov  ebx,(FATSEG << 4)
+           call read_sectors_long  ; read in the first FAT
+           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate the first sector of the data area
            movzx eax,byte nFats    ; 
@@ -293,33 +288,79 @@ skip_info_block:
            movzx ecx,word nSecRes  ;
            add  eax,ecx            ; add in the boot and info sectors
            mov  data_start,eax     ; save in data_start
-
+           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ;  the ROOT
-           mov  cx,ROOTSEG         ; segment to read to ROOT memory area
+           mov  ebx,(ROOTSEG << 4) ; segment to read to ROOT memory area
            mov  eax,nRootClust     ;
-           mov  bx,ROOTSEG_SIZE    ; we only allow ROOTSEG_SIZE sectors
+           mov  cx,ROOTSEG_SIZE    ; we only allow ROOTSEG_SIZE sectors
            call load_it            ; returns ax = sectors read from above
-           mov  root_sectors,ax    ; save it for the loader.sys
-
+           shl  ax,4               ; shl ax,9 / shr ax,5
+           mov  nRootEnts,ax       ;
+           
+           push ROOTSEG            ;
+           pop  es                 ;
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Search for loader file in root directory
-;
-           mov  es,cx              ; cx = ROOTSEG from above
-           xor  di,di              ; es:di-> root table
            mov  si,offset loadname ; 8.3 formatted loader file name
-                                   ; ax = sectors read from above
-           shl  ax,4               ; mul by 512, then divide by 32
-           mov  cx,11              ; file name + extension
-s_loader:  pusha                   ; save si, di, and cx
-           repe                    ; check if root entry is our file
-           cmpsb                   ;
-           popa                    ; restore si, di, and cx
-           je   short f_loader     ; jump if file entry found
-           add  di,32              ; else set up for next root entry
-           dec  ax                 ; if no more root entries to search
-           jnz  short s_loader     ; and search again
-           mov  si,offset diskerrorS ; loading message
+           mov  ax,nRootEnts       ; count of entries to search
+           call search_name
+           jz   short f_loader
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  Search for loader file in \boot directory
+           mov  si,offset bootname ; 8.3 formatted loader file name
+           mov  ax,nRootEnts       ; count of entries to search
+           call search_name
+           jnz  short try_system
+           
+           ; if we found the boot directory, we need to load the dir data
+           mov  cx,ROOTSEG_SIZE    ; we only allow ROOTSEG_SIZE sectors
+           movzx eax,word es:[di+1Ah]  ; starting cluster number
+           call load_it            ; read in the \BOOT directory
+           ; then search for the loader name again
+           mov  si,offset loadname ; 8.3 formatted loader file name
+           shl  ax,4               ; ax = count of entries to search
+           call search_name
+           jz   short f_loader
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  Search for loader file in \system\boot directory
+try_system:
+           ; read the root directory again
+           mov  eax,nRootClust     ;
+           mov  cx,ROOTSEG_SIZE    ; we only allow ROOTSEG_SIZE sectors
+           call load_it            ; returns ax = sectors read from above
+           
+           mov  si,offset sys_name ; 8.3 formatted loader file name
+           mov  ax,nRootEnts       ; count of entries to search
+           call search_name
+           jnz  short not_find_it
+           
+           ; if we found the \system directory, we need to load the dir data
+           mov  cx,ROOTSEG_SIZE    ; we only allow ROOTSEG_SIZE sectors
+           movzx eax,word es:[di+1Ah]  ; starting cluster number
+           call load_it            ; read in the \SYSTEM directory
+           ; now search for the \system\boot directory
+           mov  si,offset bootname ; 8.3 formatted loader file name
+           shl  ax,4               ; count of entries to search
+           call search_name
+           jnz  short not_find_it
+           
+           ; if we found the \system\boot directory, we need to load the dir data
+           mov  cx,ROOTSEG_SIZE    ; we only allow ROOTSEG_SIZE sectors
+           movzx eax,word es:[di+1Ah]  ; starting cluster number
+           call load_it            ; read in the \SYSTEM\BOOT directory
+           ; then search for the loader name again
+           mov  si,offset loadname ; 8.3 formatted loader file name
+           shl  ax,4               ; ax = count of entries to search
+           call search_name
+           jz   short f_loader
+           
+           ; else there was an error
+not_find_it:
+           mov  si,offset not_found_str ; loading message
            jmp  BootErr
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -332,89 +373,113 @@ f_loader:  mov  si,offset os_load_str  ; loading message
 ;  Load the Loader
 ;
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; "choose" loader.sys base address
+           ;  this returns the address is ebx
+           call set_up_address     ; so that we can loader a loader.sys file
+                                   ;  > 64k, we pass a physical address in ebx.
+           mov  [boot_data+S_BOOT_DATA->loader_base],ebx ; save to our boot_data block too
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; es:di->found root entry block
            ; set up first read
            mov  ax,es:[di+14h]     ; starting cluster number (hi word)
            shl  eax,16             ; move to hi word of eax
            mov  ax,es:[di+1Ah]     ; starting cluster number (low word)
-           mov  cx,LOADSEG         ; read to loader seg
-           mov  bx,cx              ; set a hi limit (3000h)
+           mov  cx,256             ; set a hi limit (256 ?)
            call load_it            ; returns ax = sectors read from above
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  So that we can have a DOS INT 21h stub on the front part of
+;   the loader, we need to "patch" the 21h vector
+           xor  ax,ax
+           mov  ds,ax
+           mov  eax,(07C00000h + int32vector)
+           mov  [(21h * 4)],eax
 
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  update the Boot Data block
+           mov  ax,07C0h
+           mov  ds,ax
+           mov  byte [boot_data+S_BOOT_DATA->file_system],FAT32 ; this assumes ds = 0x07C0, which it should
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Now jump to the loader.
 ;  Send the following information in the registers:
-;   ds:si-> boot data (includes  'booted from drive')
-
-           push 07C0h              ; set up some data for LOADER.BIN
-           pop  ds                 ; ds = 07C0h
-           mov  si,offset boot_data
-
-           ; fill the boot data struct
-           mov  eax,nSecPerFat
-           mov  [boot_data.SecPerFat],eax
-           mov  al,nFATs
-           mov  boot_data.FATs,al
-           xor  ah,ah
-           mov  al,nSecPerClust
-           mov  boot_data.SecPerClust,ax
-           mov  ax,nSecRes
-           mov  boot_data.SecRes,ax
-           mov  ax,nSecPerTrack
-           mov  boot_data.SecPerTrack,ax
-           mov  ax,nHeads
-           mov  boot_data.Heads,ax
-           xor  eax,eax
-           mov  boot_data.root_entries,eax
-           mov  byte boot_data.file_system,FAT32
-           mov  eax,(ROOTSEG << 16)
-           mov  boot_data.root_loc,eax
-           mov  eax,(FATSEG << 16)
-           mov  boot_data.other_loc,eax
-           xor  ax,ax
-           mov  boot_data.misc0,ax
-           mov  boot_data.misc1,ax
-           mov  boot_data.misc2,ax
+;   ebx-> boot data (includes  'booted from drive') (physical address)
+           mov  eax,[boot_data+S_BOOT_DATA->loader_base] ; this assumes ds = 0x07C0, which it should
+           shr  eax,4
+           mov  ds,ax
            
-           ; jump to the loader
-           push LOADSEG            ; LOADSEG:0000h for RETF below
-           push 0000h              ;
-           retf                    ; jump to LOADSEG:0000h
+           cmp  word [0],5A4Dh
+           je   short is_dos_exe
+           
+           push 07C0h              ; 
+           pop  ds                 ; ds = 07C0h again
+           mov  si,offset exe_error
+           jmp  BootErr
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; the loader.sys file is a DOS MZ type .exe file
+is_dos_exe:
+           add  ax,[08h]           ; skip over .exe header
+           mov  bx,ax
+           add  bx,[0Eh]
+           mov  ss,bx              ; ss for EXE
+           mov  sp,[10h]           ; sp for EXE
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; set up cs:ip
+           add  ax,[16h]           ; cs
+           push ax
+           push word [14h]         ; ip
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ;   ebx -> boot data (includes  'booted from drive')
+           mov  ebx,(07C00h + boot_data) ; we pass the physical address of BOOT_DATA
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           retf
+
+include ..\services\address.inc    ; include the "choosing" of the loader.sys base address code
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; new interrupt vector for INT 21h
+;  this simply (i)returns
+int32vector:
+           iret
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; loads sectors until fat entry = no more, or have loaded the limit (BX)
 ; On entry:
 ;    EAX = starting cluster in LBA format
-;     CX = segment to read to (cx:0000h)
-;     BX = Max count of sectors to read
+;    EBX = address to read to
+;     CX = Max count of sectors to read
 ; On return:
 ;     AX = count of sectors read
 load_it    proc near uses bx cx dx bp di es
-
-           mov  di,bx              ; max count
-
-           mov  es,cx              ; es:di = es:0000
-           xor  bx,bx
-
-           movzx cx,byte nSecPerClust
+           mov  di,cx              ; max count
+           
+           movzx ecx,byte nSecPerClust  ; makes sure high word of ecx is clear
            xor  bp,bp              ; amount of sectors read
-
+           
 load_next: cmp  cx,di              ;
            jle  short @f           ;
            mov  cx,di              ;
 @@:        sub  di,cx
-
+           
            add  bp,cx              ; amount of sectors read
-
+           
            push eax                ; save cluster number
            sub  eax,2              ; the cluster numbers are 2 based
+           ;xor  edx,edx
            mul  ecx
            add  eax,data_start     ; add the base of the data area
-           call read_sectors_long  ; read in the ROOT directory
+           adc  edx,0
+           call read_sectors_long  ; read in the ROOT directory/file
            
-           mov  ax,200h            ; calculate offset for next read.
-           mul  cx                 ;
-           add  bx,ax              ;
+           mov  eax,200h           ; calculate offset for next read.
+           mul  ecx                ;
+           add  ebx,eax            ;
            
            pop  eax                ; restore cluster number
 
@@ -423,9 +488,9 @@ load_next: cmp  cx,di              ;
            push FATSEG             ;
            pop  ds                 ;
            shl  eax,2              ; 
-           mov  eax,[eax]          ; this assumes all clusters are < 03FFh
+           mov  eax,[eax]          ; this assumes all cluster numbers are < 0x3F80
            pop  ds                 ; 
-
+           
            cmp  di,0
            jle  short @f
            
@@ -435,24 +500,46 @@ load_next: cmp  cx,di              ;
 @@:        xchg bp,ax              ; return ax = sectors read
            ret
 load_it    endp
-
-
-               
-
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; search for name given
+; on entry:
+;  ds:si-> name to search for (FAT SFN formatted)
+;  es:di-> buffer to search
+;     ax = count of entries to search in
+; on exit:
+;  zero flag set if found
+;  es:di-> entry found
+search_name proc near
+           xor  di,di              ; es:di-> root table
+           mov  cx,11              ; file name + extension
+@@:        pusha                   ; save si, di, and cx
+           repe                    ; check if root entry is our file
+           cmpsb                   ;
+           popa                    ; restore si, di, and cx
+           je   short @f           ; jump if file entry found
+           add  di,32              ; else set up for next root entry
+           dec  ax                 ; if no more root entries to search
+           jnz  short @b           ; and search again
+           or   al,1               ; clear the zero flag
+@@:        ret
+search_name endp           
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; 2nd data area.
 ;  Any data here must not be used until we load this sector to memory
 
 data_start    dd  0
-root_sectors  dw  0  ; sectors read for root.
+nRootEnts     dw  0
 
 os_load_str   db  13,10,'Starting FYSOS...',0
-loadname      db  'LOADER  SYS'
+exe_error     db  13,10,07,'Error with Loader.sys format.',0
+not_found_str db  13,10,'Did not find the LOADER.SYS file.',0
 
-;%print (600h-$)  ;  237 bytes here
+%PRINT (800h-$)  ;  426 bytes here
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  End of 3nd sector. Pad out to fill 512 bytes
-           org 600h
+;  End of 4th sector. Pad out to fill 512 bytes
+           org 800h
 
 .end

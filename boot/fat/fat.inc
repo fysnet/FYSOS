@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: fat.inc                                                            *
@@ -28,7 +28,7 @@ comment |*******************************************************************
 * BUILT WITH:   NewBasic Assembler                                         *
 *                 http://www.fysnet/newbasic.htm                           *
 *               NBASM ver 00.26.59                                         *
-*          Command line: nbasm exfat<enter>                                *
+*          Command line: nbasm fat1x<enter>                                *
 *                                                                          *
 * Last Updated: 10 Aug 2016                                                *
 *                                                                          *
