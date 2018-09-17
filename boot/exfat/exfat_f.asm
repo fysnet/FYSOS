@@ -30,7 +30,7 @@ comment |*******************************************************************
 *               NBASM ver 00.26.59                                         *
 *          Command line: nbasm exfat<enter>                                *
 *                                                                          *
-* Last Updated: 25 May 2017                                                *
+* Last Updated: 17 Sept 2018                                               *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -258,7 +258,7 @@ remaining_code:
            push FAT_ROOTSEG        ; es = segment of root
            pop  es                 ;
            xor  di,di              ; es:di-> root table
-s_loader:  mov  al,es:[edi+S_EXFAT_ROOT->entry_type]
+s_loader:  mov  al,es:[di+S_EXFAT_ROOT->entry_type]
            cmp  al,EXFAT_DIR_EOD   ; if no more directory entries, be done
            jz   short not_found    ;
            mov  cx,1               ; for calculation of next below
@@ -270,9 +270,13 @@ s_loader:  mov  al,es:[edi+S_EXFAT_ROOT->entry_type]
            lea  si,[di+32]         ; esi is first name ext entry (nbasm doesn't (yet) allow sizeof(S_EXFAT_ROOT) in []'s
            call extract_name       ; saves all registers
            push di                 ; save di
+           push es                 ; save es
+           push ds                 ; es = ds
+           pop  es                 ;
            mov  si,offset loadname ; 8.3 formatted loader file name
            mov  di,offset buffer
            call stricmp            ; returns zero flag set if equal
+           pop  es                 ; restore es
            pop  di                 ; restore di
            jz   short f_loader     ; jump if file entry found
            
@@ -408,7 +412,7 @@ extract_name proc near uses all ds
            
 extractit: push cx
            push si
-           add  si,S_EXFAT_NAME->name
+           add  si,S_EXFAT_NAME->name  ; (add 2 to si)
            mov  cx,15
 @@:        mov  ax,es:[si]
            add  si,2

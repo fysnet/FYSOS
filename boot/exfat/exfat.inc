@@ -30,7 +30,7 @@ comment |*******************************************************************
 *               NBASM ver 00.26.59                                         *
 *          Command line: nbasm exfat<enter>                                *
 *                                                                          *
-* Last Updated: 10 Aug 2016                                                *
+* Last Updated: 17 Sept 2018                                               *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -96,8 +96,5 @@ S_EXFAT_NAME struct
   flags        byte   ;
   name        dup 30  ; 15 words
 S_EXFAT_NAME ends
-
-
-
 
 .end
