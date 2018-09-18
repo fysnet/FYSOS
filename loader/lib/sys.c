@@ -210,6 +210,18 @@ void get_bios_equ_list(bit16u *bios_equip, bit8u *kbd_bits) {
   *kbd_bits = * (bit8u *) 0x00417;
 }
 
+// reads the current value of the Time Stamp Counter
+bit32u read_tsc(void) {
+#if ALLOW_SMALL_MACHINE
+  return 0;
+#else
+  asm (" rdtsc ");
+  // at this point, edx contains the high order dword
+  // however, we have a 32-bit compiler, so it will be
+  //  ignored on return.
+#endif
+}
+
 // disable interrupts  (using 'cli')
 bool disable_ints(void) {
   asm (
