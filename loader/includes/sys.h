@@ -74,6 +74,8 @@ void add64(void *targ, void *src);
 
 void get_bios_equ_list(bit16u *, bit8u *);
 
+bit32u read_tsc(void);
+
 bool disable_ints(void);
 bool enable_ints(void);
 bool restore_ints(const bool);
