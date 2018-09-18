@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  10 Aug 2018
+ * Last update:  17 Sept 2018
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -86,19 +86,27 @@ bit32u fs_exfat(const char *filename, void *target) {
   if (spc_key_F2)
     para_printf("ExFAT: Reading File\n");
   
+  // initialize the progress bar
+  j = 0;
+  win_init_progress(file_size);
+  
   struct S_EXFAT_VBR *vbr = (struct S_EXFAT_VBR *) exfat_data.vbr;
   void *p = target;
   bit32u *fat = (bit32u *) exfat_data.fat_loc;
   while (cluster < 0xFFFFFFF8) {
     if (read_sectors(vbr->data_region_lba + ((cluster - 2) * exfat_data.sect_per_clust),
-      exfat_data.sect_per_clust, p) != exfat_data.sect_per_clust) {
+                     exfat_data.sect_per_clust, p) != exfat_data.sect_per_clust) {
         win_printf(main_win, "Error reading from file...\n");
         return 0;
     }
+    j += (exfat_data.sect_per_clust << 9);  // clusters to bytes
+    win_put_progress(j, 0);
     cluster = fat[cluster];
     p = (void *) ((bit32u) p + (exfat_data.sect_per_clust * 512));
   }
   
+  // if we got here, we read the file okay.
+  win_put_progress(file_size, 0);
   return file_size;
 }
 
