@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  10 Aug 2018
+ * Last update:  18 Sept 2018
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -106,11 +106,24 @@ void lba_to_chs(const bit32u lba, unsigned int *cyl, unsigned int *head, unsigne
 }
 
 // some BIOSes need a short delay before/between calls for USB emulation
+// unless we are using a "small machine", we now we have a 486+ with the RDTSC instruction
+//  so let's use it for a somewhat small delay
 void delay(void) {
-  bit32u *p = (bit16u *) 0x0000046C;
-  bit32u c = *p;
+#if ALLOW_SMALL_MACHINE
+  bit16u *p = (bit16u *) 0x0000046C;
+  bit16u c = *p;
   while (*p == c)
     ;
+#else
+  bit32u rdtsc = read_tsc();
+  int c;
+  
+  for (c=0; c<10; c++) {
+    while (rdtsc == read_tsc())
+      ;
+    rdtsc = read_tsc();
+  }
+#endif
 }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
