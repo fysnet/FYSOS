@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  10 Aug 2018
+ * Last update:  19 Aug 2018
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -25,6 +25,16 @@
 
 #ifndef BOOT_H
 #define BOOT_H
+
+// Stringizing
+//  https://gcc.gnu.org/onlinedocs/cpp/Stringizing.html
+#define xstr(s) str(s)
+#define str(s) #s
+
+// GDT physical address
+#define GDTOFFA  0x00110000
+// IDT physical address
+#define IDTOFFA  0x00110800
 
 struct FILES {
   wchar_t FileName[16];
