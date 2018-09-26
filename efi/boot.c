@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  10 Aug 2018
+ * Last update:  26 Sept 2018
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -163,10 +163,10 @@ asm (
 	"  align 16          \n"
   "_gdtoff:            \n"
   "  dw  ((256*8)-1)   \n"
-  "  dd  0x00110000    \n"
+  "  dd  " xstr(GDTOFFA) "\n"
   "_idtoff:            \n"
   "  dw  ((256*8)-1)   \n"
-  "  dd  0x00110800    \n"
+  "  dd  " xstr(IDTOFFA) "\n"
 );
 
 // this is the list of files we need to load via this loader
@@ -230,9 +230,9 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, struct EFI_SYSTEM_TABLE *SystemTable
   sys_block.magic2 = S_LOADER_MAGIC2;
   sys_block.magic3 = S_LOADER_MAGIC3;
   sys_block.gdtoff  = ((256*8)-1);
-  sys_block.gdtoffa = 0x00110000;
+  sys_block.gdtoffa = GDTOFFA;
   sys_block.idtoff  = ((256*8)-1);
-  sys_block.idtoffa = 0x00110800;
+  sys_block.idtoffa = IDTOFFA;
   sys_block.has_cpuid = 1;  // if we have UEFI, we have CPUID
   sys_block.has_rdtsc = 1;  // if we have UEFI, we have RDTSC ?????
   
@@ -518,7 +518,8 @@ EFI_STATUS get_memory(struct S_MEMORY *memory, bit32u *rMemMapKey){
   bit32u MemMapDescriptorSize = 0;
   bit32u MemMapDescriptorVersion = 0;
   bit32u DescriptorCount = 0;
-  bit32u i = 0, j = 48;  // we only have 48 memory slots to fill in S_MEMORY
+  bit32u i = 0;
+  bit32s j = 48;  // we only have 48 memory slots to fill in S_MEMORY
   bit8u *Buffer = NULL;
   struct EFI_MEMORY_DESCRIPTOR *MemoryDescriptorPtr = NULL;
   struct EFI_INPUT_KEY Key;
