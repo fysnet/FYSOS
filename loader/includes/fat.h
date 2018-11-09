@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  10 Aug 2018
+ * Last update:  08 Nov 2018
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -26,6 +26,14 @@
 
 #include "loader.h"
 
+#define FAT_ATTR_LONG_FILE 0x0F
+#define FAT_ATTR_ARCHIVE   0x20
+#define FAT_ATTR_SUB_DIR   0x10
+#define FAT_ATTR_VOLUME    0x08
+#define FAT_ATTR_SYSTEM    0x04
+#define FAT_ATTR_HIDDEN    0x02
+#define FAT_ATTR_READ_ONLY 0x01
+#define FAT_ATTR_ALL       0x3F
 
 #pragma pack(push, 1)
 
@@ -117,6 +125,8 @@ struct S_FAT_DATA {
 
 
 bool fat_load_data(struct S_FAT_DATA *);
+struct S_FAT_ROOT *fat_search(struct S_FAT_ROOT *root, int entry_count, char *filename, bit8u attr);
+bit32u fs_fat_read_file(struct S_FAT_ROOT *root, void *target, struct S_FAT_DATA *fat_data);
 
 void convert_fat83(const struct S_FAT_ROOT *, char *);
 bit32u fat_get_next_cluster(void *, bit32u);
