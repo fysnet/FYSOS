@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  10 Aug 2018
+ * Last update:  08 Nov 2018
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -40,11 +40,9 @@ bool fat_data_valid = FALSE;
 struct S_FAT_DATA fat_data;
 
 bit32u fs_fat(const char *filename, void *target) {
-  struct S_FAT_ROOT *root;
-  bit8u *targ = (bit8u *) target;
-  bit8u buffer[32];
-  bit32u start_lba, cur_clust, clust_cnt, next_clust;
-  int i, j = 0;
+  struct S_FAT_ROOT *root, r;
+  int entry_count;
+  char temp[64];
   
   // have we loaded the root and fat yet
   if (!fat_data_valid)
@@ -52,27 +50,72 @@ bit32u fs_fat(const char *filename, void *target) {
       return 0;
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-  // find the entry in the root
+  // start at the root directory
   root = (struct S_FAT_ROOT *) fat_data.root_dir;
-  for (i=0; i<fat_data.root_entries; i++) {
+  entry_count = fat_data.root_entries;
+  
+  // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+  // the caller may have sent us a full path.
+  // we need to move to that directory first
+  char *s = filename;
+  char *e = strchr(s, '\\');
+  while (e) {
+    strcpy(temp, s);
+    temp[e - s] = '\0';
+    root = fat_search(root, entry_count, temp, FAT_ATTR_SUB_DIR);
+    if (root) {
+      // we must move this root entry out of the way so we don't 
+      //  overwrite it with fs_fat_read_file
+      memcpy(&r, root, sizeof(struct S_FAT_ROOT));
+      entry_count = fs_fat_read_file(&r, target, &fat_data);
+      if (entry_count == 0)
+        return 0;
+      entry_count /= 32;
+      root = target;
+      s = e + 1;
+      e = strchr(s, '\\');
+    } else
+      return 0;
+  }
+  
+  root = fat_search(root, entry_count, s, FAT_ATTR_ARCHIVE /*| FAT_ATTR_SYSTEM*/);
+  if (root) {
+    // we must move this root entry out of the way so we don't 
+    //  overwrite it with fs_fat_read_file
+    memcpy(&r, root, sizeof(struct S_FAT_ROOT));
+    return fs_fat_read_file(&r, target, &fat_data);
+  } else
+    return 0;
+}
+
+struct S_FAT_ROOT *fat_search(struct S_FAT_ROOT *root, int entry_count, char *filename, bit8u attr) {
+  bit8u buffer[32];
+  int i;
+  
+  for (i=0; i<entry_count; i++) {
     convert_fat83(root, buffer);
-    if (!stricmp(buffer, filename))
+    if (!stricmp(buffer, filename) && ((root->attrb & attr) == attr))
       break;
     root++;
   }
   
   // did we find the file?
-  if (i == fat_data.root_entries) {
-    win_printf(main_win, "Did not find file...\n");
-    return 0;
-  }
+  if (i < entry_count)
+    return root;
+  
+  return NULL;
+}
   
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 //  Walk the FAT chain reading all 'clusters' of the file.
+bit32u fs_fat_read_file(struct S_FAT_ROOT *root, void *target, struct S_FAT_DATA *fat_data) {
+  bit32u clust_cnt, next_clust, cur_clust, retsize = 0;
+  bit8u *targ = (bit8u *) target;
+  int j = 0;
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   //  Calculate the first data sector
-  start_lba = fat_data.num_fats * fat_data.sec_per_fat + fat_data.sec_resv;
+  bit32u start_lba = fat_data->sec_resv + (fat_data->num_fats * fat_data->sec_per_fat);
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // start_lba now points to root sector
@@ -81,7 +124,7 @@ bit32u fs_fat(const char *filename, void *target) {
 #ifdef FS_FAT32
   if (sys_block.boot_data.file_system != FS_FAT32)
 #endif
-    start_lba += (fat_data.root_entries >> 4);
+    start_lba += (fat_data->root_entries >> 4);
 #endif
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -105,15 +148,16 @@ bit32u fs_fat(const char *filename, void *target) {
     
     // we check to see if the next cluster is consecutively on the disk,
     //  (physically just after this one), and up the count to read it as well.
-    next_clust = fat_get_next_cluster(fat_data.fat_loc, next_clust);
+    next_clust = fat_get_next_cluster(fat_data->fat_loc, next_clust);
     while (1) {
       if (next_clust != (cur_clust + clust_cnt))
         break;
       clust_cnt++;
-      next_clust = fat_get_next_cluster(fat_data.fat_loc, next_clust);
+      next_clust = fat_get_next_cluster(fat_data->fat_loc, next_clust);
     }
-    bit32u sectors = clust_cnt * fat_data.sect_per_clust;
-    bit32u sect_lba = start_lba + ((cur_clust - 2) * fat_data.sect_per_clust);
+    bit32u sectors = clust_cnt * fat_data->sect_per_clust;
+    retsize += (sectors * 512);
+    bit32u sect_lba = start_lba + ((cur_clust - 2) * fat_data->sect_per_clust);
     while (sectors > 0) {
       // so that we update the progress, we only read so many sectors at a time
       bit32u sec_cnt = (sectors > 16) ? 16 : sectors;
@@ -130,12 +174,17 @@ bit32u fs_fat(const char *filename, void *target) {
     }
     
     // get next cluster number
-    cur_clust = fat_get_next_cluster(fat_data.fat_loc, cur_clust + (clust_cnt - 1));
+    cur_clust = fat_get_next_cluster(fat_data->fat_loc, cur_clust + (clust_cnt - 1));
   }
   
   // if we got here, we read the file okay.
-  win_put_progress(root->filesize, 0);
-  return root->filesize;
+  if (root->filesize == 0) {  // a directory will have a file size of zero
+    win_put_progress(retsize, 0);
+    return retsize;
+  } else {    
+    win_put_progress(root->filesize, 0);
+    return root->filesize;
+  }
 }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -161,9 +210,13 @@ bool fat_load_data(struct S_FAT_DATA *fat_data) {
   }
   
   switch (sys_block.boot_data.file_system) {
-#if defined(FS_FAT12) || defined(FS_FAT16)
+#if defined(FS_FAT12)
     case FS_FAT12:
+#endif
+#if defined(FS_FAT16)
     case FS_FAT16:
+#endif
+#if defined(FS_FAT12) || defined(FS_FAT16)
       // fill in the data
       fat_data->root_entries = bpb->root_entrys;
       fat_data->sec_per_fat = bpb->sect_per_fat;
