@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: gpt.asm                                                            *
@@ -30,7 +30,7 @@ comment |*******************************************************************
 *               NBASM ver 00.26.59                                         *
 *          Command line: nbasm gpt<enter>                                  *
 *                                                                          *
-* Last Updated: 12 Oct 2016                                                *
+* Last Updated: 23 Dec 2018                                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -48,18 +48,31 @@ comment |*******************************************************************
 *                                                                          *
 * This boot code does the following:                                       *
 *  - moves itself to 0:7C00h+200h (just passed this sector)                *
+*  - reads in the GPT header at LBA 1                                      *
+*     (which also reads in the remaining code we store after this header)  *
 *  - Displays all partitions found                                         *
 *  - Waits for a keypress from the user, then                              *
 *     loads and executes that partition                                    *
+*                                                                          *
+* Supports:                                                                *
+*  - 64-bit LBAs                                                           *
+*  - Entry's on any starting LBA (not the normal LBA 2)                    *
+*  - Checks that the Header CRC is correct.                                *
+*    Does not check the Entries CRC since there might be more than         *
+*     the number we support.                                               *
+*                                                                          *
+* This boot code uses two sectors of code and data.  This is okay          *
+*  since the entries must be no less than LBA 2 *and* the header at        *
+*  LBA 1 only uses the first 92 bytes of the sector.  This allows us       *
+*  to use the remaining 420 bytes for code and data.                       *
+* If more code or data is needed, we could use more, but then we would     *
+*  have to make sure the GPT partitioned device had the entries start      *
+*  at an LBA greater than 2, which is allowed, but not normal.             *
 *                                                                          *
 * Assumptions:                                                             *
 *  - Assumes that the IBM-MS INT 13 Extensions - EXTENDED READ function is *
 *      available.                                                          *
 *  - Assumes a 32-bit 80x386 compatible processor starting in real mode.   *
-*  - Assumes that the entries follow the header, header at                 *
-*    LBA 1, with the entries start at LBA 2                                *
-*  - Assumes all CRCs are correct.  i.e.: Header and Entries are valid.    *
-*  - Assumes all LBAs are 32-bit.  i.e.: No 64-bit addresses...            *
 *                                                                          *
 * On entry to this boot code:                                              *
 *     cs:ip = usually 0000:7C00h or 07C0:0000h but can be different        *
@@ -71,10 +84,17 @@ outfile 'gpt.bin'    ; name the file to create
 
 .model tiny
 
-MAX_ENTRIES    equ  16   ; we allow up to 16 entries
+; to save room for code, we re-use the memory area at 0x7C00 (now at 0x7E00)
+;  for data area since we have already executed that code.
+PHYSICAL_DRIVE  equ  [0200h]   ; byte
+;  a byte is available here
+PNP_ADDRESS_DI  equ  [0202h]   ; word
+PNP_ADDRESS_ES  equ  [0204h]   ; word
 
-HEADER_OFFSET  equ  0400h
-ENTRY_OFFSET   equ  0600h
+MAX_ENTRIES    equ  10   ; we allow up to this many entries (because we only allow single digit selections, '0' -> '9')
+
+HEADER_OFFSET  equ  0400h   ; 0x7C00 + 0x400 = 0x8000
+ENTRY_OFFSET   equ  0600h   ; 0x7C00 + 0x600 = 0x8200
 
 S_GPT_HDR struct
   sig           dup 8  ; signature
@@ -115,34 +135,30 @@ S_GPT_ENTRY ends
            ; set up the stack and seg registers (real mode)
            mov  ax,07C0h                ; set our stack, DS, ES
            mov  ds,ax                   ;
-           xor  ax,ax                   ;
-           mov  ss,ax                   ; first push at 0x07BFE
-           mov  sp,7C00h                ;
+           mov  ss,ax                   ;
+           xor  sp,sp                   ; first push at 07C0:FFFEh
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; if the BIOS is PnP aware, it will pass the PnP address
            ;  in es:di.  We don't use it in this MBR, but we pass
            ;  it on to the boot partition incase it does.
-           mov  [pnp_address+0],di
-           mov  [pnp_address+2],es
+           mov  PNP_ADDRESS_DI,di
+           mov  PNP_ADDRESS_ES,es
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; Now move out of the way, so later we can load
            ;  the partition's boot code to here
-           mov  ax,ds
            mov  es,ax                   ; set es = ds from above
            cld
            xor  si,si
-           mov  cx,200h
+           mov  cx,0200h
            mov  di,cx
            rep
             movsb
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; Now jump to newly moved code.
-           push  es
-           push  offset moved
-           retf
+           jmp   ($ + 200h + 3)   ; 200h from here + size of this instruction
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; now update the offsets within our code to the newly moved location
@@ -150,22 +166,40 @@ S_GPT_ENTRY ends
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; BIOS sets dl to drive id when calling bootsector
-moved:     mov  physical_drive,dl       ; make sure we don't mess up DL above
+moved:     mov  PHYSICAL_DRIVE,dl       ; make sure we don't mess up DL above
            
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; Now we need to find an active partition, load it, and jump to it
-; To do that, we load the first 33 sectors, starting at LBA 1, check
+; To do that, we load the header (LBA 1) and the entries (LBA x), check
 ;  the GPT header and get the count of entries.  We then check the
 ;  entries for the EFI System Partition Flag and boot the first one
 ;  we find.
-           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-           ; Read in the header and a max of 128 entries
+           ; Read in the header
+           ;  (which will read in the remaining code/data as well)
            xor  eax,eax                 ; edx:eax = base of disk drive
            cdq                          ;
            inc  eax                     ; LBA 1
-           mov  cx,33                   ; 1 header and 32 for 128 entries
+           mov  cx,ax                   ; 1 header
            mov  bx,HEADER_OFFSET        ; es:HEADER_OFFSET is just after this code
+           call read_sectors            ; read it in to es:bx
+           jc   disk_err                ;
+           
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; now we can use any code and data that is in the second sector as well
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; Check the header
+           mov  si,offset gpt_header_error  ; si-> error string before hand
+           call gpt_check_header
+           jc   printit
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; And now read in the max allowed entries we support
+           mov  eax,[bx+S_GPT_HDR->entry_offset + 0]
+           mov  edx,[bx+S_GPT_HDR->entry_offset + 4]
+           mov  cx,((MAX_ENTRIES + 3) / 4) ; x sectors. ex: 16 entries = (4 per sector * 4 = 16)
+           mov  bx,ENTRY_OFFSET         ; es:ENTRY_OFFSET is just after the header above
            call read_sectors            ; read it in to es:bx
            jc   disk_err                ;
            
@@ -176,52 +210,104 @@ moved:     mov  physical_drive,dl       ; make sure we don't mess up DL above
            mov  si,offset main_string
            call display_string
            
-; scroll through the entries printing the information
-           mov  si,bx  ; save so we can use si for the header access
-           mov  cx,[si+S_GPT_HDR->entries]  ; is little endian, so will read in the correct part
-           cmp  cx,MAX_ENTRIES     ; we only allow up to MAX_ENTRIES entries
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; scroll through the entries printing the information
+           mov  si,HEADER_OFFSET        ; point to the header
+           mov  ecx,[si+S_GPT_HDR->entries]  ; is little endian, so will read in the correct part
+           cmp  ecx,MAX_ENTRIES         ; we only allow up to MAX_ENTRIES entries
            jbe  short @f
            mov  cx,MAX_ENTRIES
-@@:        mov  bx,ENTRY_OFFSET
+@@:        ;mov  bx,ENTRY_OFFSET
            xor  dx,dx  ; current partition count
-part_loop: mov  eax,[bx+S_GPT_ENTRY->first_lba]
            
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; loop through the entries
+part_loop: mov  eax,[bx+S_GPT_ENTRY->first_lba + 0]   ; low dword
+           mov  edi,[bx+S_GPT_ENTRY->first_lba + 4]   ; high dword
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; is it outside the range?
-           cmp  eax,[si+S_GPT_HDR->first_usable]
+           ; is the low end before the start of the GPT allowed?
+           cmp  edi,[si+S_GPT_HDR->first_usable + 4]
            jb   short next_part
-           cmp  eax,[si+S_GPT_HDR->last_usable]
+           ja   short @f
+           cmp  eax,[si+S_GPT_HDR->first_usable + 0]
+           jb   short next_part
+           
+           ; is the high end past the end of the GPT allowed?
+@@:        cmp  edi,[si+S_GPT_HDR->last_usable + 4]
+           ja   short next_part
+           jb   short disp_part
+           cmp  eax,[si+S_GPT_HDR->last_usable + 0]
            ja   short next_part
            
-           ; display the letter and the name
-           pusha
-           add  dl,'A'
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; display the number and the name
+disp_part: pusha
+           add  dl,'0'
            mov  line_index,dl
            mov  si,offset line_string
            call display_string
+           
+           ; display the attribute(s)
+           mov  ecx,[bx+S_GPT_ENTRY->attribute + 0]
+           ;mov  edx,[bx+S_GPT_ENTRY->attribute + 4]
+           mov  al,' '
+           test ecx,ATTRIB_REQUIRED
+           jz   short @f
+           mov  al,'R'
+@@:        call display_char
+           mov  al,' '
+           test ecx,ATTRIB_NO_BLOCK
+           jz   short @f
+           mov  al,'H'
+@@:        call display_char
+           mov  al,' '
+           test ecx,ATTRIB_LEGACY
+           jz   short @f
+           mov  al,'L'
+@@:        call display_char
+           mov  si,offset endattrb_str
+           call display_string
+           
+           ; display the name
            lea  si,[bx+S_GPT_ENTRY->name]
            call display_wstring
+           
            popa
-           inc  dx
+           inc  dx       ; count of entries
            
 next_part: add  bx,sizeof(S_GPT_ENTRY)
            loop part_loop
            
+           mov  si,offset attribs_string
+           call display_string
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; allow the user to choose an entry
 chooseit:  mov  si,offset choose_string
            call display_string
            
+           ; get a key from the (BIOS) keyboard
            xor  ah,ah
            int  16h
            
-           and  ax,1Fh   ; 'A' = 0x1E61 & 0x001F = 0x0001
-           dec  ax       ; zero based
-           cmp  ax,dx
-           jnb  short chooseit
+           ; convert to zero-based integer index
+           ; this is a quick trick but only allows 0 -> 9 (a max of 10 entries)
+           and  ax,000Fh                ; '0' = 0x0B30 & 0x000F = 0x0000
            
+           ; is it within range?
+           cmp  ax,dx                   ; '0' = 0x0B30 & 0x000F = 0x0000,
+           jae  short chooseit          ; '1' = 0x0B31 & 0x000F = 0x0001, etc
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; convert index to point to indexed entry
+           ;  and then read in the first sector of that partition
            shl  ax,7
            add  ax,ENTRY_OFFSET
            mov  bx,ax
-           mov  eax,[bx+S_GPT_ENTRY->first_lba]
-           xor  edx,edx
+           mov  eax,[bx+S_GPT_ENTRY->first_lba + 0]
+           mov  edx,[bx+S_GPT_ENTRY->first_lba + 4]
            xor  bx,bx                   ; 07C0:0000
            mov  cx,1
            call read_sectors            ; read it in
@@ -245,11 +331,10 @@ part_good: push es   ; for retf below
            push bx
            
            ; make sure dl = disk booted from before we destroy 07C0:0000h
-           mov  dl,physical_drive  ; from booted drive
+           mov  dl,PHYSICAL_DRIVE  ; from booted drive
            
            ; restore es:di for PnP aware BIOS'
-           mov  di,[pnp_address+0]
-           mov  es,[pnp_address+2]
+           les  di,PNP_ADDRESS_DI
            
            ; now jump to the newly loaded code
            retf
@@ -273,23 +358,28 @@ printit:   call display_string
 ;      es:bx = offset to store data, es:offset
 ; On return:
 ;    carry = clear if successful
+; *** must stay in first sector of code ***
 read_sectors proc near uses alld
-           xor  si,si                   ; may use 0x07C00 for the offset
-           mov  word [si],0010h         ; [si+0] = 10h, [si+1] = 0
-           mov  [si+02h],cx             ; count of sectors to read
-           mov  [si+04h],bx             ; es:bx
-           mov  [si+06h],es             ;
-           mov  [si+08h],eax            ; lba to read
-           mov  [si+0Ch],edx            ;
+           push edx        ; offset 12
+           push eax        ; offset 8
+           push es         ; offset 6
+           push bx         ; offset 4
+           push cx         ; offset 2
+           push 10h        ; offset 0
+           mov  si,sp      ; this assumes ds==ss (which it should)
            mov  ah,42h                  ; extended read
-           mov  dl,physical_drive       ; dl = drive
+           mov  dl,PHYSICAL_DRIVE       ; dl = drive
            int  13h
+           pushf           ; save the carry flag
+           add  sp,16      ; remove the items from the stack
+           popf            ;  since the add above will modify it
            ret
 read_sectors endp
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; display a char to the screen using the BIOS
-display_char proc near uses ax bx
+; *** must stay in first sector of code ***
+display_char proc near uses bx  ; ax
            mov  ah,0Eh
            xor  bx,bx
            int  10h
@@ -298,9 +388,10 @@ display_char endp
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; display a string to the screen
-display_string proc near uses allf
+; *** must stay in first sector of code ***
+display_string proc near uses ax
            cld
-@@:        lodsb               ; ds:si = asciiz message
+@@:        lodsb               ; ds:si = w_char message
            or   al,al
            jz   short @f
            call display_char   ; output the character
@@ -309,34 +400,15 @@ display_string proc near uses allf
 display_string endp
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; display a wide_char string to the screen
-display_wstring proc near uses allf
-           cld
-@@:        lodsw               ; ds:si = w_char message
-           or   ax,ax
-           jz   short @f
-           call display_char   ; output the character (assumes ascii in al)
-           jmp  short @b
-@@:        ret
-display_wstring endp
-
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; string data
+; the following must stay in the first sector of this code
 diskerrorS        db 13,10,'Error reading from the disk.',0
-bad_partitionS    db 13,10,"Didn't find 0xAA55 sig.",0
-main_string       db '-=-=-= UEFI GPT Boot =-=-=-=-',0
-line_string       db 13,10,' '
-line_index        db 'A'
-                  db ': ',0
-choose_string     db 13,10,'Please choose a partition: ',0
 
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-; data
-physical_drive  db 0                    ; physical disk booted from
-pnp_address     dw 0,0                  ; di then es
+; the remaining may be here or in the second sector
+bad_partitionS    db 13,10,"Didn't find 0xAA55 sig.",0
 
 ; at assembly time, this will print how many free bytes we have remaining.
-%PRINT (HEADER_OFFSET-$-(4*16)-2-4-2)  ; 7 bytes free in this area
+%PRINT (HEADER_OFFSET-$-(4*16)-2-4-2)  ; 3 bytes free in this area
 
 ; disk identifier and partition entry(s)
            org (HEADER_OFFSET-2-(4*16)-2-4)
@@ -345,7 +417,7 @@ pnp_address     dw 0,0                  ; di then es
            ; modern OS's write a 32-bit signature here to help
            ; identify the media device.  The following 16-bits
            ; might be used on some systems to indicate copy-protection.
-           dd  ?              ; identifier written at FDISK time
+           dd  0              ; identifier written at FDISK time
            dw  0              ; reserved
            
            ; first partition in an Protected GPT MBR is used
@@ -358,10 +430,10 @@ pnp_address     dw 0,0                  ; di then es
            db  0FFh  ; Sector: 0xFF
            db  0FFh  ; Cylinder: 0xFF
            dd  1     ; Start LBA: 0x00000001 (1)
-           dd  0E4FF77Fh ; Size of disk in sectors: 0x0E4FF77F (240,121,727)
+           dd  0     ; Size of disk in sectors
            
            ; remaining are zero'd
-           dup (16*3),0       ; four 16-byte partitions
+           dup (16*3),0       ; 3 more 16-byte partitions
            
            dw  0AA55h
 
@@ -369,6 +441,178 @@ pnp_address     dw 0,0                  ; di then es
 ; this should be at es:HEADER_OFFSET (0x07C00 + HEADER_OFFSET)
 .ifne $ HEADER_OFFSET
   %error 1 'We should be at 0x08000 right here...'
+.endif
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; this is where the GPT header is loaded to, as well as stored on the disk
+;  (LBA 1)
+; since it is only 92 bytes, we use the remaining 420 bytes for code and data.
+
+gpt_header   st  S_GPT_HDR
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;  now we can use 420 bytes of code and data as long as any of this code
+;   and data is not accessed until *after* we read in the header above.
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; display a wide_char string to the screen
+display_wstring proc near uses ax
+           cld
+@@:        lodsw               ; ds:si = w_char message
+           or   ax,ax
+           jz   short @f
+           call display_char   ; output the character (assumes ascii in al)
+           jmp  short @b
+@@:        ret
+display_wstring endp
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; check the GPT header to make sure it is valid
+;  return carry clear if valid header
+gpt_check_header proc near uses alld es
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; check the signature
+           mov  esi,HEADER_OFFSET        ; es:HEADER_OFFSET is just after this code
+           cmp  dword [esi + S_GPT_HDR->sig + 0],20494645h
+           jne  short bad_hdr
+           cmp  dword [esi + S_GPT_HDR->sig + 4],54524150h
+           jne  short bad_hdr
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; initialize the CRC table
+           ; we need 256 dwords (1024 bytes) in space for the table
+           ; we should be find using physical address 0x07000 (0700:0000)
+           mov  ax,0700h
+           mov  es,ax
+           call crc32_initialize
+           
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; calculate the crc
+           mov  edx,[esi + S_GPT_HDR->crc32]
+           mov  dword [esi + S_GPT_HDR->crc32],0
+           mov  ecx,[esi + S_GPT_HDR->hdr_size]
+           call crc32
+           cmp  edx,eax
+           jne  short bad_hdr
+           
+           clc
+           ret
+           
+bad_hdr:   stc           
+           ret
+gpt_check_header endp
+
+
+CRC32_POLYNOMIAL  equ  04C11DB7h
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; initialize 256 dwords to our CRC table
+; passed address in es:0000
+crc32_initialize proc near
+  
+           xor  ecx,ecx
+           xor  edi,edi
+init_loop: push ecx
+           mov  eax,8           ;
+           xchg ecx,eax         ;
+           call crc32_reflect   ; crc32_table[i] = crc32_reflect(i, 8) << 24;
+           shl  eax,24          ;
+           
+           mov  cx,8
+poly_loop: shl  eax,1           ;  crc32_table[i] = (crc32_table[i] << 1) ^ 
+           jnc  short @f        ;    ((crc32_table[i] & (1 << 31)) ? CRC32_POLYNOMIAL : 0);
+           xor  eax,CRC32_POLYNOMIAL
+@@:        loop poly_loop       ;
+           
+           mov  ecx,32          ;
+           call crc32_reflect   ; crc32_table[i] = crc32_reflect(crc32_table[i], 32);
+           
+           stosd                ; crc32_table[i] = eax
+           
+           pop  ecx             ;
+           inc  ecx             ; 256 times
+           cmp  ecx,256         ;
+           jb   short init_loop
+           
+           ret
+crc32_initialize endp
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+;   Swap bit 0 for bit 7 bit 1 For bit 6, etc....
+; passed reflect value in eax
+; passed ch value in ecx
+; returns reflected value in eax
+crc32_reflect proc near uses ebx ecx edx
+           mov  edx,eax                 ; edx = reflect value
+           xor  eax,eax                 ; eax = ret value (0)
+           mov  ebx,1                   ; create bitmap bit
+           dec  ecx                     ; zero-base the shift
+           shl  ebx,cl
+reflect_loop:
+           shr  edx,1
+           jnc  short @f
+           or   eax,ebx
+@@:        shr  ebx,1
+           jnc  reflect_loop            ; go until the shift bit "falls off"
+           
+           ret
+crc32_reflect endp
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; passed byte count to check in ecx
+; passed pointer to data to check in ds:esi
+; passed seg value of table in es:0000
+; returns crc in eax
+crc32      proc near
+           mov  eax,0FFFFFFFFh
+           call crc32_partial
+           xor  eax,0FFFFFFFFh           
+           ret
+crc32      endp
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; passed byte count to check in ecx
+; passed seg value of table in es:0000
+; passed pointer to data to check in ds:esi
+; passed current crc in eax
+; returns crc in eax
+crc32_partial proc near uses edx esi edi
+           
+@@:        movzx edx,byte [esi] ;
+           inc  esi             ;
+           mov  edi,eax         ;    *crc = (*crc >> 8) ^ crc32_table[(*crc & 0xFF) ^ *data++];
+           and  edi,0FFh        ;
+           xor  edi,edx         ;
+           mov  edx,es:[edi*4]  ;
+           shr  eax,8           ;
+           xor  eax,edx         ;
+           ;.adsize              ; loop using ecx
+           loop @b              ;  (not really needed since we are in real mode and can't have
+                                ;    more than 65536 bytes, but just because...)
+           ret
+crc32_partial endp
+
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; string data
+gpt_header_error  db 13,10,"Didn't find valid GPT Header.",0
+
+main_string       db '-=-=-= UEFI GPT Boot =-=-=-=-',0
+line_string       db 13,10,' '
+line_index        db '?: [',0
+endattrb_str      db '] ',0
+attribs_string    db 13,10,'R = Required, H = Hidden, L = Legacy Bootable',0
+choose_string     db 13,10,'Please choose a partition: ',0
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+%PRINT (ENTRY_OFFSET-$)  ; 3 bytes free in this area
+           org ENTRY_OFFSET
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; this should be at es:ENTRY_OFFSET (0x07C00 + ENTRY_OFFSET)
+.ifne $ ENTRY_OFFSET
+  %error 1 'We should be at 0x08200 right here...'
 .endif
 
 .end
