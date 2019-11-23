@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2016    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: empty.asm                                                          *
@@ -30,7 +30,7 @@ comment |*******************************************************************
 *               NBASM ver 00.26.59                                         *
 *          Command line: nbasm empty<enter>                                *
 *                                                                          *
-* Last Updated: 10 Aug 2016                                                *
+* Last Updated: 22 May 2017                                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -60,10 +60,7 @@ outfile 'empty.bin'                ; out file
            mov  ss,ax              ; start of stack segment (07C0h)
            mov  sp,4000h           ; first push at 07C0:3FFEh
                                    ; (16k size in bytes)
-                                   ; (07C0:4000h = 0BC0:0000h which is less
-                                   ;      than 0C00:0000h where ROOT resides)
            sti                     ; allow interrupts again
-
 
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ;  print a simple message and freeze (halt)
@@ -101,4 +98,3 @@ message    db 13,10,7,'I am an empty boot sector.  I will just halt here.',0
            dw  0AA55h
 
 .end
-
