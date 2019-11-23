@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: boot.inc                                                           *
@@ -29,7 +29,7 @@ comment |*******************************************************************
 *                 http://www.fysnet/newbasic.htm                           *
 *               NBASM ver 00.26.59                                         *
 *                                                                          *
-* Last Updated: 10 Apr 2017                                                *
+* Last Updated: 14 Sept 2018                                               *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -55,7 +55,7 @@ STACK_OFFSET  equ 4400h        ; first push at 07C0:4400h (0x0C000) minus size o
 S_BOOT_DATA struct
            signature    dword  ; signature used for finding booted from partition
            base_lba     qword  ; base lba of partition
-           loader_base  dword  ; physical address of loader.sys
+           loader_base  dword  ; physical address of loader.sys (loader.sys must be loaded below the 4gig space)
            file_system  byte   ; filesystem number
            drive        byte   ; BIOS drive number
            reserved     dup 30 ; padding/reserved
