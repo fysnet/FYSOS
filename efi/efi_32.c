@@ -1,6 +1,6 @@
 /*             Author: Benjamin David Lunt
  *                     Forever Young Software
- *                     Copyright (c) 1984-2018
+ *                     Copyright (c) 1984-2019
  *  
  *  This code is donated to the Freeware communitee.  You have the
  *   right to use it for learning purposes only.  You may not modify it
