@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: embr.inc                                                           *
@@ -45,7 +45,9 @@ S_EMBR     struct
   crc                 dword  ; crc of this header and all entries
   entry_count          word  ; total entries in EMBR
   boot_delay           byte  ; seconds to delay before automatic boot (reserved in all but first sector)
-  resv1               dup 17 ;
+  version              byte  ; 0x25 = 1.05
+  tot_sectors         qword  ; total sectors encompassed by this embr
+  resv1               dup 8  ;
   sig1                dword  ; 'RBME'
 S_EMBR      ends
 

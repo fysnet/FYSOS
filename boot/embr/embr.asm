@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: embr.asm                                                           *
@@ -30,7 +30,9 @@ comment |*******************************************************************
 *               NBASM ver 00.26.59                                         *
 *          Command line: nbasm embr -d<enter>                              *
 *                                                                          *
-* Last Updated: 29 May 2017                                                *
+* Last Updated: 22 Oct 2018                                                *
+*                                                                          *
+*   Requires 32-bit and above x86 processor                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -66,12 +68,12 @@ include 'embr.inc'                 ; our include file
 outfile 'embr.bin'                 ; declare the out filename
 
 ; sector size
-SECT_SIZE   equ  512               ; we are assembling for 512 bytes sectors
+; SECT_SIZE   equ  512               ; we are assembling for 512 bytes sectors
 
 ; total count of sectors the code and entries occupy
 ; we will allocate 31 (32 including the MBR) even though we don't
 ;  use all of them.  This is for future additions
-OCCUPY         equ 32 ; MBR = 1, EMBR = 31
+; OCCUPY         equ 32 ; MBR = 1, EMBR = 31
 
 ; count of entries in menu window at one time, must be at least 2
 ; used to know how many entries to display in a given window
@@ -278,12 +280,12 @@ signature  db 'EmbrrbmE'
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; the offset from LBA 0 where entries start
-           dw ((entry_hdr/SECT_SIZE) + 1)  ; hard coded / written to at EMBR build time
+hdr_offset dw  0  ; ((entry_hdr/SECT_SIZE) + 1)  ; hard coded / written to at EMBR build time
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; the count of sectors remaining which include the
            ; code *and* all sectors used for EMBR entries.
-remaining  dw (OCCUPY-2)      ; hard coded / written to at EMBR build time
+remaining  dw  0  ; (OCCUPY-2)      ; hard coded / written to at EMBR build time
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; for compatibility, we still have the AA55h sig at the
@@ -331,7 +333,7 @@ remaining_code:
            ;  calculate a new one when we update the date
            call crc32_initialize
 
-           mov  di,offset entry_hdr
+           call get_entry_hdr_offset
            mov  ebx,[di + S_EMBR->crc]
            mov  dword [di + S_EMBR->crc],0
 
@@ -345,7 +347,7 @@ remaining_code:
            
            cmp  ebx,eax
            je   short @f
-
+           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; if CRC was not correct, print error, current CRC value,
            ; and the calculated CRC value.
@@ -388,7 +390,7 @@ remaining_code:
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; now get the entries.
            mov  word cur_start,0
-           mov  di,offset entry_hdr
+           call get_entry_hdr_offset
            mov  ax,[di + S_EMBR->entry_count]
            mov  tot_entries,ax
            
@@ -421,7 +423,7 @@ get_last_next:
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate the entry to be displayed as selected
 get_last_boot_done:
-           mov  di,offset entry_hdr
+           ; call get_entry_hdr_offset
            mov  ax,last_boot
            mov  cur_selected,ax
            sub  ax,(TOTAL_DISPLAY>>1)
@@ -447,7 +449,7 @@ again:     call update_scroll_bar
            mov  word col,7
            mov  word cur_entry,0
            mov  word cur_display,0
-           mov  di,offset entry_hdr
+           call get_entry_hdr_offset
            add  di,sizeof(S_EMBR)
            
 first:     mov  ax,cur_entry
@@ -466,16 +468,17 @@ first:     mov  ax,cur_entry
            cmp  ax,tot_entries
            jae  short empty_line
            
-           cmp  byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
-           jne  short not_valid
+           test dword [di + S_EMBR_ENTRY->flags],ENTRY_VALID
+           jz   short not_valid
            
            ; check the signature field too
-           cmp  dword [di + S_EMBR_ENTRY->signature],'RBMe'
+           cmp  dword [di + S_EMBR_ENTRY->signature],52424D65h    ; 'RBMe'
            jne  short not_valid
            
            ; is a valid entry
            mov  si,offset blank_line
            call display_string
+
            mov  word col,7
            lea  si,[di + S_EMBR_ENTRY->description]
            call display_string
@@ -545,7 +548,10 @@ next_entry:
            ; counting down.
 get_user_input:
            mov  byte color,07h
-           movzx ecx,byte boot_delay
+           push edi
+           call get_entry_hdr_offset
+           movzx ecx,byte [di + S_EMBR->boot_delay]
+           pop  edi
 wait_loop: mov  word row,19
            mov  word col,45
            
@@ -649,13 +655,16 @@ not_i:     cmp  ax,1474h  ; 'T'
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; now write delay back to the disk
 save_delay_count:
-           mov  boot_delay,ax
+           push edi
+           call get_entry_hdr_offset
+           mov  [di + S_EMBR->boot_delay],ax
            mov  cx,1
            xor  ebx,ebx
            mov  bx,es
            shl  ebx,4
-           add  ebx,offset entry_hdr
-           mov  eax,offset entry_hdr
+           add  ebx,edi
+           mov  eax,edi
+           pop  edi
            shr  eax,9
            cdq
            mov  si,4301h       ; write service
@@ -707,7 +716,7 @@ no_key_pressed:
 
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate the entry offset
-boot_it:   mov  di,offset entry_hdr   ;
+boot_it:   call get_entry_hdr_offset
            mov  cx,last_boot
            xor  bx,bx
            add  di,sizeof(S_EMBR)
@@ -736,7 +745,10 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate new crc
-           mov  si,offset entry_hdr
+           push edi
+           call get_entry_hdr_offset
+           mov  si,di
+           pop  edi
            mov  dword [si + S_EMBR->crc],0
            mov  ax,[si + S_EMBR->entry_count]
            mov  cx,sizeof(S_EMBR_ENTRY)
@@ -762,10 +774,13 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            xor  ebx,ebx
            mov  bx,es
            shl  ebx,4
-           add  ebx,offset entry_hdr
+           push edi
+           call get_entry_hdr_offset
+           add  ebx,edi
            
            xor  edx,edx
-           mov  eax,offset entry_hdr
+           mov  eax,edi
+           pop  edi
            movzx ecx,word sector_size
            div  ecx
            
@@ -808,7 +823,8 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            mov  es,ax
            mov  si,7A00h
            mov  di,7C00h
-           mov  cx,(SECT_SIZE>>2)
+           ; mov  cx,(SECT_SIZE>>2)
+           mov  cx,(512>>2)
            rep
              movsd
            pop es
@@ -818,6 +834,17 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            ; now jump to the newly loaded code
            jmp far 0000h,07C0h   ; (NBASM order->) offset,segment
 
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; So that we can update the S_EMBR struct independently of this code,
+;  we need to retrieve the address instead of hard coding it.
+; Since we load the code and the header/entries consecutively in memory,
+;  the offset to the S_EMBR struct is (0x0000 + (S_EMBR.offset * 512) - 512)
+get_entry_hdr_offset proc near
+           movzx edi,word [hdr_offset]
+           dec  edi
+           shl  edi,9
+           ret
+get_entry_hdr_offset endp
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; display a 32-bit decimal number to the screen
@@ -1161,7 +1188,7 @@ display_info proc near uses all
 
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate the entry offset
-disp_it:   mov  di,offset entry_hdr   ;
+disp_it:   call get_entry_hdr_offset
            mov  cx,ax
            xor  bx,bx
            add  di,sizeof(S_EMBR)
@@ -1661,8 +1688,8 @@ cur_selected dw  0    ; current entry selected
 tot_entries  dw  0    ; total entries
 
 
-menu_start  db        'ÕÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ  FYS OS (aka Konan) Multi-boot EMBR v0.94.00  ÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¸'
-            db  13,10,'³                (C)opyright Forever Young Software 1984-2014                 ³'
+menu_start  db        'ÕÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ  FYS OS (aka Konan) Multi-boot EMBR v0.94.10  ÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¸'
+            db  13,10,'³                (C)opyright Forever Young Software 1984-2018                 ³'
             db  13,10,'³    ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿ ³'
             db  13,10,'³    ³                                                                      ',24,' ³'
             db  13,10,'³    ³                                                                      ° ³'
@@ -1703,6 +1730,11 @@ legend      db        '³     ENTER = Boot current selected partition entry.     
             db  13,10,'³                                                                             ³',0
 
 
+; the remaining is if we make a single image from this .bin file and run it to test it.
+;  since we now have ultimate.exe, we can update any embr image with it
+
+comment |  ;;;; start of comment
+
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; start of EMBR entries
 ; the rest of this should actually be written to the disk via a FDISK
@@ -1727,7 +1759,9 @@ entry_hdr   db  'EMBR'        ; sig0
             dw  1             ; total entries in table
 .endif
 boot_delay  db  20            ; boot delay
-            dup 17,0          ; reserved
+            db  25h           ; version
+            dq  0
+            dup 8,0           ; reserved
             db  'RBME'        ; sig1
             
             ; entry 1
@@ -1848,6 +1882,9 @@ boot_delay  db  20            ; boot delay
 ;%print ((OCCUPY * SECT_SIZE)-$)  ; 8544 bytes here
 
             org (OCCUPY * SECT_SIZE)
+
+|  ;;; end of comment
+
 
 .end
 
