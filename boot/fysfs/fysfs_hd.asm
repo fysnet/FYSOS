@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: fysfs_hd.asm                                                       *
@@ -31,6 +31,8 @@ comment |*******************************************************************
 *          Command line: nbasm fysfs_hd<enter>                             *
 *                                                                          *
 * Last Updated: 28 Sept 2017                                               *
+*                                                                          *
+*   Requires 32-bit and above x86 processor                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
