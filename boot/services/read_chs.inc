@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: read_chs.inc                                                       *
@@ -12,6 +12,8 @@ comment |*******************************************************************
 *               NBASM ver 00.26.59                                         *
 *                                                                          *
 * Last Updated: 22 May 2017                                                *
+*                                                                          *
+*   Requires 32-bit and above x86 processor                                *
 *                                                                          *
 ***************************************************************************|
 
