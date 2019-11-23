@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2017    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: usbboot.asm                                                        *
@@ -55,14 +55,22 @@ outfile 'usbboot.bin'              ; target filename
 EXTRA_SECTS      equ   1           ; count of extra sectors we need loaded
 USE_BPB          equ   1           ; include the BPB in our code
 USE_FLOPPY       equ   1           ; use values that are compatible with a 1.44 meg floppy
+USE_SUPER_FLPY   equ   0           ; use values that are compatible with a "super floppy"
+USE_PART_TBLE    equ   0           ; give a partition table
 
 
-.if USE_FLOPPY
-  SECT_PER_TRACK   equ  18
-  TOT_HEADS        equ   2
+.if USE_SUPER_FLPY
+  SECT_PER_TRACK   equ  63
+  TOT_HEADS        equ  255
+  TOT_SECTS        equ  65500
+;.elif USE_FLOPPY
+;  SECT_PER_TRACK   equ  18
+;  TOT_HEADS        equ   2
+;  TOT_SECTS        equ  2880
 .else
   SECT_PER_TRACK   equ  63
   TOT_HEADS        equ  16
+  TOT_SECTS        equ  65500
 .endif
 
 .code                              ;
@@ -83,7 +91,7 @@ nSecPerClust db  1             ; Sectors per Cluster
 nSecRes      dw  1             ; Sectors reserved for Boot Record
 nFATs        db  2             ; Number of FATs
 nRootEnts    dw  224           ; Max Root Directory Entries allowed
-nSecs        dw  2880          ; Number of Logical Sectors (0B40h)
+nSecs        dw  TOT_SECTS     ; Number of Logical Sectors (0B40h)
                                ;   00h when > 65,535 sectors
 mDesc        db  0F0h          ; Medium Descriptor Byte
 nSecPerFat   dw  9             ; Sectors per FAT
@@ -288,7 +296,8 @@ drive         db  0
 ;  Pad out to fill 512 bytes, including final word 0xAA55
 %PRINT (200h-$-2-(4*16))               ; ~130 bytes free in this area
            org (200h-2-(4*16))
-           
+
+.if USE_PART_TBLE
 .if USE_FLOPPY
            db  0  ; boot id
              db  0 ; start head
@@ -315,6 +324,9 @@ drive         db  0
            dup 16,0
            dup 16,0
            dup 16,0
+.else
+           dup (16*4),90h
+.endif
            
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  Pad out to fill 512 bytes, including final word 0xAA55
