@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: lean_hd.asm                                                        *
@@ -215,8 +215,8 @@ include ..\services\conio.inc      ; include the display_char and display_string
 ;  The Base LBA of this boot code.
 ;  The formatter will update this data for us.
            org (200h-2-8-4)
-boot_sig   dd  ?
-base_lba   dq  ?
+boot_sig   dd  0
+base_lba   dq  0
 
            org (200h-2)
            dw  0AA55h
