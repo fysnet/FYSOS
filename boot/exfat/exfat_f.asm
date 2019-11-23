@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: exfat_f.asm                                                        *
@@ -31,6 +31,8 @@ comment |*******************************************************************
 *          Command line: nbasm exfat<enter>                                *
 *                                                                          *
 * Last Updated: 17 Sept 2018                                               *
+*                                                                          *
+*   Requires 32-bit and above x86 processor                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
