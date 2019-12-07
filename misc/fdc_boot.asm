@@ -524,8 +524,8 @@ dma_init_dma proc near
            mov  dx,DMA_FLIP_FLOP
            out  dx,al              ; DMA-1 Clear Byte Flip-Flop (write anything)
 
-	         ; size is always 1 less from sent size
-	         dec  cx
+           ; size is always 1 less from sent size
+           dec  cx
            
            mov  dx,0x81
            xor  al,al              ; DMA-1 Channel 2 Output (page value)
