@@ -1,6 +1,6 @@
 /*             Author: Benjamin David Lunt
  *                     Forever Young Software
- *                     Copyright (c) 1984-2018
+ *                     Copyright (c) 1984-2020
  *  
  *  This code is donated to the Freeware communitee.  You have the
  *   right to use it for learning purposes only.  You may not modify it
@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  17 Sept 2018
+ * Last update:  05 Jan 2020
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -45,6 +45,7 @@ bit32u fs_exfat(const char *filename, void *target) {
   bit32u cluster, file_size;
   char name[256], *n;
   bool fnd = FALSE;
+  bit8u flags = 0;
   
   // have we loaded the root and fat yet
   if (!exfat_data_valid)
@@ -60,6 +61,7 @@ bit32u fs_exfat(const char *filename, void *target) {
       if (root[1].entry_type == EXFAT_DIR_STRM_EXT) {
         cluster = root[1].type.stream_ext.first_cluster;
         file_size = root[1].type.stream_ext.data_len[0];
+        flags = root[1].type.stream_ext.flags;
         l = root[1].type.stream_ext.name_len;
         n = name;
         for (i=1; i<secs && l; i++)
@@ -90,10 +92,14 @@ bit32u fs_exfat(const char *filename, void *target) {
   j = 0;
   win_init_progress(file_size);
   
+  // calculate count of clusters to read
+  // we have to do this so if the NOFAT flag is set
+  int count = (int) (file_size / exfat_data.sect_per_clust / exfat_data.bytes_per_sector) + 1;
+  
   struct S_EXFAT_VBR *vbr = (struct S_EXFAT_VBR *) exfat_data.vbr;
   void *p = target;
   bit32u *fat = (bit32u *) exfat_data.fat_loc;
-  while (cluster < 0xFFFFFFF8) {
+  while ((cluster < 0xFFFFFFF8) && count--) {
     if (read_sectors(vbr->data_region_lba + ((cluster - 2) * exfat_data.sect_per_clust),
                      exfat_data.sect_per_clust, p) != exfat_data.sect_per_clust) {
         win_printf(main_win, "Error reading from file...\n");
@@ -101,8 +107,12 @@ bit32u fs_exfat(const char *filename, void *target) {
     }
     j += (exfat_data.sect_per_clust << 9);  // clusters to bytes
     win_put_progress(j, 0);
-    cluster = fat[cluster];
-    p = (void *) ((bit32u) p + (exfat_data.sect_per_clust * 512));
+    // if the NOFAT bit is set, we increment the cluster
+    if (flags & EXFAT_NO_FAT_CHAIN_VALID)
+      cluster++;
+    else
+      cluster = fat[cluster];
+    p = (void *) ((bit32u) p + (exfat_data.sect_per_clust * exfat_data.bytes_per_sector));
   }
   
   // if we got here, we read the file okay.
@@ -117,9 +127,6 @@ bool exfat_load_data(struct S_ExFAT_DATA *data) {
   void *buffer = malloc(512);
   int root_clusters = 4, cnt = 0;
 
-  // TODO: 1st, if root_clusters is say 16, something happens and it doesn't get past the decompression
-  // second, we need to use realloc() instead of assuming so many clusters
-  
   // read in the VBR
   if (spc_key_F2)
     para_printf("ExFAT: Reading VBR\n");
@@ -130,6 +137,7 @@ bool exfat_load_data(struct S_ExFAT_DATA *data) {
   data->vbr = buffer;
   struct S_EXFAT_VBR *vbr = (struct S_EXFAT_VBR *) buffer;
   data->sect_per_clust = (1 << vbr->log_sects_per_clust);
+  data->bytes_per_sector = (1 << vbr->log_bytes_per_sect);
   
   // read the FAT
   if (spc_key_F2)
@@ -144,7 +152,7 @@ bool exfat_load_data(struct S_ExFAT_DATA *data) {
   // read the root
   if (spc_key_F2)
     para_printf("ExFAT: Reading Root Directory\n");
-  data->root_dir = malloc(root_clusters * (512 * data->sect_per_clust));
+  data->root_dir = malloc(root_clusters * (data->bytes_per_sector * data->sect_per_clust));
   void *p = data->root_dir;
   bit32u *fat = (bit32u *) data->fat_loc;
   bit32u cluster = vbr->root_dir_cluster;
@@ -157,7 +165,7 @@ bool exfat_load_data(struct S_ExFAT_DATA *data) {
         return FALSE;
     }
     cluster = fat[cluster];
-    p = (void *) ((bit32u) p + (data->sect_per_clust * 512));
+    p = (void *) ((bit32u) p + (data->sect_per_clust * data->bytes_per_sector));
     root_clusters--;
   }
   
