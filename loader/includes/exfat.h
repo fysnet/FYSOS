@@ -1,6 +1,6 @@
 /*             Author: Benjamin David Lunt
  *                     Forever Young Software
- *                     Copyright (c) 1984-2018
+ *                     Copyright (c) 1984-2020
  *  
  *  This code is donated to the Freeware communitee.  You have the
  *   right to use it for learning purposes only.  You may not modify it
@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  10 Aug 2018
+ * Last update:  05 Jan 2020
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -56,25 +56,25 @@
 #pragma pack(push, 1)
 
 struct S_EXFAT_VBR {
-	bit8u  jmp[3];
-	char   oem_name[8];
+  bit8u  jmp[3];
+  char   oem_name[8];
   bit8u  reserved0[53];
-	bit32u part_offset[2];
-	bit32u total_sectors[2];
-	bit32u first_fat;
-	bit32u sect_per_fat;
-	bit32u data_region_lba;
-	bit32u data_region_size;   // in clusters
-	bit32u root_dir_cluster;
-	bit32u serial;
-	bit16u fs_version;
-	bit16u flags;
-	bit8u  log_bytes_per_sect;
-	bit8u  log_sects_per_clust;
-	bit8u  num_fats;
-	bit8u  drive_sel;
-	bit8u  percent_heap;
-	bit8u  reserved1[7];
+  bit32u part_offset[2];
+  bit32u total_sectors[2];
+  bit32u first_fat;
+  bit32u sect_per_fat;
+  bit32u data_region_lba;
+  bit32u data_region_size;   // in clusters
+  bit32u root_dir_cluster;
+  bit32u serial;
+  bit16u fs_version;
+  bit16u flags;
+  bit8u  log_bytes_per_sect;
+  bit8u  log_sects_per_clust;
+  bit8u  num_fats;
+  bit8u  drive_sel;
+  bit8u  percent_heap;
+  bit8u  reserved1[7];
   bit8u  boot_code[390];
   bit16u boot_sig;           // 0xAA55
 };
@@ -115,7 +115,7 @@ struct S_EXFAT_ROOT {
     } stream_ext;
     struct {
       bit8u  flags;
-	    bit16u name[15];
+      bit16u name[15];
     } file_name_ext;
     struct {
       bit8u  len;
@@ -152,6 +152,7 @@ struct S_ExFAT_DATA {
   void *root_dir;
   void *fat_loc;
   int  sect_per_clust;
+  int  bytes_per_sector;
 };
 
 bool exfat_load_data(struct S_ExFAT_DATA *data);
