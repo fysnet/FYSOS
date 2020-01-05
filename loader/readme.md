@@ -6,6 +6,6 @@ This assumes you have installed SmallerC which also uses your favorite assembler
 
 Find SmallerC and directions at:
 
-#### https://github.com/fysnet/SmallerC
+#### https://github.com/alexfru/SmallerC/
 
 To see the boot and loader in action, boot one of the two images in https://github.com/fysnet/FYSOS/tree/master/images within your favorite emulator, or copy to a floppy disk, hard drive, or USB thumb drive and boot on a physical machine.
