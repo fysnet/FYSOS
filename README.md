@@ -45,7 +45,7 @@ You MUST:
 
 The assembly files are built with the NewBasic Assembler
 
-#### [NBASM ver 00.26.59](http://www.fysnet/newbasic.htm)
+#### [NBASM ver 00.26.59](http://www.fysnet.net/newbasic.htm)
 
 The C files are built with Alex's SmallerC
 
