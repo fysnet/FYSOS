@@ -1,6 +1,6 @@
 /*             Author: Benjamin David Lunt
  *                     Forever Young Software
- *                     Copyright (c) 1984-2018
+ *                     Copyright (c) 1984-2020
  *  
  *  This code is donated to the Freeware communitee.  You have the
  *   right to use it for learning purposes only.  You may not modify it
@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  18 Sept 2018
+ * Last update:  6 July 2020
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -80,7 +80,7 @@ bool disable_ints(void);
 bool enable_ints(void);
 bool restore_ints(const bool);
 
-void *hook_vector(const int, const void *);
+hook_vector(const int, const void *, bit32u *);
 
 extern bool allow_spc_keys;
 extern bool spc_key_F1, spc_key_F2, spc_key_F3,
