@@ -1,6 +1,6 @@
 /*             Author: Benjamin David Lunt
  *                     Forever Young Software
- *                     Copyright (c) 1984-2018
+ *                     Copyright (c) 1984-2020
  *  
  *  This code is donated to the Freeware communitee.  You have the
  *   right to use it for learning purposes only.  You may not modify it
@@ -181,7 +181,7 @@ int main(struct REGS *boot_regs) {
   
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   // and hook the BIOS keyboard interrupt
-  old_isr9 = hook_vector(9, &keyboard_isr);
+  hook_vector(9, &keyboard_isr, &old_isr9);
   
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // initialize our memory allocation
