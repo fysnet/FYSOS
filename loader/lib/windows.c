@@ -1,6 +1,6 @@
 /*             Author: Benjamin David Lunt
  *                     Forever Young Software
- *                     Copyright (c) 1984-2018
+ *                     Copyright (c) 1984-2020
  *  
  *  This code is donated to the Freeware communitee.  You have the
  *   right to use it for learning purposes only.  You may not modify it
@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  10 Aug 2018
+ * Last update:  6 Aug 2020
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -71,7 +71,7 @@ void win_initialize(void) {
   // hook into the BIOS Timer interrupt.
   // Then if main_win != NULL, and main_win->status_timer != 0, decrement the timer.
   //  if the timer value reaches zero, clear the status string of the window.
-  old_isr8 = hook_vector(8, &win_timer);
+  hook_vector(8, &win_timer, &old_isr8);
 }
 
 void win_timer(void) {
@@ -81,6 +81,7 @@ void win_timer(void) {
     " push  ds     \n"
     " xor  ax,ax   \n"
     " mov  ds,ax   \n"
+    " mov  fs,ax   \n"
   );
   
   if (main_win != NULL) {
@@ -95,13 +96,8 @@ void win_timer(void) {
     "  popad             \n"  // restore all registers used
     "  add  sp,4         \n"  // remove the 'win' local parameter
     "  pop  ebp          \n"  // restore ebp
-    "  sub  sp,4         \n"  // make room for the seg:off
-    "  push eax          \n"  // save eax
-    "  mov  eax,[dword fs:_old_isr8]  \n"  // must have the 'dword' operand or SmallerC won't create a relocation for it
-    "  mov  [esp+4],eax  \n"  // put the seg:eax in the room we allocated
-    "  pop  eax          \n"  // restore eax
-    "  retf              \n"  // jump (removing 4 bytes from the stack)
-    );
+    "  jmp  word far [dword fs:_old_isr8]  \n"  // must have the 'dword' operand or SmallerC won't create a relocation for it
+  );
 }
 
 void *win_create(void *parent, const char *title, const char *status, int x, int y, int w, int h, bit32u flags) {
