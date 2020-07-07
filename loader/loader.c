@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  10 Aug 2018
+ * Last update:  6 Aug 2020
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
