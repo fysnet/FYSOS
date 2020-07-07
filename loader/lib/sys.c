@@ -1,6 +1,6 @@
 /*             Author: Benjamin David Lunt
  *                     Forever Young Software
- *                     Copyright (c) 1984-2018
+ *                     Copyright (c) 1984-2020
  *  
  *  This code is donated to the Freeware communitee.  You have the
  *   right to use it for learning purposes only.  You may not modify it
@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  18 Sept 2018
+ * Last update:  6 Aug 2020
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -252,21 +252,18 @@ bool restore_ints(const bool state) {
 }
 
 // hook a BIOS vector
-void *hook_vector(const int i, const void *addr) {
-  void *old_isr;
+hook_vector(const int i, const void *addr, bit32u *old_isr) {
   bool ints;
   
   ints = disable_ints();
   
-  old_isr = (void *) * (bit32u *) (i * sizeof(bit32u));
+  *old_isr = * (bit32u *) (i * sizeof(bit32u));
   * (bit32u *) (i * sizeof(bit32u)) = (((bit32u) addr & 0x000FFFF0) << 12) | ((bit32u) addr & 0xF);
   
   restore_ints(ints);
-  
-  return old_isr;
 }
 
-void *old_isr9 = NULL;
+bit32u old_isr9;
 bool spc_key_F1 = FALSE,  // help screen
      spc_key_F2 = FALSE,  // verbose
      spc_key_F3 = FALSE,  // nothing at this time
@@ -303,6 +300,7 @@ void keyboard_isr(void) {
     " push  ds     \n"
     " xor  ax,ax   \n"
     " mov  ds,ax   \n"
+    " mov  fs,ax   \n"
   );
   
   // if a special key is pressed (F8 for example), set its flag
@@ -355,11 +353,6 @@ void keyboard_isr(void) {
     "  popad             \n"  // restore all registers used
     "  add  sp,8         \n"  // remove the 'keycode' and 'i' local parameters
     "  pop  ebp          \n"  // restore ebp
-    "  sub  sp,4         \n"  // make room for the seg:off
-    "  push eax          \n"  // save eax
-    "  mov  eax,[dword fs:_old_isr9]  \n"  // must have the 'dword' operand or SmallerC won't create a relocation for it
-    "  mov  [esp+4],eax  \n"  // put the seg:eax in the room we allocated
-    "  pop  eax          \n"  // restore eax
-    "  retf              \n"  // jump (removing 4 bytes from the stack)
+    "  jmp  word far [dword fs:_old_isr9]  \n"  // must have the 'dword' operand or SmallerC won't create a relocation for it
   );
 }
