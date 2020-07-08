@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  6 Aug 2020
+ * Last update:  7 Aug 2020
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -77,11 +77,10 @@ void win_initialize(void) {
 void win_timer(void) {
   // save all registers used
   asm (
-    " pushad       \n"
     " push  ds     \n"
+    " pushad       \n"
     " xor  ax,ax   \n"
     " mov  ds,ax   \n"
-    " mov  fs,ax   \n"
   );
   
   if (main_win != NULL) {
@@ -92,11 +91,12 @@ void win_timer(void) {
   }
   
   asm (
-    "  pop  ds           \n"  
     "  popad             \n"  // restore all registers used
+    "  mov  ebp,[dword _old_isr8]  \n"
+    "  pop  ds           \n"  
     "  add  sp,4         \n"  // remove the 'win' local parameter
-    "  pop  ebp          \n"  // restore ebp
-    "  jmp  word far [dword fs:_old_isr8]  \n"  // must have the 'dword' operand or SmallerC won't create a relocation for it
+    "  xchg ebp,[esp]    \n"  // place the return value on the stack and restore the epb register
+    "  retf              \n"
   );
 }
 
