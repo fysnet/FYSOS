@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  6 Aug 2020
+ * Last update:  7 Aug 2020
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -296,11 +296,10 @@ bool allow_spc_keys = TRUE;
 void keyboard_isr(void) {
   // save all registers used
   asm (
-    " pushad       \n"
     " push  ds     \n"
+    " pushad       \n"
     " xor  ax,ax   \n"
     " mov  ds,ax   \n"
-    " mov  fs,ax   \n"
   );
   
   // if a special key is pressed (F8 for example), set its flag
@@ -336,8 +335,8 @@ void keyboard_isr(void) {
         asm (
           "  mov  al,20h       \n"  // end of interrupt
           "  out  20h,al       \n"  //  ...
-          "  pop  ds           \n"  // 
           "  popad             \n"  // restore all registers used
+          "  pop  ds           \n"  // 
           "  add  sp,8         \n"  // remove the 'keycode' and 'i' local parameters
           "  pop  ebp          \n"  // restore ebp
           "  iret              \n"  // return from handler
@@ -349,10 +348,11 @@ void keyboard_isr(void) {
   
   // else, it was any other key, so pass it on to the BIOS' handler
   asm (
-    "  pop  ds           \n"  //
     "  popad             \n"  // restore all registers used
+    "  mov  ebp,[dword _old_isr9]  \n"
+    "  pop  ds           \n"  //
     "  add  sp,8         \n"  // remove the 'keycode' and 'i' local parameters
-    "  pop  ebp          \n"  // restore ebp
-    "  jmp  word far [dword fs:_old_isr9]  \n"  // must have the 'dword' operand or SmallerC won't create a relocation for it
+    "  xchg ebp,[esi]    \n"  // place the return value on the stack and restore the epb register
+    "  retf              \n"
   );
 }
