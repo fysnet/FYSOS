@@ -352,7 +352,7 @@ void keyboard_isr(void) {
     "  mov  ebp,[dword _old_isr9]  \n"
     "  pop  ds           \n"  //
     "  add  sp,8         \n"  // remove the 'keycode' and 'i' local parameters
-    "  xchg ebp,[esi]    \n"  // place the return value on the stack and restore the epb register
+    "  xchg ebp,[esp]    \n"  // place the return value on the stack and restore the epb register
     "  retf              \n"
   );
 }
