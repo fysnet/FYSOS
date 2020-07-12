@@ -1,0 +1,229 @@
+# Resource file used with MAKE_IMG for the GUI book 
+#            by Benjamin David Lunt
+#  Copyright 1984-2016  All Rights Reserved
+#
+# This is the resource file for MAKE_IMG.  Even though the resource code will expect
+#  much more information, we only need the file names to load, and their ID number
+
+# we need the image file name to create
+#  imgfile=filename   - This is the path/filename of the target file 
+
+imgfile=  E:\Books\fysos\main\gui\utils\make_img\images\images.sys
+#imgfile=  D:\fysos\main\gui\utils\make_img\images\images.sys
+
+# we use the idfile parameter to indicate the location of the resource .h file
+#  that contains the #defines for the ID_ resources we use below.  This should
+#  point to ids.h
+
+idfile=  E:\Books\fysos\main\gui\source\gui_demo\ids.h
+#idfile=  D:\fysos\main\gui\source\gui_demo\ids.h
+
+# The list of files are the files that this app
+#  should find and write to the main image file.  
+# The first parameter is the id name to place with the image. 
+#  This utility will parse the given resource file specified in
+#  the idfile= parameter above to find the value for the given
+#  name.
+# The second parameter is the full path name of the file to read.
+# The third parameter is the value to use if the name is not found
+#  in the resource file given.
+# The forth parameter is a flag to indicate how many, including this
+#  image is part of a multi-part image.  Set to 1 if not a multi-part
+#  image.  Set to 0 for remaining parts. (We currently use a default
+#  for the delay value, not allowing one given here)
+
+# (Each field must contain a value, even though it might be ignored
+#  by the current attribute of the line)
+
+# If file is a standard .BMP file using the following specs:
+#  standard .BMP file
+#  24-bit (RGB) only
+#  no compression
+#  no special pallet/color table (uses RGB values)
+#  one color plane
+#  Uses 40 byte (windows) BITMAPINFOHEADER info header
+
+# since our code also checks for images sizes, we can have
+#  multiple images with the same ID.
+
+ID_ICON_USER_ADD      , add_user.bmp      , 0, 1
+ID_ICON_ARROW_LEFT    , back.bmp          , 0, 1
+ID_ICON_ARROW_LEFT    , back16x16up.bmp   , 0, 2
+ID_ICON_ARROW_LEFT    , back16x16dn.bmp   , 0, 0
+ID_ICON_CAUTION       , caution.bmp       , 0, 1
+ID_ICON_CAUTION_SM    , caution_small.bmp , 0, 1
+ID_ICON_INFO          , info.bmp          , 0, 1
+ID_ICON_QUESTION      , question.bmp      , 0, 1
+ID_ICON_STOP          , stop.bmp          , 0, 1
+ID_ICON_FOLDER_OPEN   , cfolder.bmp       , 0, 1
+ID_ICON_COPY          , copy.bmp          , 0, 1
+ID_ICON_DELETE        , delete.bmp        , 0, 1
+ID_ICON_DOCUMENT      , document.bmp      , 0, 1
+ID_ICON_MAIL          , mail.bmp          , 0, 1
+ID_ICON_FOLDER_CLOSED , ofolder.bmp       , 0, 1
+ID_ICON_PROMPT        , prompt.bmp        , 0, 1
+ID_ICON_TRASH         , trash.bmp         , 0, 1
+ID_ICON_ARROW_UP      , up16x16up.bmp     , 0, 2
+ID_ICON_ARROW_UP      , up16x16dn.bmp     , 0, 0
+ID_ICON_SYS_RIGHT     , right_small.bmp   , 0, 1
+ID_ICON_SYS_LEFT      , left_small.bmp    , 0, 1
+ID_ICON_SYS_UP        , up_small.bmp      , 0, 1
+ID_ICON_SYS_DOWN      , down_small.bmp    , 0, 1
+ID_ICON_TEXT          , textedit.bmp      , 0, 1
+
+ID_ICON_CALCULATOR    , calculator.bmp    , 0, 1
+ID_ICON_SETTINGS      , settings.bmp      , 0, 1
+ID_ICON_MINESWEEP     , minesweep.bmp     , 0, 1
+ID_ICON_TASKMAN       , taskman.bmp       , 0, 1
+ID_ICON_MEDIA_PLAYER  , media_player.bmp  , 0, 1
+ID_ICON_HARDWARE      , hardware.bmp      , 0, 1
+
+ID_BORDER_CLOSE       , close.bmp         , 0, 1
+ID_BORDER_MAX         , max.bmp           , 0, 1
+ID_BORDER_MIN         , min.bmp           , 0, 1
+ID_BORDER_RESIZE      , resize.bmp        , 0, 1  # border marker
+ID_ICON_RESIZE        , resizem.bmp       , 0, 1  # mouse cursor
+
+ID_BUTTON_BAR_DIV     , bttnbar_div.bmp   , 0, 1
+ID_FILE_NEW           , new_small.bmp     , 0, 1
+ID_FILE_OPEN          , open_small.bmp    , 0, 1
+ID_FILE_SAVE          , save_small.bmp    , 0, 1
+
+ID_ANIMATE_DEMO       , animate0.bmp      , 0, 4
+ID_ANIMATE_DEMO       , animate1.bmp      , 0, 0
+ID_ANIMATE_DEMO       , animate2.bmp      , 0, 0
+ID_ANIMATE_DEMO       , animate3.bmp      , 0, 0
+
+ID_ICON_BUSY          , busy0.bmp         , 0, 5
+ID_ICON_BUSY          , busy1.bmp         , 0, 0
+ID_ICON_BUSY          , busy2.bmp         , 0, 0
+ID_ICON_BUSY          , busy3.bmp         , 0, 0
+ID_ICON_BUSY          , busy4.bmp         , 0, 0
+
+ID_EDIT_COPY          , copy_small.bmp    , 0, 1
+ID_EDIT_CUT           , cut_small.bmp     , 0, 1
+ID_EDIT_PASTE         , paste_small.bmp   , 0, 1
+ID_EDIT_FIND          , find_small.bmp    , 0, 1
+
+ID_FILE_PRINT         , print_small.bmp   , 0, 1
+
+ID_HELP_HELP          , help_small.bmp    , 0, 1
+
+ID_SYSTEM_MENU        , system_menu.bmp   , 0, 1
+ID_TASKBAR_UP         , taskbarup.bmp     , 0, 1
+ID_TASKBAR_DOWN       , taskbardown.bmp   , 0, 1
+
+# make sure to make the "middle" of these are transparent (1,1,1) so the
+#  "button" color will match whatever is underneath it.
+ID_BUTTON_DROP_DN     , buttondowna.bmp   , 0, 1
+ID_BUTTON_DROP_UP     , buttonupa.bmp     , 0, 1
+ID_BUTTON_UP          , buttonup.bmp      , 0, 1
+ID_BUTTON_DOWN        , buttondown.bmp    , 0, 1
+ID_SCROLL_LEFT        , scroll_left.bmp   , 0, 1
+ID_SCROLL_RIGHT       , scroll_right.bmp  , 0, 1
+ID_SCROLL_UP          , scroll_up.bmp     , 0, 1
+ID_SCROLL_DOWN        , scroll_down.bmp   , 0, 1
+
+ID_SCROLL_BACK        , scroll_back.bmp   , 0, 1
+
+ID_GREEN_BALL         , green_ball.bmp    , 0, 1
+
+ID_ON_OFF             , switch_off.bmp    , 0, 2
+ID_ON_OFF             , switch_on.bmp     , 0, 0
+
+ID_LIST_PLUS_MINUS    , list_minus.bmp    , 0, 2
+ID_LIST_PLUS_MINUS    , list_plus.bmp     , 0, 0
+
+
+# file extension types
+ID_TYPE_UNKNOWN       , ext_type_unk.bmp  , 0, 1
+ID_TYPE_DRIVE         , ext_type_drv.bmp  , 0, 1
+ID_TYPE_FLOPPY        , ext_type_flpy.bmp , 0, 1
+ID_TYPE_CDROM         , ext_type_cd.bmp   , 0, 1
+ID_TYPE_RAM           , ext_type_ram.bmp  , 0, 1
+ID_TYPE_DIR           , ext_type_dir.bmp  , 0, 1
+ID_TYPE_ASM           , ext_type_asm.bmp  , 0, 1
+ID_TYPE_BAT           , ext_type_bat.bmp  , 0, 1
+ID_TYPE_C             , ext_type_c.bmp    , 0, 1
+ID_TYPE_COM           , ext_type_com.bmp  , 0, 1
+ID_TYPE_CPP           , ext_type_cpp.bmp  , 0, 1
+ID_TYPE_EXE           , ext_type_exe.bmp  , 0, 1
+ID_TYPE_FNT           , ext_type_fnt.bmp  , 0, 1
+ID_TYPE_H             , ext_type_h.bmp    , 0, 1
+ID_TYPE_IMG           , ext_type_img.bmp  , 0, 1
+ID_TYPE_SYS           , ext_type_sys.bmp  , 0, 1
+ID_TYPE_TXT           , ext_type_txt.bmp  , 0, 1
+ID_TYPE_ZIP           , ext_type_zip.bmp  , 0, 1
+
+# Hardware types
+ID_TYPE_USB           , hard_type_usb.bmp , 0, 1
+ID_TYPE_CPU           , hard_type_cpu.bmp , 0, 1
+ID_TYPE_KEYBRD        , hard_type_keybrd.bmp , 0, 1
+ID_TYPE_MOUSE         , hard_type_mouse.bmp , 0, 1
+ID_TYPE_FDD           , hard_type_floppy.bmp , 0, 1
+ID_TYPE_ATA           , hard_type_disk.bmp , 0, 1
+ID_TYPE_GAME          , hard_type_game.bmp , 0, 1
+ID_TYPE_SERIAL        , hard_type_serial.bmp , 0, 1
+ID_TYPE_PARA          , hard_type_para.bmp , 0, 1
+ID_TYPE_SPKR          , hard_type_spkr.bmp , 0, 1
+ID_TYPE_TIMER         , hard_type_timer.bmp , 0, 1
+
+
+# Minesweep images
+ID_MS_BLANK           , ms\blank.bmp      , 0, 2
+ID_MS_BLANK           , ms\blankdn.bmp    , 0, 0
+ID_MS_ONE             , ms\blank.bmp      , 0, 2
+ID_MS_ONE             , ms\one.bmp        , 0, 0
+ID_MS_TWO             , ms\blank.bmp      , 0, 2
+ID_MS_TWO             , ms\two.bmp        , 0, 0
+ID_MS_THREE           , ms\blank.bmp      , 0, 2
+ID_MS_THREE           , ms\three.bmp      , 0, 0
+ID_MS_FOUR            , ms\blank.bmp      , 0, 2
+ID_MS_FOUR            , ms\four.bmp       , 0, 0
+ID_MS_FIVE            , ms\blank.bmp      , 0, 2
+ID_MS_FIVE            , ms\five.bmp       , 0, 0
+ID_MS_SIX             , ms\blank.bmp      , 0, 2
+ID_MS_SIX             , ms\six.bmp        , 0, 0
+ID_MS_SEVEN           , ms\blank.bmp      , 0, 2
+ID_MS_SEVEN           , ms\seven.bmp      , 0, 0
+ID_MS_EIGHT           , ms\blank.bmp      , 0, 2
+ID_MS_EIGHT           , ms\eight.bmp      , 0, 0
+ID_MS_BOMB            , ms\blank.bmp      , 0, 2
+ID_MS_BOMB            , ms\bomb.bmp       , 0, 0
+ID_MS_BOMB_RED        , ms\bombred.bmp    , 0, 1
+ID_MS_RESET           , ms\resetup.bmp    , 0, 2
+ID_MS_RESET           , ms\resetdn.bmp    , 0, 0
+
+ID_MS_BLANK_TAG       , ms\blanktag.bmp   , 0, 2
+ID_MS_BLANK_TAG       , ms\blankdn.bmp    , 0, 0
+ID_MS_ONE_TAG         , ms\blanktag.bmp   , 0, 2
+ID_MS_ONE_TAG         , ms\one.bmp        , 0, 0
+ID_MS_TWO_TAG         , ms\blanktag.bmp   , 0, 2
+ID_MS_TWO_TAG         , ms\two.bmp        , 0, 0
+ID_MS_THREE_TAG       , ms\blanktag.bmp   , 0, 2
+ID_MS_THREE_TAG       , ms\three.bmp      , 0, 0
+ID_MS_FOUR_TAG        , ms\blanktag.bmp   , 0, 2
+ID_MS_FOUR_TAG        , ms\four.bmp       , 0, 0
+ID_MS_FIVE_TAG        , ms\blanktag.bmp   , 0, 2
+ID_MS_FIVE_TAG        , ms\five.bmp       , 0, 0
+ID_MS_SIX_TAG         , ms\blanktag.bmp   , 0, 2
+ID_MS_SIX_TAG         , ms\six.bmp        , 0, 0
+ID_MS_SEVEN_TAG       , ms\blanktag.bmp   , 0, 2
+ID_MS_SEVEN_TAG       , ms\seven.bmp      , 0, 0
+ID_MS_EIGHT_TAG       , ms\blanktag.bmp   , 0, 2
+ID_MS_EIGHT_TAG       , ms\eight.bmp      , 0, 0
+ID_MS_BOMB_TAG        , ms\blanktag.bmp   , 0, 2
+ID_MS_BOMB_TAG        , ms\bomb.bmp       , 0, 0
+
+#seven segment digits
+ID_SEVENSEG_ZERO      , seven\zero.bmp    , 0, 1
+ID_SEVENSEG_ONE       , seven\one.bmp     , 0, 1
+ID_SEVENSEG_TWO       , seven\two.bmp     , 0, 1
+ID_SEVENSEG_THREE     , seven\three.bmp   , 0, 1
+ID_SEVENSEG_FOUR      , seven\four.bmp    , 0, 1
+ID_SEVENSEG_FIVE      , seven\five.bmp    , 0, 1
+ID_SEVENSEG_SIX       , seven\six.bmp     , 0, 1
+ID_SEVENSEG_SEVEN     , seven\seven.bmp   , 0, 1
+ID_SEVENSEG_EIGHT     , seven\eight.bmp   , 0, 1
+ID_SEVENSEG_NINE      , seven\nine.bmp    , 0, 1
+ID_SEVENSEG_NEG       , seven\neg.bmp     , 0, 1
