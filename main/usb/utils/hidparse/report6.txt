@@ -1,0 +1,12 @@
+# HIDParser -- Parse a HID Report Descriptor  v1.50.00
+# Forever Young Software           Copyright 1984-2018
+#
+# report6.txt
+# use:
+#  hidparse report6.txt /a
+
+05 01 09 02 A1 01 09 01 A1 00 05 09 19 01 29 10
+15 00 25 01 95 10 75 01 81 02 05 01 16 01 80 26
+FF 7F 75 10 95 02 09 30 09 31 81 06 15 81 25 7F
+75 08 95 01 09 38 81 06 05 0C 0A 38 02 95 01 81
+06 C0 C0
