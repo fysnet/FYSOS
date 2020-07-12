@@ -1,0 +1,145 @@
+This file is a list of example input items for mgptpart.exe along
+with a description of how to create your own.
+
+Instructions:
+ 1. A line may contain a '#' character as the character to indicate
+    that any remaining characters in this line are used as a comment.
+ 2. A line must start with one of the following items:
+    out:
+    mbr:
+    part:
+    <blank space>
+    # <comment goes here
+ 3. All spaces and tabs are ignored, including any spaces within
+    filenames.  Therefore, you may not use a filename that includes
+    a space character.
+ 4. The base= parameter *must* be a physical lba offset from the
+    start of the disk.
+ 5. You may have up to 128 partitions specified.
+ 6. This utility does not check for out-of-bounds or overlapped
+    partitions.
+ 7. All numbers are in hexidecimal or decimal.
+
+Very few errors are checked.  It is up to the user to make sure
+that all parameters are correct, images fit within the size given,
+etc.  I did not make this utility to show how to find errors.  I
+made this utility to show how to make GPT partitions.
+
+
+Explanation of parameters:
+ 1. out:
+    This is an optional parameter.  You do not have to include
+    the out: parameter in your source.  If you do not, the target
+    image file created is retrieved from the command line or defaults
+    to "outfile.img".  However, if you do use this parameter, you must
+    use the file= sub-parameter.
+
+      file="filename.bin"
+        This is a path and filename to the image file that will be created.
+      spt=63
+        This is the number of sectors per track used for this image/disk.
+        This parameter is optional and defaults to 63 if not used.
+      heads=16
+        This is the number of heads (sides) used for this image/disk.
+        This parameter is optional and defaults to 16 if not used.
+
+ 2. mbr:
+    This is an optional parameter.  This parameter is used to indicate
+    what 512 byte image to write to the 1st sector of the image.  The
+    first partition entry with in this image will be over written and
+    will point to LBA 1.  The other three will be zeroed.  If you use
+    this parameter, you must use the file= sub-parameter.
+
+      file="filename.bin"
+        This is a path and filename to the image file that will be written
+        to the first sector of the disk.
+
+ 3. part:
+    This is a required parameter.  At least one is required, though no checks
+    are made.  This is the parameter that indicates what type and size of partition
+    to create.
+
+      file="filename.bin"
+        This is a path and filename to the image file that will be written
+        to the partition at this base.  No check is made to see if the image
+        file is larger that the partition size given.  The utility will pad
+        the ending sectors with zeros if the image file is smaller than the
+        size given.  This parameter is optional and may be omitted or used as:
+          file=""
+        If no filename is given, or this parameter is omitted, this utility
+        will write zeros to the sectors within this partition.
+
+      base=
+        This parameter is required.  It is the base lba from the start of the
+        disk.  Remember that all values are in decimal format and can not be 
+        larger than 32 bits.
+
+      size=
+        This parameter is required.  It is the number of sectors in this partition.
+        This number must be decimal and no more than 32 bits in size.
+
+      type="system"
+      type="hidden"
+      type="legacy"
+        This parameter not is required, however you may have more than one on
+        a line.
+         system - This is a required partition for the system
+         hidden - This partition is hidden from the EFI system
+         legacy - This partition can be booted from a legacy MBR system
+         
+      sys_id=
+        This parameter not is required.  It is the type of partition format used.
+        For example, if it is a FAT16 partition, you give a value of 4, so
+        that the MBR's sys_id field is set accordingly.  The EFI does not care
+        what value this is.  This is the value used if the sys_id is *not* 0xEE
+        when a Protected MBR is used.
+
+      boot_id=
+        This parameter not is required.  It is the boot id of partition entry.
+        Two values are used: 0x80 for the bootable partition and 0x00 for the
+        remaining entries.
+
+ 4. type:
+    This is the type of MBR to use.
+      legacy
+        Use the Legacy type of MBR.  The 'sys_id=' and 'boot_id=' parameters
+        in #3 above will be required.
+      efi
+        Use the EFI's Protected MBR.  All of the partitions will be under one
+        partition entry using the 0xEE system id.  The 'sys_id=' and 'boot_id=' 
+        parameters in #3 above will be ignored.
+
+** Please remember that no checks are made for accuracy.  It is up to the
+   user to make sure that partitions are correctly spaced, sized, typed,
+   and do not overlap.
+
+
+#############################################################################
+# Example 1
+#  Create four empty partitions, specifying the target image file on the
+#   command line and assuming the default 63 SPT and 16 heads.  No MBR image.
+
+part: file="", base=128, size=65536, type="system", type="legacy", sys_id=4, boot_id=0
+part: file="", base=65664, size=65536, type="hidden", sys_id=6, boot_id=0
+part: file="", base=131200, size=65536, type="hidden", sys_id=22, boot_id=0
+part: file="", base=196736, size=65536, type="hidden", sys_id=24, boot_id=0
+type: Legacy
+
+
+#############################################################################
+# Example 2
+#  Create three (3) partitions, specifying the target image file, SPT, and
+#   count of heads here.  Also specifies a mbr.bin file
+
+# target image file = "out.bin" with 63 SPT and 16 heads
+out: file="out.bin", spt=63, heads=16
+mbr: file="mbr.bin"   # use "mbr.bin" as the MBR image file
+# part0.img: base = 128, size = 65536 sectors, system, sys_id=4 (ignored), boot_id=0x80 (ignored)
+part: file="part0.img", base=128, size=65536, type="system", sys_id=4, boot_id=0x80
+# part1.img: base = 65664, size = 65536 sectors, system, sys_id=6
+part: file="part1.img", base=65564, size=65536, type="system", sys_id=6
+# part2.img: base = 131200, size = 65535 sectors, system, sys_id=22
+part: file="part2.img", base=131200, size=65535, type="system", sys_id=22
+# Use the EFI GPT Protected MBR
+type: EFI
+
