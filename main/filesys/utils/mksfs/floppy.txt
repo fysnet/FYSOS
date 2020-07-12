@@ -1,0 +1,61 @@
+# Resource file used with MKSFS for the FILESYS book 
+#            by Benjamin David Lunt
+#  Copyright 1984-2017  All Rights Reserved
+#
+#  mbrfile=filename   - This is the path/filename of the mbr file to use (should be 1 sector in length)
+#  bootfile=filename  - This is the path/filename of the boot code 
+#                        file to use (should be at least one sector in length if used)
+#  imgfile=filename   - This is the path/filename of the target file to create
+#  base_lba=0         - Base LBA of SFS volume
+#  tot_sects=0        - Total sectors to "allocate"
+#  param0=            - 0 = Is File, 1 = Is Directory
+#  param1=0           - Ignored
+#  heads=2            - heads per cylinder
+#  spt=18             - sectors per track
+#   path_to_source_file0, path_filename_to_use0, 0  # file
+#   *must put something*, path_filename_to_use1, 1  # directory name
+#   path_to_source_file2, path_filename_to_use2, 0  # file
+
+# This app will create an image that contains a MBR and the boot sector(s)
+#   specified by the parameters below.
+imgfile=  D:\fysos\main\filesys\images\sfs_f.img
+
+# Boot file.  Should be a multiple of 512 bytes
+bootfile= D:\Path\to\your\boot\source\code\sfs_f.bin
+
+# You may use decimal or hexadecimal numbers
+base_lba= 0         # LBA = 0
+tot_sects= 2880     # Total number of sectors in partition
+param0= 0           # Ignored
+param1= 0           # Ignored
+heads= 2            # heads per cylinder
+spt= 18             # sectors per track
+
+# The remaining list of files are the files that this app
+#  should find and write to the "root directory" of the image.  
+#  First parameter is the full path name of the file to copy, 
+#  second parameter is the path and name of the file to use in the 
+#  image's "root directory".
+# The third parameter is a the DIR flag, indicating if it is
+#  a directory or a file.
+# You may have as many or as few as you wish.  Please note 
+#  that this app does not check for out of bounds due to too 
+#  many "root directory" entries specified below.
+D:\Path\goes\here\kernel.sys, kernel.sys, 0
+D:\Path\goes\here\loader.sys, loader.sys, 0
+D:\Path\goes\here\system.sys, system.sys, 0
+
+ * , system, 1            # make the system folder (note, must put something in path field. '*' works just fine)
+ * , system/fonts, 1      # make the fonts folder inside the system folder
+D:\Path\goes\here\arial.fnt, system/fonts/arial.fnt, 0
+D:\Path\goes\here\couriernew.fnt, system/fonts/couriernew.fnt, 0
+D:\Path\goes\here\lucidac.fnt, system/fonts/lucidac.fnt, 0
+D:\Path\goes\here\sansserf.fnt, system/fonts/sansserf.fnt, 0
+D:\Path\goes\here\simple.fnt, system/fonts/simple.fnt, 0
+D:\Path\goes\here\System128.fnt, system/fonts/System128.fnt, 0
+D:\Path\goes\here\System256.fnt, system/fonts/System256.fnt, 0
+
+* , system/grfx, 1
+D:\Path\goes\here\hallway.gif, system/grfx/hallway.gif, 0
+D:\Path\goes\here\snow.bmp, system/grfx/snow.bmp, 0
+D:\Path\goes\here\images.sys, system/grfx/images.sys, 0
