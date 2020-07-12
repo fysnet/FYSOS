@@ -13,11 +13,15 @@ Each folder contains all of the files needed for that specific book.
 #### [gui](https://github.com/fysnet/FYSOS/tree/master/main/gui):     Volume 6: The Graphical User Interface
   Volume 7 is currently not available
 #### [usb](https://github.com/fysnet/FYSOS/tree/master/main/usb):     Volume 8: USB: The Universal Serial Bus
-<br>
+
+
+#### CWSDPMI
+Some of the utilities included here require a DOS Protected Mode Interface (DPMI).
+Each utility has been tested with [CWSDPMI](https://en.wikipedia.org/wiki/CWSDPMI) version [0.90r7](http://sandmann.dotster.com/cwsdpmi/)
+
 
 #### Please note
-I am currently converting the CDROM files and folders to this github format.<br>
-Please be patient with the road construction.<br>
+I am currently converting the CDROM files and folders to this github format. Please be patient with the road construction.
 
 Thank you,<br>
 Ben
