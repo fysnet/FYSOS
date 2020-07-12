@@ -1,2 +1,6 @@
+# FYSOS: Operating System Design Book Series
+### [FYSOS: Operating System Design Book Series](http://www.fysnet.net/osdesign_book_series.htm)
 
-This is where the Volume 6 files will go
+The files included here are or to be the supplemental and/or companion files for the book series linked above.
+
+#### gui:     Volume 6: The Graphical User Interface
