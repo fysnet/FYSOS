@@ -13,3 +13,11 @@ Each folder contains all of the files needed for that specific book.
 #### [gui](https://github.com/fysnet/FYSOS/tree/master/main/gui):     Volume 6: The Graphical User Interface
   Volume 7 is currently not available
 #### [usb](https://github.com/fysnet/FYSOS/tree/master/main/usb):     Volume 8: USB: The Universal Serial Bus
+<br>
+
+#### Please note
+I am currently converting the CDROM files and folders to this github format.<br>
+Please be patient with the road construction.<br>
+
+Thank you,<br>
+Ben
