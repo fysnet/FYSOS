@@ -1,0 +1,32 @@
+# Resource file used with MBOOTCD for the FILESYS book by Benjamin David Lunt
+#  Copyright 1984-2018  All Rights Reserved
+#
+#  mbrfile=filename   - Ignored
+#  bootfile=filename  - Ignored
+#  imgfile=filename   - This is the path/filename of the target file to create/modify
+#  base_lba=0         - Ignored
+#  tot_sects=0        - Ignored
+#  param0=            - Ignored
+#  param1=            - Ignored
+#  heads=             - Ignored
+#  spt=               - Ignored
+#   path_to_source_file0, ignored, X
+#   path_to_source_file1, ignored, X
+#     where X = 0: no emulation.  Is actual CD-ROM root directory, etc.
+#               1: 1.20 Meg Floppy
+#               2: 1.44 Meg Floppy
+#               3: 2.88 Meg Floppy
+#               4: Hard Drive Image
+imgfile= D:\fysos\main\filesys\images\bootcd.iso
+
+# The remaining list of files are the files that this app should find and
+#  write to the CD-ROM image.  First parameter is the full path name of the 
+#  file to copy, second parameter is ignored.
+# The third parameter is the type parameter.  See 'where X =' above.
+# You may have as many or as few as you wish.  Please note that this app
+#  does not check for out of bounds due to too many entries specified below.
+D:\fysos\main\filesys\images\cd_menu.img, , 0  # no emulation
+D:\fysos\main\filesys\images\a.img, , 2         # 1.44 meg
+D:\fysos\main\filesys\images\fat12.img, , 4     # hard drive image
+D:\fysos\main\filesys\images\fat16.img, , 4     # hard drive image
+D:\fysos\main\filesys\images\fat32.img, , 4     # hard drive image
