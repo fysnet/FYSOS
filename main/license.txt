@@ -1,6 +1,7 @@
                             Copyright (c) 1984-2020
                              Benjamin David Lunt
                             Forever Young Software
+                           fys [at] fysnet [dot] net
                              All rights reserved
 
 Redistribution and use in source and binary forms with or without modification,
@@ -22,3 +23,24 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
 ANY   THEORY OF  LIABILITY, WHETHER  IN  CONTRACT, STRICT  LIABILITY,  OR  TORT 
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Let it be known that the purpose of this product, (hereby known as source code,
+documentation, binary files, or other forms within this distribution), is to be
+used as supplemental product for one or more of  the following mentioned books.
+
+  FYSOS: Operating System Design
+   Volume 1:  The System Core
+   Volume 2:  The Virtual File System
+   Volume 3:  Media Storage Devices
+   Volume 4:  Input and Output Devices
+   Volume 5:  ** Not yet published **
+   Volume 6:  The Graphical User Interface
+   Volume 7:  ** Not yet published **
+   Volume 8:  USB: The Universal Serial Bus
+
+This product here is  included as a companion to one or more of these books and 
+is not intended to be  self sufficient.  Each item within  this distribution is
+part of a discussion within one or more of the books mentioned above.
+
+For more information, please visit:
+            http://www.fysnet.net/osdesign_book_series.htm
