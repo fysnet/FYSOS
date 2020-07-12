@@ -1,0 +1,185 @@
+This file is a list of example input items for mpart.exe along
+with a description of how to create your own.
+
+Instructions:
+ 1. A line may contain a '#' character as the character to indicate
+    that any remaining characters in this line are used as a comment.
+ 2. A line must start with one of the following items:
+    out:
+    mbr:
+    part:
+    <blank space>
+    # <comment goes here
+ 3. All spaces and tabs are ignored, including any spaces within
+    filenames.  Therefore, you may not use a filename that includes
+    a space character.
+ 4. Even though each extended partition uses a relative offset to
+    its parent, the base= parameter *must* be a physical lba offset
+    from the start of the disk, not a relative offset from its 
+    parent partition.
+ 5. Extended partitions may be nested within each other.
+ 6. You may have unlimited extended partitions (up to the amount
+    currently coded in the source file (64) and of course, size
+    of image file produced.)
+ 7. This utility does not check for out-of-bounds or overlapped
+    partitions.
+ 8. Only 4 partition entries are allowed per partition record.
+ 9. All numbers are in decimal.
+
+Very few errors are checked.  It is up to the user to make sure
+that all parameters are correct, images fit within the size given,
+etc.  I did not make this utility to show how to find errors.  I
+made this utility to show how to make partitions.
+
+
+Explanation of parameters:
+ 1. out:
+    This is an optional parameter.  You do not have to include
+    the out: parameter in your source.  If you do not, the target
+    image file created is retrieved from the command line or defaults
+    to "outfile.img".  However, if you do use this parameter, you must
+    use the file= sub-parameter.
+
+      file="filename.bin"
+        This is a path and filename to the image file that will be created.
+      spt=63
+        This is the number of sectors per track used for this image/disk.
+        This parameter is optional and defaults to 63 if not used.
+      heads=16
+        This is the number of heads (sides) used for this image/disk.
+        This parameter is optional and defaults to 16 if not used.
+
+ 2. mbr:
+    This is an optional parameter.  This parameter is used to indicate
+    what 512 byte image to write to the 1st sector of the image.  The
+    partition entries with in this image will be over written by the
+    part: parameters.  All four will be zeroed first, then overwritten.
+    If you use this parameter, you must use the file= sub-parameter.
+
+      file="filename.bin"
+        This is a path and filename to the image file that will be written
+        to the first sector of the disk.
+
+ 3. part:
+    This is a required parameter.  At least one is required, though no checks
+    are made.  This is the parameter that indicates what type and size of partition
+    to create.
+
+      file="filename.bin"
+        This is a path and filename to the image file that will be written
+        to the partition at this base.  No check is made to see if the image
+        file is larger that the partition size given.  The utility will pad
+        the ending sectors with zeros if the image file is smaller than the
+        size given.  This parameter is optional and may be omitted or used as:
+          file=""
+        If no filename is given, or this parameter is omitted, this utility
+        will write zeros to the sectors within this partition.  This parameter
+        is ignored if this line is an extended partition.
+
+     base=
+        This parameter is required.  It is the base lba from the start of the
+        disk, not the relative offset from the parent partition this partition
+        resides in (if a partition within an extended partition).  This is so
+        you don't have to calculate the relative offsets.  Remember that all
+        values are in decimal format and can not be larger than 32 bits.
+
+      size=
+        This parameter is required.  It is the number of sectors in this partition.
+        This number must be decimal and no more than 32 bits in size.
+
+      type=
+        This parameter is required.  It is the type of partition.  This number
+        must be decimal and no more than 8 bits in size.  If this value is
+        5 (five) or 15 (fifteen), this utility will create an extended partition
+        at this base lba.
+
+      active=
+        This parameter is optional and zero (0) is default if not given.
+        This indicates that this utility should mark this partition active.
+
+      last=
+        This parameter is optional and zero (0) is default if not given.
+        *However*, undefined results including crashing may result if you do
+        not use this parameter correctly.  This parameter indicates that this
+        is the last partition within this partition record.  In other words,
+        if this is a partition within an extended partition, go back to the
+        last one (the parent partition) and continue with it.  Remember, if
+        this is an extended partition entry, even though there may be multiple
+        entries after this entry within these extended partition entry(ies),
+        if this is the last entry in this partition record, you still need
+        to specify that this is the last one (last = 1).  Please see the 
+        examples below about using the last=1 sub-parameter.
+        
+** Please remember that no checks are made for accuracy.  It is up to the
+   user to make sure that partitions are correctly spaced, sized, typed,
+   and do not overlap.
+
+
+
+#############################################################################
+# Example 1
+#  Create four empty partitions, specifying the target image file on the
+#   command line and assuming the default 63 SPT and 16 heads.  No MBR image.
+
+part: file="", base=63, size=65536, type=4, active=0, last=0
+part: file="", base=65646, size=65536, type=11, active=1, last=0
+part: file="", base=131229, size=65536, type=11, active=0, last=0
+part: file="", base=196812, size=65536, type=131, active=0, last=1
+
+
+
+#############################################################################
+# Example 2
+#  Create three (3) partitions, two within the primary partition record, one (1)
+#   extended partition which contains one (1) secondary (logical) partition
+#   which occupies the whole extended partition size.
+
+# target image file = "out.bin" with 63 SPT and 16 heads
+out: file="out.bin", spt=63, heads=16
+mbr: file="mbr.bin"   # use "mbr.bin" as the MBR image file
+# part0.img: base = 63, size = 65536 sectors, type 4, non active, not last
+part: file="part0.img", base=63, size=65536, type=4, active=0, last=0
+# part1.img: base = 65646, size = 65536 sectors, type 11, active, not last
+part: file="part1.img", base=65646, size=65536, type=11, active=1, last=0
+# extended: base = 131229, size = 65536 sectors, type 15, non active, last
+part: base=131229, size=65536, type=15, last=1
+  # part2.img: base = 131230, size = 65535 sectors, type 131, non active, last
+  part: file="part2.img", base=131230, size=65535, type=131, active=0, last=1
+
+
+
+#############################################################################
+# Example 3
+#  Same as Example 2 above except two (2) logical partitions
+#  (other comments are now omitted)
+
+out: file="out.bin", spt=63, heads=16
+mbr: file="mbr.bin"   # use "mbr.bin" as the MBR image file
+part: file="part0.img", base=63, size=65536, type=4, active=0, last=0
+part: file="part1.img", base=65646, size=65536, type=11, active=1, last=0
+part: base=131229, size=65591, type=15, last=1
+  part: file="part2.img", base=131230, size=32768, type=131, active=0, last=0
+  part: file="part3.img", base=164052, size=32768, type=131, active=0, last=1
+
+
+
+#############################################################################
+# Example 4
+# *** Please note that the base values and sizes are erroneous. ****
+#     This sample should not be used.  It is displayed here only to
+#     show how to have nested/multiple extended partitions listed.
+
+# This line is a comment
+out: file="out.bin", spt=63, heads=16  # the image file will be out.bin
+mbr: file="mbr.bin"
+part: file="part0.img", base=63, size=128, type=8, active=0, last=0
+part: base=4096, size=4096, type=15, last=0
+ part: file="part1.img", base=4097, size=256, type=10, active=0, last=0
+ part: base=12288, size=4096, type=15, last=1
+  part: file="b.bin", base=12289, size=256, type=12, active=1, last=1
+part: file="", base=8192, size=4096, type=15, last=0
+ part: file="", base=8193, size=256, type=13, active=0, last=0
+ part: file="", base=8749, size=256, type=14, active=0, last=1
+part: file="", base=1024, size=128, type=11, active=0, last=1
+
+
