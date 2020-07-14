@@ -14,6 +14,8 @@ Each folder contains all of the files needed for that specific book.
   Volume 7 is currently not available
 #### [usb](https://github.com/fysnet/FYSOS/tree/master/main/usb):     Volume 8: USB: The Universal Serial Bus
 
+#### License
+Please be sure and read the [license](https://github.com/fysnet/FYSOS/blob/master/main/license.txt) for this source code so that you understand its purpose.
 
 #### CWSDPMI
 Some of the utilities included here require a DOS Protected Mode Interface (DPMI).
