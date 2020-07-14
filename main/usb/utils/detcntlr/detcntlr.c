@@ -57,13 +57,31 @@
  */
 
 /*
- *  compile using gcc (DJGPP)
+ *  DETCNTLR.EXE
+ *   Will enumerate through the PCI, displaying any attached USB controller
+ *    with the specification matching a UHCI, OHCI, EHCI, or xHCI.
+ *
+ *  Assumptions/prerequisites:
+ *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must have a pre-installed 32-bit DPMI.
+ *   - Will produce unknown behavior if ran under existing operating system other
+ *     than mentioned here.
+ *   - Must have full access to said hardware.
+ *   - Does not modify said hardware, so that emulated mouse and keyboard will
+ *     still function.
+ *   - Does write to PCI BAR register(s), though preserving them upon exit.
+ *      (should have no affect on function, though depends on SMM operation)
+ *
+ *  Last updated: 13 July 2020
+ *
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os detcntlr.c -o detcntlr.exe -s
  *
- *  using:
+ *  Usage:
+ *    detcntlr
+ *      standard display of controllers.
  *    detcntlr /type
- *   displays the type of controller.
- *
+ *      standard display of controllers, displays the type of controller
  */
 
 #include <ctype.h>
