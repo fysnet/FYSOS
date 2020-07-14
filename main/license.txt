@@ -13,10 +13,10 @@ are permitted provided that the following conditions are met:
    this list of  conditions and the following  disclaimer in the  documentation
    and/or other materials provided with the distribution.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+THIS SOFTWARE IS PROVIDED BY  THE COPYRIGHT HOLDER AND  CONTRIBUTOR "AS IS" AND
 ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
 WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTOR  BE LIABLE FOR
 ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
 (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
 LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
@@ -38,9 +38,10 @@ used as supplemental product for one or more of  the following mentioned books.
    Volume 7:  ** Not yet published **
    Volume 8:  USB: The Universal Serial Bus
 
-This product here is  included as a companion to one or more of these books and 
-is not intended to be  self sufficient.  Each item within  this distribution is
-part of a discussion within one or more of the books mentioned above.
+This product is  included as a companion  to one or more of these  books and is
+not intended to be self-sufficient.  Each item within this distribution is part
+of a discussion within one or more of the books mentioned above and is released
+soley for that purpose.
 
 For more information, please visit:
             http://www.fysnet.net/osdesign_book_series.htm
