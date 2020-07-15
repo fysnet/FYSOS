@@ -87,6 +87,16 @@ Notes:
    turn off all BIOS/Firmware USB emulation.  However, by doing so, you can no 
    longer boot the USB thumb drive to get to the utilities to test them.
    
+   If you have an older machine with a 1.44m floppy drive, it is best to turn
+   off all USB emulation, boot from the floppy, and run these utilities from
+   that floppy.  Each utility is confirmed to work when ran from a floppy with
+   USB emulation turned off.
+
+   It is ironic that the USB has become so integrated into our systems that
+   the BIOS/Firmware no longer allows you to program the USB with a simple
+   utility such as these included here.  However, without this integration,
+   the USB would not be what it is today.
+   
    However, I hope the source code for these utilities will show you how to 
    program your system drivers to be able to retrieve Device Descriptors.
 
