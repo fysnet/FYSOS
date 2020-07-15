@@ -56,6 +56,41 @@
  *             http://www.fysnet.net/osdesign_book_series.htm
  */
 
+Notes:
+
+1. These utilities will try to retrieve the Device Descriptor of any attached
+   USB device.
+
+2. These utilities will only see a device attached to the root hub.  
+   i.e.:  It will not detect a device plugged in to an external hub.
+
+3. Three of the four utilities, UHCI, OHCI, and XHCI, will see any device attached
+   as a full- or low-speed device or a super-speed device (XHCI), simply because 
+   of the way the USB is designed. However, the EHCI utility will only work with
+   high-speed devices.  Because of the way the USB is designed, any low- or
+   full-speed device will be handed off to the companion controller(s).  When
+   using the EHCI utility, be sure to test with high-speed devices only.
+
+4. If your machine has a Rate Matching Hub attached to the root port, these
+   utilities may not see anything attached, since they will not extend past
+   the hub.
+
+
+****** Important ******
+   Unfortunately, modern hardware no longer has 1.44m floppy drives and expects
+   you to boot from a USB thumb drive.  If this is the case, the System Management
+   part of the BIOS/Firmware may keep control of the USB and not allow any of
+   these utilities to see an attached device. I have experienced this on many
+   newer model machines.
+
+   Unfortunately, I can only get these to work on a machine that I can completely 
+   turn off all BIOS/Firmware USB emulation.  However, by doing so, you can no 
+   longer boot the USB thumb drive to get to the utilities to test them.
+   
+   However, I hope the source code for these utilities will show you how to 
+   program your system drivers to be able to retrieve Device Descriptors.
+
+
 Notes common to all four utilities.
 
 1. The heap_alloc() function does not have a corresponding free() function.
