@@ -1,6 +1,60 @@
-//////////////////////////////////////////////////////////////////////////
-//  pci.h
-//////////////////////////////////////////////////////////////////////////
+/*
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
 
 #ifndef FYSOS__PCI
 #define FYSOS__PCI
@@ -108,25 +162,27 @@ __inline__ void outpd(const bit16u port, const bit32u data) {
 
 // port is the byte offset from 0x00
 bit8u pci_read_byte(const int bus, const int dev, const int func, const int port) {
+  const int shift = ((port & 3) * 8);
   const bit32u val = 0x80000000 |
     (bus << 16) |
     (dev << 11) |
     (func << 8) |
     (port & 0xFC);
   outpd(PCI_ADDR, val);
-  return inpb(PCI_DATA + (port & 3));
+  return (inpd(PCI_DATA) >> shift) & 0xFF;
 }
 
 // port is the byte offset from 0x00
 bit16u pci_read_word(const int bus, const int dev, const int func, const int port) {
-  if ((port & 1) == 0) {
+  if ((port & 3) <= 2) {
+    const int shift = ((port & 3) * 8);
     const bit32u val = 0x80000000 |
       (bus << 16) |
       (dev << 11) |
       (func << 8) |
       (port & 0xFC);
     outpd(PCI_ADDR, val);
-    return inpw(PCI_DATA + (port & 0x3));
+    return (inpd(PCI_DATA) >> shift) & 0xFFFF;
   } else
     return (pci_read_byte(bus, dev, func, port + 1) << 8) | pci_read_byte(bus, dev, func, port);
 }
@@ -147,25 +203,27 @@ bit32u pci_read_dword(const int bus, const int dev, const int func, const int po
 
 // port is the byte offset from 0x00
 void pci_write_byte(const int bus, const int dev, const int func, const int port, const bit8u value) {
+  const int shift = ((port & 3) * 8);
   const bit32u val = 0x80000000 |
     (bus << 16) |
     (dev << 11) |
     (func << 8) |
     (port & 0xFC);
   outpd(PCI_ADDR, val);
-  outpb(PCI_DATA + (port & 3), value);
+  outpd(PCI_DATA, (inpd(PCI_DATA) & ~(0xFF << shift)) | (value << shift));
 }
 
 // port is the byte offset from 0x00
 void pci_write_word(const int bus, const int dev, const int func, const int port, const bit16u value) {
-  if ((port & 1) == 0) {
+  if ((port & 3) <= 2) {
+    const int shift = ((port & 3) * 8);
     const bit32u val = 0x80000000 |
       (bus << 16) |
       (dev << 11) |
       (func << 8) |
       (port & 0xFC);
     outpd(PCI_ADDR, val);
-    outpw(PCI_DATA + (port & 0x3), value);
+    outpd(PCI_DATA, (inpd(PCI_DATA) & ~(0xFFFF << shift)) | (value << shift));
   } else {
     pci_write_byte(bus, dev, func, port + 0, (bit8u) (value & 0xFF));
     pci_write_byte(bus, dev, func, port + 1, (bit8u) (value >> 8));
