@@ -1,52 +1,83 @@
 /*
- *  gd_xhci.c  v1.10.20       (C) Forever Young Software 1984-2016
- *  
- *  Last update: 20 May 2016
- *
- * This code is included on the disc that is included with the book
- *     FYSOS -- USB: The Universal Serial Bus
- * and is for that purpose only.  You have the right to use it for 
- * learning purposes only.  You may not modify it or redistribute for 
- * any other purpose unless you have written permission from the author.
- *
- * You may modify it and use it in your own projects as long as they
- * are for non profit only.  Any project for profit that uses this code
- * must have written permission from the author.
- *
- * The purpose of this code is to show how to retrieve the device descriptor
- *  from an attached usb device.
- *
- * This code finds a XHCI controller, then uses that controller to see 
- *  if something is attached. If so, it attempts to retrieve the device's 
- *  descriptor.
- *
- * Assumptions:
- *  - you have at least a 486 with the CPUID instruction.
- *  - no external hubs have any devices attached.
- *     (this code won't get the device descriptor of any devices plugged
- *      in to external hubs)
- *  - all memory above 1meg is available for use with this code
- *
- * *** Please Note ***
- * This code does not do all of the error checking that your driver code
- *  should do.  This code does a bare minimum of error checking and preeration
- *  to get the device descriptor.  Your driver code should have a lot more
- *  to it than just this.  However, this should get you started.
- *
- * *** Please Note ***
- * This code also assumes that you will have a large enough TRB ring for the
- *  control endpoint context.  It does not check for the end of the ring.
- *
- * *** Please Note ***
- * This code is for Real Mode DOS with the use of a DMPI extender such as
- *  the one included on the CDROM.  This code will not work under a Windows
- *  DOS session or any other emulated real mode environment.  This code
- *  was written for and tested with FreeDOS (www.freedos.org)
- *
- * compile using gcc (djgpp) for DOS
- *  gcc -Os gd_xhci.c -o gd_xhci.exe -s
- *
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
  */
+
+/*
+ *  GD_XHCI.EXE
+ *   Will enumerate through the PCI, finding a XHCI, then enumerating that XHCI
+ *    to see if there are any devices attached.  If so, it will display information
+ *    about found device.
+ *
+ *  Assumptions/prerequisites:
+ *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must have a pre-installed 32-bit DPMI.
+ *   - Will produce unknown behavior if ran under existing operating system other
+ *     than mentioned here.
+ *   - Must have full access to said hardware.
+ *
+ *  Last updated: 14 July 2020
+ *
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
+ *   gcc -Os gd_xhci.c -o gd_xhci.exe -s
+ *
+ *  Usage:
+ *    gd_xhci
+ */
+
 
 #include <ctype.h>
 #include <conio.h>
@@ -56,6 +87,8 @@
 
 #include <dpmi.h>
 #include <go32.h>
+
+#include <libc/farptrgs.h>
 
 #include "../include/ctype.h"
 #include "../include/pci.h"
@@ -105,7 +138,6 @@ bool   cur_ep_ring_cycle;
 
 // we currently don't use any command line parameters, but still leave them here
 int main(int argc, char *argv[]) {
-  
   struct PCI_DEV pci_dev;
   struct PCI_POS pci_pos;
   
@@ -140,11 +172,10 @@ int main(int argc, char *argv[]) {
 
 // reset the controller, create a few rings, set the address, and request the device descriptor.
 bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
-  
   int timeout, ndp = 0, i, k;
   
   // Initialize the pci
-  write_pci(pos->bus, pos->dev, pos->func, 0x04, 2, 0x0006);   // mem I/O access enable and bus master enable
+  pci_write_word(pos->bus, pos->dev, pos->func, 0x04, 0x0006);   // mem I/O access enable and bus master enable
   
   memset(port_info, 0, 16 * sizeof(struct S_XHCI_PORT_INFO));  // clear the port info
   
@@ -169,18 +200,18 @@ bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   
   // Write to the FLADJ register incase the BIOS didn't
   // At the time of this writing, there wasn't a BIOS that supported xHCI yet :-)
-  write_pci(pos->bus, pos->dev, pos->func, 0x61, 1, 0x20);
+  pci_write_byte(pos->bus, pos->dev, pos->func, 0x61, 0x20);
   
   // read the version register (just a small safety check)
   if (_farpeekw(base_selector, xHC_CAPS_IVersion) < 0x95)
     return FALSE;
   
   // if it is a Panther Point device, make sure sockets are xHCI controlled.
-  if ((read_pci(pos->bus, pos->dev, pos->func, 0, sizeof(bit16u)) == 0x8086) && 
-      (read_pci(pos->bus, pos->dev, pos->func, 2, sizeof(bit16u)) == 0x1E31) && 
-      (read_pci(pos->bus, pos->dev, pos->func, 8, sizeof(bit8u)) == 4)) {
-    write_pci(pos->bus, pos->dev, pos->func, 0xD8, sizeof(bit32u), 0xFFFFFFFF);
-    write_pci(pos->bus, pos->dev, pos->func, 0xD0, sizeof(bit32u), 0xFFFFFFFF);
+  if ((pci_read_word(pos->bus, pos->dev, pos->func, 0) == 0x8086) && 
+      (pci_read_word(pos->bus, pos->dev, pos->func, 2) == 0x1E31) && 
+      (pci_read_byte(pos->bus, pos->dev, pos->func, 8) == 4)) {
+    pci_write_dword(pos->bus, pos->dev, pos->func, 0xD8, 0xFFFFFFFF);
+    pci_write_dword(pos->bus, pos->dev, pos->func, 0xD0, 0xFFFFFFFF);
   }
   
   // calculate the operational base
@@ -219,8 +250,8 @@ bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
     return FALSE;
   }
   
-	// get num_ports from XHCI's HCSPARAMS1 register
-	ndp = (bit8u) ((hcsparams1 & 0xFF000000) >> 24);
+  // get num_ports from XHCI's HCSPARAMS1 register
+  ndp = (bit8u) ((hcsparams1 & 0xFF000000) >> 24);
   printf("\n  Found %i (virtual) root hub ports.", ndp);
   
   // Get protocol of each port
@@ -415,7 +446,6 @@ bit32u heap_alloc(bit32u size, const bit32u alignment, const bit32u boundary) {
 }
 
 bool xhci_get_descriptor(const int port) {
-  
   bit32u dword;
   bit32u HCPortStatusOff = xHC_OPS_USBPortSt + (port * 16);
   struct DEVICE_DESC dev_desc;
@@ -522,7 +552,6 @@ bool xhci_get_descriptor(const int port) {
  * - there is a properly formatted list at this pointer
  */
 bit32u xhci_get_proto_offset(bit32u list_off, const int version, int *offset, int *count, bit16u *flags) {
-  
   bit32u next;
   
   *count = 0;  // mark that there isn't any to begin with
@@ -582,7 +611,6 @@ bool xhci_stop_legacy(bit32u list_off) {
 // 4.9: Initially when the TRB Ring is created in memory, or if it is ever re-initialized, 
 //      all TRBs in the ring shall be cleared to ‘0’. This state represents an empty queue.
 bit32u create_ring(const int trbs) {
-  
   const bit32u addr = heap_alloc(trbs * sizeof(struct xHCI_TRB), 64, 65536);
   
   // make the last one a link TRB to point to the first one
@@ -696,7 +724,6 @@ bit32u create_event_ring(const int trbs, bit32u *ret_addr) {
 }
 
 bool xhci_reset_port(const int port) {
-  
   bool ret = FALSE;
   bit32u HCPortStatusOff = xHC_OPS_USBPortSt + (port * 16);
   bit32u val;
@@ -748,7 +775,7 @@ bool xhci_reset_port(const int port) {
   
   // if we have a successful USB2 reset, we need to make sure this port is marked active,
   //  and if it has a paired port, it is marked inactive
-  if ((ret == SUCCESS_RESET) && xHCI_IS_USB2_PORT(port)) {
+  if (ret && xHCI_IS_USB2_PORT(port)) {
     port_info[port].flags |= xHCI_PROTO_ACTIVE;
     if (port_info[port].flags & xHCI_PROTO_HAS_PAIR)
       port_info[port_info[port].other_port_num].flags &= ~xHCI_PROTO_ACTIVE;
@@ -769,9 +796,7 @@ bool xhci_reset_port(const int port) {
  *   set the slot->hub, ->mtt, ->ttt, ->etc, items.
  */
 bit32u xhci_initialize_slot(const int slot_id, const int port, const int speed, const int max_packet) {
-  
   int i;
-  
   bit32u slot_addr = heap_alloc(context_size * 2, 32, page_size);  // two contexts (slot and control_ep), 32 byte alignment, page_size boundary
   
   // write the address of the slot in the slot array
@@ -893,7 +918,6 @@ void read_from_ep(struct xHCI_EP_CONTEXT *ep, const bit32u offset) {
 }
 
 bool xhci_set_address(const bit32u slot_addr, const int slot_id, const bool block_it) {
-  
   struct xHCI_SLOT_CONTEXT slot_context;
   struct xHCI_EP_CONTEXT ep_context;
   struct xHCI_TRB trb;
@@ -924,7 +948,6 @@ bool xhci_set_address(const bit32u slot_addr, const int slot_id, const bool bloc
 }
 
 bool xhci_control_in(void *targ, const int len, const int slot_id, const int max_packet) {
-
   bit8u dir = xHCI_DIR_IN;
   bit8u dirb = xHCI_DIR_IN_B;
   bit32u status_addr = heap_alloc(4, 16, 16);  // we need a dword status buffer with a physical address
@@ -960,7 +983,6 @@ bool xhci_control_in(void *targ, const int len, const int slot_id, const int max
 }
 
 int xhci_setup_stage(const struct REQUEST_PACKET *request, const bit8u dir) {
-  
   bit64u param = (bit64u) (((request->value << 16) | (request->request << 8) | request->request_type) | 
                                   ((bit64u) request->length << 48) | ((bit64u) request->index << 32));
 
@@ -975,7 +997,6 @@ int xhci_setup_stage(const struct REQUEST_PACKET *request, const bit8u dir) {
 }
 
 int xhci_data_stage(bit32u addr, bit8u trb_type, const bit32u size, bit8u direction, const bit16u max_packet, const bit32u status_addr) {
-  
   int i = 0;
   int sz = (int) size;
   int remaining = (int) (((sz + (max_packet - 1)) / max_packet) - 1);
@@ -1204,7 +1225,6 @@ void xhci_irq() {
   }
   
   // this first one assumes your irq is 8 or above
- 	outportb(0xA0, 0x20);      // end of interrupt on controller
- 	outportb(0x20, 0x20);      // end of interrupt on controller
+  outpb(0xA0, 0x20);      // end of interrupt on controller
+  outpb(0x20, 0x20);      // end of interrupt on controller
 }
-

@@ -1,41 +1,84 @@
 /*
- *  gd_ehci.c  v01.10.00       (C) Forever Young Software 1984-2016
- *  
- *  Last update: 10 Oct 2014
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
+
+/*
+ *  GD_EHCI.EXE
+ *   Will enumerate through the PCI, finding a EHCI, then enumerating that EHCI
+ *    to see if there are any devices attached.  If so, it will display information
+ *    about found device.
  *
- * This code is included on the disc that is included with the book
- *     FYSOS -- USB: The Universal Serial Bus
- * and is for that purpose only.  You have the right to use it for 
- * learning purposes only.  You may not modify it or redistribute for 
- * any other purpose unless you have written permission from the author.
+ *  Assumptions/prerequisites:
+ *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must have a pre-installed 32-bit DPMI.
+ *   - Will produce unknown behavior if ran under existing operating system other
+ *     than mentioned here.
+ *   - Must have full access to said hardware.
+ *   - This code assumes the attached device is a high-speed device.  If a full-
+ *     or low-speed device is attached, the device will not be found by this code.
+ *     Use GD_UHCI or GD_OHCI for full- and low-speed devices.
  *
- * You may modify it and use it in your own projects as long as they
- * are for non profit only.  Any project for profit that uses this code
- * must have written permission from the author.
+ *  Last updated: 14 July 2020
  *
- * The purpose of this code is to show how to retrieve the device descriptor
- *  from an attached usb device.
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
+ *   gcc -Os gd_ehci.c -o gd_ehci.exe -s
  *
- * This code finds a EHCI controller, then uses that controller to see 
- *  if something is attached. If so, it attempts to retrieve the device's 
- *  descriptor.
- *
- * Assumptions:
- *  - you have at least a 486 with the CPUID instruction.
- *  - no external hubs have any devices attached.
- *     (this code won't get the device descriptor of any devices plugged
- *      in to external hubs)
- *  - all memory above 1meg is available for use with this code
- *
- * *** Please Note ***
- * This code is for Real Mode DOS with the use of a DMPI extender such as
- *  the one included on the CDROM.  This code will not work under a Windows
- *  DOS session or any other emulated real mode environment.  This code
- *  was written for and tested with FreeDOS (www.freedos.org)
- *
- * compile using gcc (djgpp) for DOS
- *  gcc -Os gd_ehci.c -o gd_ehci.exe -s
- *
+ *  Usage:
+ *    gd_ehci
  */
 
 #include <ctype.h>
@@ -46,6 +89,8 @@
 
 #include <dpmi.h>
 #include <go32.h>
+
+#include <libc/farptrgs.h>
 
 #include "../include/ctype.h"
 #include "../include/pci.h"
@@ -72,7 +117,6 @@ bit8u num_ports;
 #include "common.h"
 
 int main(int argc, char *argv[]) {
-  
   struct PCI_DEV pci_dev;
   struct PCI_POS pci_pos;
   
@@ -107,11 +151,10 @@ int main(int argc, char *argv[]) {
 
 // reset the controller, give control of all ports to the companion controllers.
 bool process_ehci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
-  
   int timeout, i;
   
   // allow access to data (memmapped IO)
-  write_pci(pos->bus, pos->dev, pos->func, 0x04, sizeof(bit16u), 0x0006);
+  pci_write_word(pos->bus, pos->dev, pos->func, 0x04, 0x0006);
   
   // set up the memory access
   // The EHCI controller uses the dword at base0 and is memmapped access
@@ -355,7 +398,6 @@ bit32u heap_alloc(bit32u size, const bit32u alignment) {
 // enable/disable one of the lists.
 // if the async member is set, it disables/enables the asynchronous list, else the periodic list
 bool ehci_enable_async_list(const bool enable) {
-  
   bit32u command;
   
   // first make sure that both bits are the same
@@ -425,19 +467,18 @@ void ehci_init_stack_frame(const bit32u async_base) {
  *   (It is unknown the exact time limit that the BIOS has to release ownership.)
  */
 bool ehci_stop_legacy(const struct PCI_POS *pos, const bit32u params) {
-  
   const bit8u eecp = (bit8u) ((params & 0x0000FF00) >> 8);
   
   if (eecp >= 0x40) {
     
     // set bit 24 asking the BIOS to release ownership
-    write_pci(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP, 4, 
-      (read_pci(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP, 4) | EHC_LEGACY_OS_OWNED));
+    pci_write_dword(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP, 
+      (pci_read_dword(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP) | EHC_LEGACY_OS_OWNED));
     
     // Timeout if bit 24 is not set and bit 16 is not clear after EHC_LEGACY_TIMEOUT milliseconds
     int timeout = EHC_LEGACY_TIMEOUT;
     while (timeout--) {
-      if ((read_pci(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP, 4) & EHC_LEGACY_OWNED_MASK) == EHC_LEGACY_OS_OWNED)
+      if ((pci_read_dword(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP) & EHC_LEGACY_OWNED_MASK) == EHC_LEGACY_OS_OWNED)
         return TRUE;
       mdelay(1);
     }
@@ -586,12 +627,11 @@ void ehci_insert_queue(bit32u queue, const bit8u type) {
 // EHCI section 4.8.2, shows that we must watch for three bits before we have "fully and successfully" removed
 //   the queue(s) from the list
 bool ehci_remove_queue(bit32u queue) {
-  
   bit32u temp_addr;
   
   temp_addr = ehci_read_phy_mem(queue + EHCI_QH_OFF_PREV_PTR);
   ehci_write_phy_mem(temp_addr + EHCI_QH_OFF_HORZ_PTR, ehci_read_phy_mem(queue + EHCI_QH_OFF_HORZ_PTR));
-
+  
   temp_addr = ehci_read_phy_mem(queue + EHCI_QH_OFF_HORZ_PTR) & ~EHCI_QUEUE_HEAD_PTR_MASK;
   ehci_write_phy_mem(temp_addr + EHCI_QH_OFF_PREV_PTR, ehci_read_phy_mem(queue + EHCI_QH_OFF_PREV_PTR));
   
@@ -609,7 +649,6 @@ bool ehci_remove_queue(bit32u queue) {
 }
 
 int ehci_wait_interrupt(bit32u addr, const bit32u timeout, bool *spd) {
-  
   int ret = -1;
   bit32u status;
   
@@ -710,4 +749,3 @@ bit32u ehci_read_cap_reg(const bit32u offset) {
 bit32u ehci_read_op_reg(const bit32u offset) {
   return ehci_read_cap_reg(op_base_off + offset);
 }
-

@@ -1,42 +1,83 @@
 /*
- *  gd_uhci.c  v1.00.00       (C) Forever Young Software 1984-2016
- *  
- *  Last update: 10 Oct 2014
- *
- * This code is included on the disc that is included with the book
- *     FYSOS -- USB: The Universal Serial Bus
- * and is for that purpose only.  You have the right to use it for 
- * learning purposes only.  You may not modify it or redistribute for 
- * any other purpose unless you have written permission from the author.
- *
- * You may modify it and use it in your own projects as long as they
- * are for non profit only.  Any project for profit that uses this code
- * must have written permission from the author.
- *
- * The purpose of this code is to show how to retrieve the device descriptor
- *  from an attached usb device.
- *
- * This code finds a UHCI controller, then uses that controller to see 
- *  if something is attached. If so, it attempts to retrieve the device's 
- *  descriptor.
- *
- * Assumptions:
- *  - you have at least a 486 with the CPUID instruction.
- *  - no external hubs have any devices attached.
- *     (this code won't get the device descriptor of any devices plugged
- *      in to external hubs)
- *  - all memory above 1meg is available for use with this code
- *
- * *** Please Note ***
- * This code is for Real Mode DOS with the use of a DMPI extender such as
- *  the one included on the CDROM.  This code will not work under a Windows
- *  DOS session or any other emulated real mode environment.  This code
- *  was written for and tested with FreeDOS (www.freedos.org)
- *
- * compile using gcc (djgpp) for DOS
- *  gcc -Os gd_uhci.c -o gd_uhci.exe -s
- *
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
  */
+
+/*
+ *  GD_UHCI.EXE
+ *   Will enumerate through the PCI, finding a UHCI, then enumerating that UHCI
+ *    to see if there are any devices attached.  If so, it will display information
+ *    about found device.
+ *
+ *  Assumptions/prerequisites:
+ *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must have a pre-installed 32-bit DPMI.
+ *   - Will produce unknown behavior if ran under existing operating system other
+ *     than mentioned here.
+ *   - Must have full access to said hardware.
+ *
+ *  Last updated: 14 July 2020
+ *
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
+ *   gcc -Os gd_uhci.c -o gd_uhci.exe -s
+ *
+ *  Usage:
+ *    gd_uhci
+ */
+
 
 #include <ctype.h>
 #include <conio.h>
@@ -45,6 +86,8 @@
 
 #include <dpmi.h>
 #include <go32.h>
+
+#include <libc/farptrgs.h>
 
 #include "../include/ctype.h"
 #include "../include/pci.h"
@@ -57,7 +100,6 @@
 #include "common.h"
 
 int main(int argc, char *argv[]) {
-  
   struct PCI_DEV pci_dev;
   struct PCI_POS pci_pos;
   
@@ -98,7 +140,7 @@ bool process_uhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   const bit16u base = (bit16u) (pci_dev->base4 & ~0x0003);
   
   // allow access to data (port IO)
-  write_pci(pos->bus, pos->dev, pos->func, 0x04, sizeof(bit16u), 0x0005);
+  pci_write_word(pos->bus, pos->dev, pos->func, 0x04, 0x0005);
   
   __dpmi_meminfo frame_mi_base;
   int selector, i, dev_address = 1;
@@ -119,7 +161,7 @@ bool process_uhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   // The status register is write clear, let's clear it out.
   outpw(base+UHCI_STATUS, 0x00FF);
   // does the SOF register contain its default value of 0x40  
-  if (inp(base+UHCI_SOF_MOD) != 0x40) return FALSE;
+  if (inpb(base+UHCI_SOF_MOD) != 0x40) return FALSE;
   
   // if we set bit 1 in the Command register, after a specified time the controller should reset it to 0.
   // In my tests, the UHCI controller takes less than 2uS to reset the bit
@@ -144,7 +186,7 @@ bool process_uhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   // set the Host Controllers schedule
   outpd(base+UHCI_FRAME_BASE, frame_mi_base.address); // physical address
   outpw(base+UHCI_FRAME_NUM, 0);                // start at frame 0
-  outp(base+UHCI_SOF_MOD, 0x40);                // start of frame to default
+  outpb(base+UHCI_SOF_MOD, 0x40);               // start of frame to default
   outpw(base+UHCI_INTERRUPT, 0x0000);           // disallow error interrupts
   outpw(base+UHCI_STATUS, 0x001F);              // Clear any status bits.
   outpw(base+UHCI_COMMAND, (1<<7) | (1<<6) | (1<<0));
@@ -235,7 +277,6 @@ bool uhci_port_pres(bit16u base, bit8u port) {
 }
 
 bool uhci_port_reset(bit16u base, bit8u port) {
-  
   int i;
   bit16u val = 0;
   bool ret = FALSE;
@@ -420,4 +461,3 @@ bool uhci_set_address(const bit16u io_base, const bit32u base, const int selecto
   
   return TRUE;
 }
-

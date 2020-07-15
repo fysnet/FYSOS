@@ -1,47 +1,89 @@
 /*
- *  gd_ohci.c  v1.10.00       (C) Forever Young Software 1984-2016
- *  
- *  Last update: 10 Oct 2014
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
+
+/*
+ *  GD_OHCI.EXE
+ *   Will enumerate through the PCI, finding a OHCI, then enumerating that OHCI
+ *    to see if there are any devices attached.  If so, it will display information
+ *    about found device.
  *
- * This code is included on the disc that is included with the book
- *     FYSOS -- USB: The Universal Serial Bus
- * and is for that purpose only.  You have the right to use it for 
- * learning purposes only.  You may not modify it or redistribute for 
- * any other purpose unless you have written permission from the author.
+ *  Assumptions/prerequisites:
+ *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must have a pre-installed 32-bit DPMI.
+ *   - Will produce unknown behavior if ran under existing operating system other
+ *     than mentioned here.
+ *   - Must have full access to said hardware.
  *
- * You may modify it and use it in your own projects as long as they
- * are for non profit only.  Any project for profit that uses this code
- * must have written permission from the author.
+ *  Last updated: 14 July 2020
  *
- * The purpose of this code is to show how to retrieve the device descriptor
- *  from an attached usb device.
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
+ *   gcc -Os gd_ohci.c -o gd_ohci.exe -s
  *
- * This code finds a OHCI controller, then uses that controller to see 
- *  if something is attached. If so, it attempts to retrieve the device's 
- *  descriptor.
- *
- * Assumptions:
- *  - you have at least a 486 with the CPUID instruction.
- *  - no external hubs have any devices attached.
- *     (this code won't get the device descriptor of any devices plugged
- *      in to external hubs)
- *  - all memory above 1meg is available for use with this code
- *
- * *** Please Note ***
- * This code is for Real Mode DOS with the use of a DMPI extender such as
- *  the one included on the CDROM.  This code will not work under a Windows
- *  DOS session or any other emulated real mode environment.  This code
- *  was written for and tested with FreeDOS (www.freedos.org)
- *
- * compile using gcc (djgpp) for DOS
- *  gcc -Os gd_ohci.c -o gd_ohci.exe -s
- *
+ *  Usage:
+ *    gd_ohci
  */
 
 #include <ctype.h>
 #include <conio.h>
 #include <string.h>
 #include <stdio.h>
+
+#include <libc/farptrgs.h>
 
 #include <dpmi.h>
 #include <go32.h>
@@ -60,10 +102,9 @@ int opregs_selector, hcca_selector;
 #include "common.h"
 
 int main(int argc, char *argv[]) {
-  
   struct PCI_DEV pci_dev;
   struct PCI_POS pci_pos;
-
+  
   // print header string
   printf("\n GD_OHCI -- OHCI: Get Device Descriptor.   v1.10.00" COPYRIGHT);
   
@@ -96,14 +137,13 @@ int main(int argc, char *argv[]) {
 // reset the host controller, then see if anything attached.
 // if device attached, get device descriptor
 bool process_ohci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
-  
   int timeout, ndp = 0, potpgt, i, dev_address = 1, desc_len, desc_mps;
   bool good_ret;
   bit32u dword;
   struct DEVICE_DESC dev_desc;
   
   // allow access to data (memmapped IO)
-  write_pci(pos->bus, pos->dev, pos->func, 0x04, sizeof(bit16u), 0x0006);
+  pci_write_word(pos->bus, pos->dev, pos->func, 0x04, 0x0006);
   
   // set up the memory access
   opregs_mi.address = pci_dev->base0 & ~0xF;
@@ -295,7 +335,6 @@ bool ohci_reset_port(int port, int opregs_selector) {
 
 // create a valid stack frame with our GetDeviceDescriptor tranfser packets
 void ohci_create_stack(struct OHCI_FRAME *frame, const bit32u base, const int mps, int cnt, const bool ls_device, const int address) {
-  
   bit8u setup_packet[8] = { 0x80, 0x06, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00 };
   int i, p, t;
   
@@ -338,7 +377,6 @@ void ohci_create_stack(struct OHCI_FRAME *frame, const bit32u base, const int mp
 }
 
 void ohci_set_address(struct OHCI_FRAME *frame, bit32u base, int dev_address, bool ls_device) {
-
   bit8u setup_packet[8] = { 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
   
   setup_packet[2] = (bit8u) dev_address;
