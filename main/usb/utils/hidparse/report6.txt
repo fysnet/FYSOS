@@ -1,5 +1,5 @@
 # HIDParser -- Parse a HID Report Descriptor  v1.50.00
-# Forever Young Software           Copyright 1984-2018
+# Forever Young Software           Copyright 1984-2020
 #
 # report6.txt
 # use:

@@ -118,7 +118,7 @@ int main(int argc, char *argv[]) {
   int hid_report_len;
   
   printf("\nHIDParser -- Parse a HID Report Descriptor  v1.50.00\n"
-           "Forever Young Software           Copyright 1984-2018\n");
+           "Forever Young Software           Copyright 1984-2020\n");
   
   // parse the command line
   if (!parse_cmnd_line(argc, argv))
