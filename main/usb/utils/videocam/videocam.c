@@ -1,38 +1,84 @@
 /*
- *  videocam.c  v01.00.00       (C) Forever Young Software 1984-2014
- *  
- *  Last update: 10 Oct 2014
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
+
+/*
+ *  VIDEOCAM.EXE
  *
- * This code is included on the disc that is included with the book
- *     FYSOS -- USB: The Universal Serial Bus
- * and is for that purpose only.  You have the right to use it for 
- * learning purposes only.  You may not modify it or redistribute for 
- * any other purpose unless you have written permission from the author.
+ *  Assumptions/prerequisites:
+ *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must have a pre-installed 32-bit DPMI.
+ *   - Will produce unknown behavior if ran under existing operating system other
+ *     than mentioned here.
+ *   - Must have full access to said hardware.
+ *   - The camera is plugged into a High Speed port (EHCI)
+ *   - you have at least a 486 with the CPUID instruction.
+ *   - no external hubs have any devices attached.
+ *      (this code won't get the device descriptor of any devices plugged
+ *       in to external hubs)
+ *   - all memory above 1meg is available for use with this code
  *
- * You may modify it and use it in your own projects as long as they
- * are for non profit only.  Any project for profit that uses this code
- * must have written permission from the author.
+ *  Last updated: 14 July 2020
  *
- * The purpose of this code is to show how to retrieve the device descriptor
- *  from an attached usb device, find that it is a video camera using ISO
- *  transfers, and set up the camera ready for video input.
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
+ *   gcc -Os videocam.c -o videocam.exe -s
  *
- * Assumptions:
- *  - The camera is plugged into a High Speed port (EHCI)
- *  - you have at least a 486 with the CPUID instruction.
- *  - no external hubs have any devices attached.
- *     (this code won't get the device descriptor of any devices plugged
- *      in to external hubs)
- *  - all memory above 1meg is available for use with this code
- *
- * *** Please Note ***
- * This code is for Real Mode DOS with the use of a DMPI extender such as
- *  the one included on the CDROM.  This code will not work under a Windows
- *  DOS session or any other emulated real mode environment.  This code
- *  was written for and tested with FreeDOS (www.freedos.org)
- *
- * compile using gcc (djgpp) for DOS
- *  gcc -Os videocam.c -o videocam.exe -s
+ *  Usage:
+ *    videocam
  */
 
 #include <ctype.h>
@@ -43,6 +89,8 @@
 
 #include <dpmi.h>
 #include <go32.h>
+
+#include <libc/farptrgs.h>
 
 #include "../include/ctype.h"
 #include "../include/pci.h"
@@ -100,7 +148,7 @@ bool process_ehci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   bit32u hccparams, hcsparams;
   
   // allow access to data (memmapped IO)
-  write_pci(pos->bus, pos->dev, pos->func, 0x04, sizeof(bit16u), 0x0006);
+  pci_write_word(pos->bus, pos->dev, pos->func, 0x04, 0x0006);
   
   // set up the memory access
   // The EHCI controller uses the dword at base0 and is memmapped access
@@ -238,13 +286,13 @@ bool get_next_cntrlr(struct PCI_DEV *device, struct PCI_POS *pos) {
   for (; pos->bus < PCI_MAX_BUS; pos->bus++) {
     for (; pos->dev < PCI_MAX_DEV; pos->dev++) {
       for (; pos->func < PCI_MAX_FUNC; pos->func++) {
-				if (read_pci(pos->bus, pos->dev, pos->func, 0x00, sizeof(bit16u)) != 0xFFFF) {
-          type = read_pci(pos->bus, pos->dev, pos->func, (2<<2)+2, sizeof(bit16u));
+				if (pci_read_word(pos->bus, pos->dev, pos->func, 0x00) != 0xFFFF) {
+          type = pci_read_word(pos->bus, pos->dev, pos->func, (2<<2)+2);
           if (type == 0x0C03) {
             printf("\n PCI: Found a USB controller entry: Bus = %i, device = %i, function = %i ", pos->bus, pos->dev, pos->func);
             // read in the 256 bytes (64 dwords)
             for (i=0; i<64; i++)
-              pcidata[i] = read_pci(pos->bus, pos->dev, pos->func, (i<<2), sizeof(bit32u));
+              pcidata[i] = pci_read_dword(pos->bus, pos->dev, pos->func, (i<<2));
             return TRUE;
           }
 				}
@@ -930,13 +978,13 @@ bool ehci_stop_legacy(const struct PCI_POS *pos, const bit32u params) {
   if (eecp >= 0x40) {
     
     // set bit 24 asking the BIOS to release ownership
-    write_pci(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP, 4, 
-      (read_pci(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP, 4) | EHC_LEGACY_OS_OWNED));
+    pci_write_dword(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP, 
+      (pci_read_dword(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP) | EHC_LEGACY_OS_OWNED));
     
     // Timeout if bit 24 is not set and bit 16 is not clear after EHC_LEGACY_TIMEOUT milliseconds
     int timeout = EHC_LEGACY_TIMEOUT;
     while (timeout--) {
-      if ((read_pci(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP, 4) & EHC_LEGACY_OWNED_MASK) == EHC_LEGACY_OS_OWNED)
+      if ((pci_read_dword(pos->bus, pos->dev, pos->func, eecp + EHC_LEGACY_USBLEGSUP) & EHC_LEGACY_OWNED_MASK) == EHC_LEGACY_OS_OWNED)
         return TRUE;
       mdelay(1);
     }
