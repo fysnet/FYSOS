@@ -1,16 +1,63 @@
-/*             Author: Benjamin David Lunt
- *                     Forever Young Software
- *                     Copyright (c) 1984-2017
- *  
- *  This code is included on the disc that is included with the book
- *   FYSOS: The Virtual File System, and is for that purpose only.  You have
- *   the right to use it for learning purposes only.  You may not modify it
- *   for redistribution for any other purpose unless you have written
- *   permission from the author.
- *
- *  You may modify and use it in your own projects as long as they are
- *   for non profit only and not distributed.  Any project for profit that 
- *   uses this code must have written permission from the author.
+/*
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
+
+/*
+ *  Last updated: 15 July 2020
  */
 
 // set it to 1 (align on byte)
@@ -86,21 +133,21 @@ struct S_FAT32_BPB {
 };
 
 struct S_FAT32_FSINFO {
-	bit32u sig0;              // 0x41615252 ("RRaA")
+  bit32u sig0;              // 0x41615252 ("RRaA")
   bit8u  resv[480];
-	bit32u sig1;              // 0x61417272 ("rrAa")
-	bit32u free_clust_cnt;    // 0xFFFFFFFF when the count is unknown
-	bit32u next_free_clust;   // most recent allocated cluster  + 1
-	bit8u  resv1[12];
-	bit32u trail_sig;         // 0xAA550000
+  bit32u sig1;              // 0x61417272 ("rrAa")
+  bit32u free_clust_cnt;    // 0xFFFFFFFF when the count is unknown
+  bit32u next_free_clust;   // most recent allocated cluster  + 1
+  bit8u  resv1[12];
+  bit32u trail_sig;         // 0xAA550000
 };
 
 struct S_FAT_ROOT {
-	bit8u  name[8];    // name
-	bit8u  ext[3];     // ext
-	bit8u  attrb;      // attribute
+  bit8u  name[8];    // name
+  bit8u  ext[3];     // ext
+  bit8u  attrb;      // attribute
   union {
-	  bit8u  resv[10];   // reserved in fat12/16
+    bit8u  resv[10];   // reserved in fat12/16
     struct {
       bit8u  nt_resv;    // reserved for WinNT
       bit8u  crt_time_tenth; // millisecond stamp at creation time
@@ -110,21 +157,21 @@ struct S_FAT_ROOT {
       bit16u strtclst32; // hi word of FAT32 starting cluster
     } fat32;
   } type;
-	bit16u time;       // time
-	bit16u date;       // date
-	bit16u strtclst;   // starting cluster number
-	bit32u filesize;   // file size in bytes
+  bit16u time;       // time
+  bit16u date;       // date
+  bit16u strtclst;   // starting cluster number
+  bit32u filesize;   // file size in bytes
 };
 
 struct S_FAT_LFN_ROOT {
-	bit8u  sequ_flags;
-	bit8u  name0[10];
-	bit8u  attrb;
-	bit8u  resv;
-	bit8u  sfn_crc;
-	bit8u  name1[12];
-	bit16u clust_zero;
-	bit8u  name2[4];
+  bit8u  sequ_flags;
+  bit8u  name0[10];
+  bit8u  attrb;
+  bit8u  resv;
+  bit8u  sfn_crc;
+  bit8u  name1[12];
+  bit16u clust_zero;
+  bit8u  name2[4];
 };
 
 void parse_command(int, char *[], char *, bool *, bool *, char *);
