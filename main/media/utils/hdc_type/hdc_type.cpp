@@ -1,31 +1,66 @@
-/*             Author: Benjamin David Lunt
- *                     Forever Young Software
- *                     Copyright (c) 1984-2016
- *  
- *  This code is included on the disc that is included with the book
- *   FYSOS: Media Storage Devices, and is for that purpose only.  You have the
- *   right to use it for learning purposes only.  You may not modify it for
- *   redistribution for any other purpose unless you have written permission
- *   from the author.
+/*
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
+
+/*
+ *  HDC_TYPE.EXE
+ *   Will enumerate through the PCI, finding a ATA controllers to see if there are 
+ *    any devices attached.  If so, it will display information about found device.
  *
- *  You may modify and use it in your own projects as long as they are
- *   for non profit only and not distributed.  Any project for profit that 
- *   uses this code must have written permission from the author.
- *
- *  compile using gcc (DJGPP)
- *   gcc -Os hdc_type.cpp -o hdc_type.exe -s
- *
- *  usage:
- *    hdc_type [parameters]
- *
- *  parameters:
- *    -v         indicates verbose output
- *    -ide       if SATA found with multiple mode support, use Legacy IDE mode
- *    -ahci      if SATA found with multiple mode support, use AHCI mode
- *    -do_isa    detect controllers on the ISA bus too
- *    -pio_only  do pio only I/O
- *
- *  Notes:
  *   - This code is mainly for the Intel PIIX and ICHx controllers.
  *
  *   IDE:
@@ -36,6 +71,30 @@
  *   AHCI:
  *     - This code assumes all memory mapped I/O addresses.
  *
+ *  Assumptions/prerequisites:
+ *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must have a pre-installed 32-bit DPMI.
+ *   - Will produce unknown behavior if ran under existing operating system other
+ *     than mentioned here.
+ *   - Must have full access to said hardware.
+ *   - This code assumes the attached device is a high-speed device.  If a full-
+ *     or low-speed device is attached, the device will not be found by this code.
+ *     Use GD_UHCI or GD_OHCI for full- and low-speed devices.
+ *
+ *  Last updated: 15 July 2020
+ *
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
+ *   gcc -Os hdc_type.cpp -o hdc_type.exe -s
+ *
+ *  Usage:
+ *    hdc_type [parameters]
+ *
+ *   parameters:
+ *     -v         indicates verbose output
+ *     -ide       if SATA found with multiple mode support, use Legacy IDE mode
+ *     -ahci      if SATA found with multiple mode support, use AHCI mode
+ *     -do_isa    detect controllers on the ISA bus too
+ *     -pio_only  do pio only I/O
  */
 
 #include <ctype.h>
@@ -44,9 +103,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-
-#define MDELAY(x)   mdelay(x)  // use our mS delay
-//#define MDELAY(x) delay(x)  // use DJGPP's mS delay
 
 #include <crt0.h>
 #include <dos.h>
@@ -111,9 +167,9 @@ int main(int argc, char *argv[]) {
       printf(" Found PCI ATA device:\n");
       printf("  * Bus = %i, device = %i, function = %i, type = 0x%06X\n", pci_bus, pci_dev, pci_func, type);
       printf("  * Vendor = 0x%04X  Device = 0x%04X  rev = 0x%02X\n",
-        read_pci(pci_bus, pci_dev, pci_func, 0, sizeof(bit16u)),
-        read_pci(pci_bus, pci_dev, pci_func, 2, sizeof(bit16u)),
-        read_pci(pci_bus, pci_dev, pci_func, 8, sizeof(bit8u)));
+        pci_read_word(pci_bus, pci_dev, pci_func, 0),
+        pci_read_word(pci_bus, pci_dev, pci_func, 2),
+        pci_read_byte(pci_bus, pci_dev, pci_func, 8));
     }
     
     // make sure the device is powered
@@ -121,8 +177,8 @@ int main(int argc, char *argv[]) {
       break;
     
     // get type of controller
-    hdc.type = ata_controller_type(read_pci(pci_bus, pci_dev, pci_func, 0, sizeof(bit16u)),
-                                   read_pci(pci_bus, pci_dev, pci_func, 2, sizeof(bit16u)), str);
+    hdc.type = ata_controller_type(pci_read_word(pci_bus, pci_dev, pci_func, 0),
+                                   pci_read_word(pci_bus, pci_dev, pci_func, 2), str);
     
     switch ((type & 0x0000FF00) >> 8) {
       case PCI_ATA_SUB_SCSI:  //   SCSI
@@ -165,7 +221,7 @@ int main(int argc, char *argv[]) {
     //  then this is a multi-function device.
     //  else, skip checking the rest of the functions.
     if (pci_func == 0)
-      if ((read_pci(pci_bus, pci_dev, pci_func, 0x0E, sizeof(bit8u)) & 0x80) == 0)
+      if ((pci_read_byte(pci_bus, pci_dev, pci_func, 0x0E) & 0x80) == 0)
         pci_func = PCI_MAX_FUNC;
     
     // increment to next function for next loop
@@ -212,7 +268,7 @@ bool ata_ide_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit8
   //  port values of 0x1F0, and the BAR's may be zeros. (The PIIX3 assumes this)
   // If bit 0 is set, this controller is in Native mode and uses the port values in
   //  the BAR's.
-  type = read_pci(pci_bus, pci_dev, pci_func, (2<<2), sizeof(bit32u)) >> 8;
+  type = pci_read_dword(pci_bus, pci_dev, pci_func, (2<<2)) >> 8;
   p_interface = (type & 0xFF);
   hdc_base = 0x1F0;  // assume primary base (for the first controller)
   hdc_altbase = ATA_ADPT_CNTRL1;
@@ -221,11 +277,11 @@ bool ata_ide_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit8
       // native mode
       cntrlr->mode = HDC_MODE_NATIVE;
       if (channel == ATA_CHANNEL_PRIMARY) {
-        hdc_base = read_pci(pci_bus, pci_dev, pci_func, 0x10, sizeof(bit16u));
-        hdc_altbase = read_pci(pci_bus, pci_dev, pci_func, 0x14, sizeof(bit16u));
+        hdc_base = pci_read_word(pci_bus, pci_dev, pci_func, 0x10);
+        hdc_altbase = pci_read_word(pci_bus, pci_dev, pci_func, 0x14);
       } else {
-        hdc_base = read_pci(pci_bus, pci_dev, pci_func, 0x18, sizeof(bit16u));
-        hdc_altbase = read_pci(pci_bus, pci_dev, pci_func, 0x1C, sizeof(bit16u));
+        hdc_base = pci_read_word(pci_bus, pci_dev, pci_func, 0x18);
+        hdc_altbase = pci_read_word(pci_bus, pci_dev, pci_func, 0x1C);
       }
       if (!(hdc_base & 1) || !(hdc_altbase & 1)) {
         printf("One or more of the controller's BAR registers use memory mapped I/O...\n");
@@ -239,7 +295,7 @@ bool ata_ide_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit8
       cntrlr->mode = HDC_MODE_LEGACY;
     
     if ((cntrlr->type >= CNTRL_TYPE_STD_SATA) || (p_interface & 0x80)) {
-      bus_master = read_pci(pci_bus, pci_dev, pci_func, 0x20, sizeof(bit16u));
+      bus_master = pci_read_word(pci_bus, pci_dev, pci_func, 0x20);
       if (!(bus_master & 1)) {
         printf("Bus Master BAR register uses memory mapped I/O...\n");
         goto next_ide_controller;
@@ -247,7 +303,7 @@ bool ata_ide_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit8
         bus_master &= 0xFFFC;
       
       // I/O access enable and bus master enable
-      write_pci(pci_bus, pci_dev, pci_func, 0x04, sizeof(bit16u), (1 << 2) | (1 << 0));
+      pci_write_word(pci_bus, pci_dev, pci_func, 0x04, (1 << 2) | (1 << 0));
       
       switch (cntrlr->type) {
         case CNTRL_TYPE_PIIX:
@@ -257,7 +313,7 @@ bool ata_ide_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit8
         case CNTRL_TYPE_ICH6:
           // Make sure the PCI Latency Timer is at least 48 and at most 64 (in increments of 8).
           // On the PIIX/ICH, the MIN_LAT and MAX_LAT fields are reserved, so we simply set it to 64.
-          write_pci(pci_bus, pci_dev, pci_func, 0x0D, sizeof(bit8u), 64);
+          pci_write_byte(pci_bus, pci_dev, pci_func, 0x0D, 64);
           
           /********************************************************************\
           *  set the timing of the PCI transfers
@@ -270,15 +326,15 @@ bool ata_ide_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit8
           *  get an idea of what to set it too.
           * For now, we set the timings to some default/well-known values.
           \********************************************************************/
-          write_pci(pci_bus, pci_dev, pci_func, 0x40, sizeof(bit16u), 0xA344);
-          write_pci(pci_bus, pci_dev, pci_func, 0x42, sizeof(bit16u), 0xA344);
+          pci_write_word(pci_bus, pci_dev, pci_func, 0x40, 0xA344);
+          pci_write_word(pci_bus, pci_dev, pci_func, 0x42, 0xA344);
           
           // TODO: What is this one?
-          //write_pci(pci_bus, pci_dev, pci_func, 0x48, sizeof(bit8u), 0x00);
+          //pci_write_byte(pci_bus, pci_dev, pci_func, 0x48, 0x00);
           
           // TODO:
-          //write_pci(pci_bus, pci_dev, pci_func, 0x54, sizeof(bit32u), 
-          //  read_pci(pci_bus, pci_dev, pci_func, 0x54, sizeof(bit32u)) | 0x0400);
+          //pci_write_dword(pci_bus, pci_dev, pci_func, 0x54, 
+          //  pci_read_dword(pci_bus, pci_dev, pci_func, 0x54) | 0x0400);
           break;
         case CNTRL_TYPE_0571:
           // Offset 48->4B - Drive Timing Control (R/W)
@@ -301,7 +357,7 @@ bool ata_ide_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit8
           ;
       }
     } else {
-      write_pci(pci_bus, pci_dev, pci_func, 0x04, sizeof(bit16u), 0x0001);      // I/O access enable and bus master disable
+      pci_write_word(pci_bus, pci_dev, pci_func, 0x04, 0x0001);      // I/O access enable and bus master disable
       bus_master = 0x0000;
     }
     
@@ -326,7 +382,7 @@ bool ata_ide_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit8
         if (cntrlr->mode == HDC_MODE_NATIVE) {
           // if in Native Mode, we need to write the IRQ to the PCI Config Space.
           cntrlr->irq = 14; // this is were you would choose an available IRQ number from your kernel code
-          write_pci(pci_bus, pci_dev, pci_func, 0x3C, sizeof(bit8u), cntrlr->irq);
+          pci_write_byte(pci_bus, pci_dev, pci_func, 0x3C, cntrlr->irq);
         } else
           cntrlr->irq = (channel == ATA_CHANNEL_PRIMARY) ? 14 : 15;
     }
@@ -462,7 +518,7 @@ int ata_controller_type(const bit16u vendor_id, const bit16u device_id, char *st
 //  if we read anything other than 0xFF from the status register.
 bool det_ata_controller(struct S_ATA_CNTRLR *cntrlr) {
   
-  if (inportb(cntrlr->base + ATA_STATUS) == 0xFF) {
+  if (inpb(cntrlr->base + ATA_STATUS) == 0xFF) {
     if (verbose) printf("ATA_STATUS returned 0xFF.  No controller attached.\n");
     return FALSE;
   }
@@ -496,18 +552,18 @@ bool ata_select_drv(const bit16u base, const bit8u drv, const bit8u flags, const
   if (select == cur_selected)
     return TRUE;
   
-  if (inportb(base + ATA_STATUS) & (ATA_STATUS_BSY | ATA_STATUS_DRQ)) {
-    if (verbose) printf("0: Could not select drive...(%02X)\n", inportb(base + ATA_STATUS));
+  if (inpb(base + ATA_STATUS) & (ATA_STATUS_BSY | ATA_STATUS_DRQ)) {
+    if (verbose) printf("0: Could not select drive...(%02X)\n", inpb(base + ATA_STATUS));
     return FALSE;
   }
   
   // select the drive
-  outportb(base + ATA_DRV_HEAD, select);
+  outpb(base + ATA_DRV_HEAD, select);
   mdelay(2); // pause for at least 1ms
-  inportb(base + ATA_STATUS);  // pause and clear any pending interrupt
+  inpb(base + ATA_STATUS);  // pause and clear any pending interrupt
   
-  if (inportb(base + ATA_STATUS) & (ATA_STATUS_BSY | ATA_STATUS_DRQ)) {
-    if (verbose) printf("1: Could not select drive...(%02X)\n", inportb(base + ATA_STATUS));
+  if (inpb(base + ATA_STATUS) & (ATA_STATUS_BSY | ATA_STATUS_DRQ)) {
+    if (verbose) printf("1: Could not select drive...(%02X)\n", inpb(base + ATA_STATUS));
     return FALSE;
   }
   
@@ -528,23 +584,23 @@ bool ata_device_reset(struct S_ATA_CNTRLR *cntrlr, const int drv, bit16u *type_i
   
   // turn off interrupts
   // (4heads is a thing of the past, but we do it anyway)
-  outportb(cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_4HEADS | ATA_DEV_CNTRL_nINT);
+  outpb(cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_4HEADS | ATA_DEV_CNTRL_nINT);
   mdelay(10);
   
   // select the drive 
   //  (do not call ata_select_drv() since it reads from the status register)
-  outportb(cntrlr->base + ATA_DRV_HEAD, 0xA0 | ATA_DH_ISLBA | (drv << 4));
+  outpb(cntrlr->base + ATA_DRV_HEAD, 0xA0 | ATA_DH_ISLBA | (drv << 4));
   mdelay(2);
   
   // check to see if there is a drive here
-  outportb(cntrlr->base + ATA_SECTOR_COUNT, 0x55);
-  outportb(cntrlr->base + ATA_SECTOR_NUMBER, 0xAA);
-  outportb(cntrlr->base + ATA_SECTOR_COUNT, 0xAA);
-  outportb(cntrlr->base + ATA_SECTOR_NUMBER, 0x55);
-  outportb(cntrlr->base + ATA_SECTOR_COUNT, 0x55);
-  outportb(cntrlr->base + ATA_SECTOR_NUMBER, 0xAA);
-  r0 = inportb(cntrlr->base + ATA_SECTOR_COUNT);
-  r1 = inportb(cntrlr->base + ATA_SECTOR_NUMBER);
+  outpb(cntrlr->base + ATA_SECTOR_COUNT, 0x55);
+  outpb(cntrlr->base + ATA_SECTOR_NUMBER, 0xAA);
+  outpb(cntrlr->base + ATA_SECTOR_COUNT, 0xAA);
+  outpb(cntrlr->base + ATA_SECTOR_NUMBER, 0x55);
+  outpb(cntrlr->base + ATA_SECTOR_COUNT, 0x55);
+  outpb(cntrlr->base + ATA_SECTOR_NUMBER, 0xAA);
+  r0 = inpb(cntrlr->base + ATA_SECTOR_COUNT);
+  r1 = inpb(cntrlr->base + ATA_SECTOR_NUMBER);
   if (verbose) printf("id bytes:  0x%02X and 0x%02X\n", r0, r1);
   
   // if no drive, no need to try to reset it
@@ -559,12 +615,12 @@ bool ata_device_reset(struct S_ATA_CNTRLR *cntrlr, const int drv, bit16u *type_i
   // after setting the SRST bit, the controller may take 2us to come out of sleep mode,
   //  and 400ns to set the BSY bit.  We should wait a minimum of 5us before clearing it anyway.
   if (verbose) puts("Setting SRST bit");
-  outportb(cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_RESET | ATA_DEV_CNTRL_nINT);
+  outpb(cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_RESET | ATA_DEV_CNTRL_nINT);
   udelay(5);         // hold for a min of 5 us
   
   // clear the SRST bit, disabling interrupts too
   if (verbose) puts("Clearing SRST bit");
-  outportb(cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_nINT);  // clear the bit(s), no interrupts
+  outpb(cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_nINT);  // clear the bit(s), no interrupts
   mdelay(2);         // hold for a min of 2+ms
   
   // wait for the controller to not be busy (for a reset, could take up to 30 seconds)
@@ -575,18 +631,18 @@ bool ata_device_reset(struct S_ATA_CNTRLR *cntrlr, const int drv, bit16u *type_i
   mdelay(5);
   
   // specs say to read the ERROR register just after reset
-  bit8u error = inportb(cntrlr->base + ATA_ERROR);
+  bit8u error = inpb(cntrlr->base + ATA_ERROR);
   if (verbose) printf("Error Register returned: 0x%02X\n", error);
   
   // force a select next time since we reset the controller above
   cur_selected = 0xFF;
   ata_select_drv(cntrlr->base, drv, 0, 0);
   
-  bit8u count = inportb(cntrlr->base + ATA_SECTOR_COUNT);
-  bit8u number = inportb(cntrlr->base + ATA_SECTOR_NUMBER);
+  bit8u count = inpb(cntrlr->base + ATA_SECTOR_COUNT);
+  bit8u number = inpb(cntrlr->base + ATA_SECTOR_NUMBER);
   if ((count == 1) && (number == 1)) {
-    bit8u cyl_low = inportb(cntrlr->base + ATA_CYL_LOW);
-    bit8u cyl_high = inportb(cntrlr->base + ATA_CYL_HIGH);
+    bit8u cyl_low = inpb(cntrlr->base + ATA_CYL_LOW);
+    bit8u cyl_high = inpb(cntrlr->base + ATA_CYL_HIGH);
     if (type_id) *type_id = (cyl_high << 8) | cyl_low;
     if (verbose) printf("Detect controller bytes: (%i) 0x%02X  0x%02X\n", drv, cyl_low, cyl_high);
     return TRUE;
@@ -689,8 +745,8 @@ bool det_ata_drive(struct S_ATA *ata) {
     if ((ata->version >= 7) && ((ata->info.command_set2 & (3 << 5)) == 3)) {
       printf("Word 83, bits 6:5 == 11b.  Must send a Set Features Subcommand to drive before it will spin up...\n");
       ata_select_drv(ata->cntrlr->base, ata->drv, 0, 0);
-      outportb(ata->cntrlr->base + ATA_FEATURE_CODE, ATA_FEATURE_DEVICE_SPINUP);
-      outportb(ata->cntrlr->base + ATA_COMMAND, CMD_SET_FEATURES); // set feature command
+      outpb(ata->cntrlr->base + ATA_FEATURE_CODE, ATA_FEATURE_DEVICE_SPINUP);
+      outpb(ata->cntrlr->base + ATA_COMMAND, CMD_SET_FEATURES); // set feature command
       if (!ata_wait(ata, ATA_STATUS_RDY, ATA_WAIT_RDY))
         return FALSE;
       // if bit 2 of WORD 0 is set, we need to get the IDENTIFY block again.
@@ -769,26 +825,26 @@ bool det_ata_drive(struct S_ATA *ata) {
       bit64s native_size = -1;
       ata_select_drv(ata->cntrlr->base, ata->drv, ATA_DH_ISLBA, 0);
       if (!ata->large_cap) {
-        outportb(ata->cntrlr->base + ATA_COMMAND, CMD_READ_NATIVE_MAX);
+        outpb(ata->cntrlr->base + ATA_COMMAND, CMD_READ_NATIVE_MAX);
         if (ata_wait(ata, ATA_STATUS_RDY, ATA_WAIT_RDY)) {  // wait for drive ready.
-          native_size = ((inportb(ata->cntrlr->base + ATA_DRV_HEAD) & 0x0F) << 24) |
-                         (inportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE) << 16)    |
-                         (inportb(ata->cntrlr->base + ATA_LBA_MID_BYTE) <<  8)     |
-                         (inportb(ata->cntrlr->base + ATA_LBA_LOW_BYTE) <<  0);
+          native_size = ((inpb(ata->cntrlr->base + ATA_DRV_HEAD) & 0x0F) << 24) |
+                         (inpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE) << 16)    |
+                         (inpb(ata->cntrlr->base + ATA_LBA_MID_BYTE) <<  8)     |
+                         (inpb(ata->cntrlr->base + ATA_LBA_LOW_BYTE) <<  0);
         }
       } else {
-        outportb(ata->cntrlr->base + ATA_COMMAND, CMD_READ_NATIVE_MAX_EXT);
+        outpb(ata->cntrlr->base + ATA_COMMAND, CMD_READ_NATIVE_MAX_EXT);
         if (ata_wait(ata, ATA_STATUS_RDY, ATA_WAIT_RDY)) {  // wait for drive ready.
           // write HOB bit
-          outportb(ata->cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_HOB | ATA_DEV_CNTRL_nINT);
-          native_size = ((bit64u) inportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE) << 40) |
-                        ((bit64u) inportb(ata->cntrlr->base + ATA_LBA_MID_BYTE) << 32)  |
-                        ((bit64u) inportb(ata->cntrlr->base + ATA_LBA_LOW_BYTE) << 24);
+          outpb(ata->cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_HOB | ATA_DEV_CNTRL_nINT);
+          native_size = ((bit64u) inpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE) << 40) |
+                        ((bit64u) inpb(ata->cntrlr->base + ATA_LBA_MID_BYTE) << 32)  |
+                        ((bit64u) inpb(ata->cntrlr->base + ATA_LBA_LOW_BYTE) << 24);
           // clear HOB bit
-          outportb(ata->cntrlr->base + ATA_SECTOR_COUNT, 0);
-          native_size |= (inportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE) << 16) |
-                         (inportb(ata->cntrlr->base + ATA_LBA_MID_BYTE) <<  8)  |
-                         (inportb(ata->cntrlr->base + ATA_LBA_LOW_BYTE) <<  0);
+          outpb(ata->cntrlr->base + ATA_SECTOR_COUNT, 0);
+          native_size |= (inpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE) << 16) |
+                         (inpb(ata->cntrlr->base + ATA_LBA_MID_BYTE) <<  8)  |
+                         (inpb(ata->cntrlr->base + ATA_LBA_LOW_BYTE) <<  0);
         }
       }
       if (native_size != -1) {
@@ -815,11 +871,11 @@ bool det_ata_drive(struct S_ATA *ata) {
       ata->transfer_type = DMA_TYPE_NONE;
       // SET_FEATURES: set mode to a PIO mode (0 to 7)      
       ata_select_drv(ata->cntrlr->base, ata->drv, 0, 0);
-      outportb(ata->cntrlr->base + ATA_FEATURE_CODE, ATA_FEATURE_SET_TRANSFER_MODE);
-      outportb(ata->cntrlr->base + ATA_FEATURE_CODE_1, XFER_PIO_0);
-      outportb(ata->cntrlr->base + ATA_COMMAND, CMD_SET_FEATURES); // set feature command
+      outpb(ata->cntrlr->base + ATA_FEATURE_CODE, ATA_FEATURE_SET_TRANSFER_MODE);
+      outpb(ata->cntrlr->base + ATA_FEATURE_CODE_1, XFER_PIO_0);
+      outpb(ata->cntrlr->base + ATA_COMMAND, CMD_SET_FEATURES); // set feature command
       if (ata_wait(ata, ATA_STATUS_RDY, ATA_WAIT_RDY)) {  // wait for drive ready.
-        if (inportb(ata->cntrlr->base + ATA_FEATURE_RESULT) & ATA_ERROR_ABRT)
+        if (inpb(ata->cntrlr->base + ATA_FEATURE_RESULT) & ATA_ERROR_ABRT)
           printf("Error setting PIO type\n");
         else
           printf("Successfully set PIO type\n");
@@ -873,7 +929,7 @@ bool det_ata_drive(struct S_ATA *ata) {
         if (verbose) printf("Attempt to read a sector %i from LBA 0 using DMA\n", (bit32u) lba);
         init_ext_int(ata->cntrlr->irq); // Initialize and allow interrupts for the ATA
         
-        outportb(ata->cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_eINT); // allow interrupts on the controller
+        outpb(ata->cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_eINT); // allow interrupts on the controller
         
         // Allocate DOS memory for the read (4096 * 2 * 2)
         // (We actually allocate 4 pages incase the first 2 cross a 64k boundary)
@@ -901,7 +957,7 @@ bool det_ata_drive(struct S_ATA *ata) {
           if (!ata_tx_rx_data(ata, ATA_TRNS_TYPE_DMA, ATA_DIR_RECV, CMD_READ_DMA, ATA_WAIT_RDY, 0, lba, NULL, ata->words_sect * 2, phy_address)) {
             // error
             printf("Error in ATA only READ_DMA (status = 0x%02X, error = 0x%02X)\n", 
-              inportb(ata->cntrlr->alt_base + ATA_ALT_STATUS), inportb(ata->cntrlr->base + ATA_ERROR));
+              inpb(ata->cntrlr->alt_base + ATA_ALT_STATUS), inpb(ata->cntrlr->base + ATA_ERROR));
           } else
             read_okay = TRUE;
         } else {
@@ -910,7 +966,7 @@ bool det_ata_drive(struct S_ATA *ata) {
           if (!atapi_tx_packet_rx_data(ata, ATA_TRNS_TYPE_DMA, ATA_DIR_RECV, packet, NULL, ata->words_sect * 2, phy_address)) {
             // error
             printf("Error in ATAPI only Read(12) (status = 0x%02X, error = 0x%02X)\n", 
-              inportb(ata->cntrlr->alt_base + ATA_ALT_STATUS), inportb(ata->cntrlr->base + ATA_ERROR));
+              inpb(ata->cntrlr->alt_base + ATA_ALT_STATUS), inpb(ata->cntrlr->base + ATA_ERROR));
           } else
             read_okay = TRUE;
         }
@@ -921,7 +977,7 @@ bool det_ata_drive(struct S_ATA *ata) {
           // wait for interrupt
           if (ata_wait_int(ata, 2000)) {
             dma_stop_dma(ata);
-            inportb(ata->cntrlr->base + ATA_STATUS); // clear the interrupt pending flag
+            inpb(ata->cntrlr->base + ATA_STATUS); // clear the interrupt pending flag
             dosmemget(phy_address + 4096, ata->words_sect * 2, sector_buff);
             read_okay = TRUE;
           } else {
@@ -929,7 +985,7 @@ bool det_ata_drive(struct S_ATA *ata) {
           }
         }
         
-        outportb(ata->cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_nINT); // disallow interrupts on the controller
+        outpb(ata->cntrlr->alt_base + ATA_DEV_CONTROL, ATA_DEV_CNTRL_nINT); // disallow interrupts on the controller
         exit_ext_int(ata->cntrlr->irq);
         __dpmi_free_dos_memory(sel);  // free the memory
       } else {
@@ -976,10 +1032,10 @@ bool ata_get_identify(struct S_ATA *ata, void *buffer) {
   } else {
     // The ATAPI, after receiving an ATA Identify command will set the parameter registers to the After-Reset
     //  values indicating what type of device it is.  
-    if ((inportb(ata->cntrlr->base + ATA_SECTOR_COUNT) == 1) &&
-        (inportb(ata->cntrlr->base + ATA_SECTOR_NUMBER) == 1) &&
-        (inportb(ata->cntrlr->base + ATA_LBA_MID_BYTE) == 0x14) &&
-        (inportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE) == 0xEB)) {
+    if ((inpb(ata->cntrlr->base + ATA_SECTOR_COUNT) == 1) &&
+        (inpb(ata->cntrlr->base + ATA_SECTOR_NUMBER) == 1) &&
+        (inpb(ata->cntrlr->base + ATA_LBA_MID_BYTE) == 0x14) &&
+        (inpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE) == 0xEB)) {
       if (ata_tx_rx_data(ata, ATA_TRNS_TYPE_PIO, ATA_DIR_RECV, ATA_CMD_ID_PACKET_DEVICE, ATAPI_WAIT_RDY, 0, 0, buffer, 512, (bit32u) NULL)) {
         // we have an ATAPI device
         if (!ata->atapi)
@@ -1015,9 +1071,9 @@ const struct SHORT_CABLES short_cables[] = {
 // Returns the type of cable attached
 bit8u ata_get_cable_reporting(const struct S_ATA *ata) {
   if (ata->cntrlr->is_pci_dev) {
-    const bit16u device = read_pci(ata->cntrlr->pci_dev.bus, ata->cntrlr->pci_dev.dev, ata->cntrlr->pci_dev.func, 0x02, sizeof(bit16u));
-    const bit16u sub_vendor = read_pci(ata->cntrlr->pci_dev.bus, ata->cntrlr->pci_dev.dev, ata->cntrlr->pci_dev.func, 0x2C, sizeof(bit16u));
-    const bit16u sub_device = read_pci(ata->cntrlr->pci_dev.bus, ata->cntrlr->pci_dev.dev, ata->cntrlr->pci_dev.func, 0x2E, sizeof(bit16u));
+    const bit16u device = pci_read_word(ata->cntrlr->pci_dev.bus, ata->cntrlr->pci_dev.dev, ata->cntrlr->pci_dev.func, 0x02);
+    const bit16u sub_vendor = pci_read_word(ata->cntrlr->pci_dev.bus, ata->cntrlr->pci_dev.dev, ata->cntrlr->pci_dev.func, 0x2C);
+    const bit16u sub_device = pci_read_word(ata->cntrlr->pci_dev.bus, ata->cntrlr->pci_dev.dev, ata->cntrlr->pci_dev.func, 0x2E);
     int i = 0;
     
     while (short_cables[i].device) {
@@ -1030,7 +1086,7 @@ bit8u ata_get_cable_reporting(const struct S_ATA *ata) {
     
     // if we got here, the device must have a regular 40 wire or 80 wire cable
     const bit8u mask = (ata->cntrlr->channel == ATA_CHANNEL_PRIMARY) ? 0x30 : 0xC0;
-    const bit8u byte = read_pci(ata->cntrlr->pci_dev.bus, ata->cntrlr->pci_dev.dev, ata->cntrlr->pci_dev.func, 0x54, sizeof(bit8u));
+    const bit8u byte = pci_read_byte(ata->cntrlr->pci_dev.bus, ata->cntrlr->pci_dev.dev, ata->cntrlr->pci_dev.func, 0x54);
     
     return (byte & mask) ? CABLE_TYPE_80WIRE : CABLE_TYPE_40WIRE;
   } else
@@ -1150,7 +1206,7 @@ void fix_ide_string(char *s, int len) {
 bool ata_wait_busy(const bit16u base, const bit16u time) {
   int timeout = time;
   while (timeout) {
-    if (!(inportb(base + ATA_STATUS) & 0x80))
+    if (!(inpb(base + ATA_STATUS) & 0x80))
       return TRUE;
     mdelay(1);
     timeout--;
@@ -1166,10 +1222,10 @@ bool ata_wait(const struct S_ATA *ata, const bit8u ch, int timeout) {
   
   // we should always delay at least 400nS after sending a COMMAND and reading the (alt)Status register
   // therefore, read it once, ignoring the return
-  inportb(ata->cntrlr->alt_base + ATA_ALT_STATUS);
+  inpb(ata->cntrlr->alt_base + ATA_ALT_STATUS);
   
   while (timeout) {
-    bit8u status = inportb(ata->cntrlr->alt_base + ATA_ALT_STATUS);
+    bit8u status = inpb(ata->cntrlr->alt_base + ATA_ALT_STATUS);
     if (!(status & ATA_STATUS_BSY)) {
       if (status & (ATA_STATUS_ERR | ATA_STATUS_DF))
         return FALSE;
@@ -1187,10 +1243,10 @@ bool ata_wait(const struct S_ATA *ata, const bit8u ch, int timeout) {
 bool atapi_wait(const struct S_ATA *ata, const bit8u ch, int timeout) {
   // we should always delay at least 400nS after sending a COMMAND and reading the (alt)Status register
   // the specs say that an ignored read from the alt_status register is sufficient
-  inportb(ata->cntrlr->alt_base + ATA_ALT_STATUS);
+  inpb(ata->cntrlr->alt_base + ATA_ALT_STATUS);
   
   while (timeout) {
-    bit8u status = inportb(ata->cntrlr->base + ATA_STATUS);
+    bit8u status = inpb(ata->cntrlr->base + ATA_STATUS);
     if (status & (ATA_STATUS_ERR | ATA_STATUS_DF))
       return FALSE;
     // must be all bits specified in ch
@@ -1199,7 +1255,7 @@ bool atapi_wait(const struct S_ATA *ata, const bit8u ch, int timeout) {
     timeout--;
   }
   
-  if (verbose) printf("atapi_wait returned FALSE (%02X) (%02X)", inportb(ata->cntrlr->alt_base + ATA_ALT_STATUS), inportb(ata->cntrlr->alt_base + ATA_ERROR));
+  if (verbose) printf("atapi_wait returned FALSE (%02X) (%02X)", inpb(ata->cntrlr->alt_base + ATA_ALT_STATUS), inpb(ata->cntrlr->alt_base + ATA_ERROR));
   return FALSE;
 }
 
@@ -1327,11 +1383,11 @@ bool ata_tx_rx_data(const struct S_ATA *ata, bool ttype, const bool dir, const b
       
       // wait for the controller to not be busy (i.e: wait for it to be ready)
       if (ata_wait(ata, ATA_STATUS_RDY, wait)) {
-        outportb(ata->cntrlr->base + ATA_FEATURES, (features & 0x00FF) >> 0);
-        outportb(ata->cntrlr->base + ATA_SECTOR_COUNT, ((buflen / 512) & 0x00FF) >> 0);
-        outportb(ata->cntrlr->base + ATA_SECTOR_NUMBER, (bit8u) sector);
-        outportb(ata->cntrlr->base + ATA_CYL_LOW, (bit8u) ((cyl & 0x00FF) >> 0));
-        outportb(ata->cntrlr->base + ATA_CYL_HIGH, (bit8u) ((cyl & 0xFF00) >> 8));
+        outpb(ata->cntrlr->base + ATA_FEATURES, (features & 0x00FF) >> 0);
+        outpb(ata->cntrlr->base + ATA_SECTOR_COUNT, ((buflen / 512) & 0x00FF) >> 0);
+        outpb(ata->cntrlr->base + ATA_SECTOR_NUMBER, (bit8u) sector);
+        outpb(ata->cntrlr->base + ATA_CYL_LOW, (bit8u) ((cyl & 0x00FF) >> 0));
+        outpb(ata->cntrlr->base + ATA_CYL_HIGH, (bit8u) ((cyl & 0xFF00) >> 8));
       } else
         return FALSE;
     } else {
@@ -1344,17 +1400,17 @@ bool ata_tx_rx_data(const struct S_ATA *ata, bool ttype, const bool dir, const b
         // wait for the controller to not be busy (i.e: wait for it to be ready)
         if (ata_wait(ata, ATA_STATUS_RDY, wait)) {
           // HOB's first
-          outportb(ata->cntrlr->base + ATA_FEATURES, (features & 0xFF00) >> 8);
-          outportb(ata->cntrlr->base + ATA_SECTOR_COUNT, ((buflen / 512) & 0xFF00) >> 8);
-          outportb(ata->cntrlr->base + ATA_LBA_LOW_BYTE,  (bit8u) ((bit64u) (lba & (bit64u) 0x0000FF000000) >> 24));
-          outportb(ata->cntrlr->base + ATA_LBA_MID_BYTE,  (bit8u) ((bit64u) (lba & (bit64u) 0x00FF00000000) >> 32));
-          outportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, (bit8u) ((bit64u) (lba & (bit64u) 0xFF0000000000) >> 40));
+          outpb(ata->cntrlr->base + ATA_FEATURES, (features & 0xFF00) >> 8);
+          outpb(ata->cntrlr->base + ATA_SECTOR_COUNT, ((buflen / 512) & 0xFF00) >> 8);
+          outpb(ata->cntrlr->base + ATA_LBA_LOW_BYTE,  (bit8u) ((bit64u) (lba & (bit64u) 0x0000FF000000) >> 24));
+          outpb(ata->cntrlr->base + ATA_LBA_MID_BYTE,  (bit8u) ((bit64u) (lba & (bit64u) 0x00FF00000000) >> 32));
+          outpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, (bit8u) ((bit64u) (lba & (bit64u) 0xFF0000000000) >> 40));
           // Low order last
-          outportb(ata->cntrlr->base + ATA_FEATURES, (features & 0x00FF) >> 0);
-          outportb(ata->cntrlr->base + ATA_SECTOR_COUNT, ((buflen / 512) & 0x00FF) >> 0);
-          outportb(ata->cntrlr->base + ATA_LBA_LOW_BYTE,  (bit8u) ((bit64u) (lba & (bit64u) 0x0000000000FF) >>  0));
-          outportb(ata->cntrlr->base + ATA_LBA_MID_BYTE,  (bit8u) ((bit64u) (lba & (bit64u) 0x00000000FF00) >>  8));
-          outportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, (bit8u) ((bit64u) (lba & (bit64u) 0x000000FF0000) >> 16));
+          outpb(ata->cntrlr->base + ATA_FEATURES, (features & 0x00FF) >> 0);
+          outpb(ata->cntrlr->base + ATA_SECTOR_COUNT, ((buflen / 512) & 0x00FF) >> 0);
+          outpb(ata->cntrlr->base + ATA_LBA_LOW_BYTE,  (bit8u) ((bit64u) (lba & (bit64u) 0x0000000000FF) >>  0));
+          outpb(ata->cntrlr->base + ATA_LBA_MID_BYTE,  (bit8u) ((bit64u) (lba & (bit64u) 0x00000000FF00) >>  8));
+          outpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, (bit8u) ((bit64u) (lba & (bit64u) 0x000000FF0000) >> 16));
         } else 
           return FALSE;
       } else {
@@ -1366,11 +1422,11 @@ bool ata_tx_rx_data(const struct S_ATA *ata, bool ttype, const bool dir, const b
         
         // wait for the controller to not be busy (i.e: wait for it to be ready)
         if (ata_wait(ata, ATA_STATUS_RDY, wait)) {
-          outportb(ata->cntrlr->base + ATA_FEATURES, (features & 0xFF));
-          outportb(ata->cntrlr->base + ATA_SECTOR_COUNT, ((buflen / 512) & 0xFF));
-          outportb(ata->cntrlr->base + ATA_LBA_LOW_BYTE,  (bit8u) (((bit32u) lba & 0x000000FF) >>  0));
-          outportb(ata->cntrlr->base + ATA_LBA_MID_BYTE,  (bit8u) (((bit32u) lba & 0x0000FF00) >>  8));
-          outportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, (bit8u) (((bit32u) lba & 0x00FF0000) >> 16));
+          outpb(ata->cntrlr->base + ATA_FEATURES, (features & 0xFF));
+          outpb(ata->cntrlr->base + ATA_SECTOR_COUNT, ((buflen / 512) & 0xFF));
+          outpb(ata->cntrlr->base + ATA_LBA_LOW_BYTE,  (bit8u) (((bit32u) lba & 0x000000FF) >>  0));
+          outpb(ata->cntrlr->base + ATA_LBA_MID_BYTE,  (bit8u) (((bit32u) lba & 0x0000FF00) >>  8));
+          outpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, (bit8u) (((bit32u) lba & 0x00FF0000) >> 16));
         } else
           return FALSE;
       }
@@ -1378,7 +1434,7 @@ bool ata_tx_rx_data(const struct S_ATA *ata, bool ttype, const bool dir, const b
   }
   
   // send the command
-  outportb(ata->cntrlr->base + ATA_COMMAND, command);
+  outpb(ata->cntrlr->base + ATA_COMMAND, command);
   // wait for the drive to be ready for the transfer
   if (ata_wait(ata, ATA_STATUS_DRQ, wait)) {
     if (ttype == ATA_TRNS_TYPE_PIO) {
@@ -1390,18 +1446,18 @@ bool ata_tx_rx_data(const struct S_ATA *ata, bool ttype, const bool dir, const b
           j = ((buflen > 512) ? 512 : buflen) / sizeof(bit32u);
           for (i=0; i<j; i++) {
             if (dir == ATA_DIR_RECV)
-              *ptr++ = inportl(ata->cntrlr->base + ATA_DATA);
+              *ptr++ = inpd(ata->cntrlr->base + ATA_DATA);
             else
-              outportl(ata->cntrlr->base + ATA_DATA, *ptr++);
+              outpd(ata->cntrlr->base + ATA_DATA, *ptr++);
           }
         } else {
           bit16u *ptr = (bit16u *) addr;
           j = ((buflen > 512) ? 512 : buflen) / sizeof(bit16u);
           for (i=0; i<j; i++) {
             if (dir == ATA_DIR_RECV)
-              *ptr++ = inportw(ata->cntrlr->base + ATA_DATA);
+              *ptr++ = inpw(ata->cntrlr->base + ATA_DATA);
             else
-              outportw(ata->cntrlr->base + ATA_DATA, *ptr++);
+              outpw(ata->cntrlr->base + ATA_DATA, *ptr++);
           }
         }
         buflen -= 512;
@@ -1437,12 +1493,12 @@ bool atapi_tx_packet_rx_data(struct S_ATA *ata, const bool ttype, const bool dir
   // wait for the controller to not be busy (i.e: wait for it to be ready)
   if (ata_wait(ata, ATA_STATUS_RDY, ATAPI_WAIT_RDY)) {
     // now for the parameters
-    outportb(ata->cntrlr->base + ATA_FEATURES, (0 << 1) | (ttype << 0));     // OVR = 0, DMA = (PIO mode (0) or DMA mode (1))
-    outportb(ata->cntrlr->base + ATA_SECTOR_COUNT, 0);  // (Tag N/A)
-    outportb(ata->cntrlr->base + ATA_LBA_LOW_BYTE, 0);  // N/A
-    outportb(ata->cntrlr->base + ATA_LBA_MID_BYTE, (((sect_size * 2) >> 0) & 0xFF));  // low byte of limit  (size of all bytes to transfer...)
-    outportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, (((sect_size * 2) >> 8) & 0xFF)); // high byte of limit (...not counting command packet sent)
-    outportb(ata->cntrlr->base + ATA_COMMAND, ATA_CMD_PACKET);  // send packet
+    outpb(ata->cntrlr->base + ATA_FEATURES, (0 << 1) | (ttype << 0));     // OVR = 0, DMA = (PIO mode (0) or DMA mode (1))
+    outpb(ata->cntrlr->base + ATA_SECTOR_COUNT, 0);  // (Tag N/A)
+    outpb(ata->cntrlr->base + ATA_LBA_LOW_BYTE, 0);  // N/A
+    outpb(ata->cntrlr->base + ATA_LBA_MID_BYTE, (((sect_size * 2) >> 0) & 0xFF));  // low byte of limit  (size of all bytes to transfer...)
+    outpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, (((sect_size * 2) >> 8) & 0xFF)); // high byte of limit (...not counting command packet sent)
+    outpb(ata->cntrlr->base + ATA_COMMAND, ATA_CMD_PACKET);  // send packet
     // The hardware is usually instantly ready for the packet, but
     //  we wait for it anyway.
     if (!ata_wait(ata, ATA_STATUS_DRQ, ATAPI_WAIT_RDY))
@@ -1450,13 +1506,13 @@ bool atapi_tx_packet_rx_data(struct S_ATA *ata, const bool ttype, const bool dir
     
     // send the 12- or 16-byte packet
     for (i=0; i<packet_size; i+=2)
-      outportw(ata->cntrlr->base + ATA_DATA, packet[i] | (packet[i+1] << 8));
+      outpw(ata->cntrlr->base + ATA_DATA, packet[i] | (packet[i+1] << 8));
     
     if (buflen > 0) {
       if (ttype == ATA_TRNS_TYPE_PIO) {
         // wait for the drive to be ready for the transfer
         if (atapi_wait(ata, ATA_STATUS_DRQ, ATAPI_WAIT_RDY)) {
-          bytes_per_drq = (inportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE) << 8) | inportb(ata->cntrlr->base + ATA_LBA_MID_BYTE);
+          bytes_per_drq = (inpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE) << 8) | inpb(ata->cntrlr->base + ATA_LBA_MID_BYTE);
           buffer = malloc(bytes_per_drq);
           
           // On an ATAPI transfer, the tranfer length can and usually will be less
@@ -1475,21 +1531,21 @@ bool atapi_tx_packet_rx_data(struct S_ATA *ata, const bool ttype, const bool dir
               bit32u *ptr = (bit32u *) buffer;
               for (i=0; i<count; i++) {
                 if (dir == ATA_DIR_RECV)
-                  *ptr++ = inportl(ata->cntrlr->base + ATA_DATA);
+                  *ptr++ = inpd(ata->cntrlr->base + ATA_DATA);
                 else
-                  outportl(ata->cntrlr->base + ATA_DATA, *ptr++);
+                  outpd(ata->cntrlr->base + ATA_DATA, *ptr++);
               }
             } else {
               bit16u *ptr = (bit16u *) buffer;
               for (i=0; i<count; i++) {
                 if (dir == ATA_DIR_RECV)
-                  *ptr++ = inportw(ata->cntrlr->base + ATA_DATA);
+                  *ptr++ = inpw(ata->cntrlr->base + ATA_DATA);
                 else
-                  outportw(ata->cntrlr->base + ATA_DATA, *ptr++);
+                  outpw(ata->cntrlr->base + ATA_DATA, *ptr++);
               }
             }
             // read the status register to acknowledge command
-            inportb(ata->cntrlr->base + ATA_STATUS);
+            inpb(ata->cntrlr->base + ATA_STATUS);
             
             // move the data to our passed buffer
             if ((buf != NULL) && (buflen > 0)) {
@@ -1537,32 +1593,32 @@ int words_per_sector(struct S_ATA *ata, const bool atapi) {
     if (ata_wait(ata, ATA_STATUS_RDY, ATA_WAIT_RDY)) {
       // now for the parameters
       if (atapi) {
-        outportb(ata->cntrlr->base + ATA_FEATURES, 0);      // OVR = 0, DMA = 0 (PIO mode)
-        outportb(ata->cntrlr->base + ATA_SECTOR_COUNT, 0);  // (Tag N/A)
-        outportb(ata->cntrlr->base + ATA_LBA_LOW_BYTE, 0);  // N/A
-        outportb(ata->cntrlr->base + ATA_LBA_MID_BYTE, ((2048 >> 0) & 0xFF));  // low byte of limit  (size of all bytes to transfer...)
-        outportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, ((2048 >> 8) & 0xFF)); // high byte of limit (...not counting command packet sent)
+        outpb(ata->cntrlr->base + ATA_FEATURES, 0);      // OVR = 0, DMA = 0 (PIO mode)
+        outpb(ata->cntrlr->base + ATA_SECTOR_COUNT, 0);  // (Tag N/A)
+        outpb(ata->cntrlr->base + ATA_LBA_LOW_BYTE, 0);  // N/A
+        outpb(ata->cntrlr->base + ATA_LBA_MID_BYTE, ((2048 >> 0) & 0xFF));  // low byte of limit  (size of all bytes to transfer...)
+        outpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, ((2048 >> 8) & 0xFF)); // high byte of limit (...not counting command packet sent)
       } else {
-        outportb(ata->cntrlr->base + ATA_FEATURES, 0);
-        outportb(ata->cntrlr->base + ATA_SECTOR_COUNT, 1);
-        outportb(ata->cntrlr->base + ATA_LBA_LOW_BYTE, 0);
-        outportb(ata->cntrlr->base + ATA_LBA_MID_BYTE, 0);
-        outportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, 0);
+        outpb(ata->cntrlr->base + ATA_FEATURES, 0);
+        outpb(ata->cntrlr->base + ATA_SECTOR_COUNT, 1);
+        outpb(ata->cntrlr->base + ATA_LBA_LOW_BYTE, 0);
+        outpb(ata->cntrlr->base + ATA_LBA_MID_BYTE, 0);
+        outpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE, 0);
       }
       
       if (atapi) {
-        outportb(ata->cntrlr->base + ATA_COMMAND, ATA_CMD_PACKET);
+        outpb(ata->cntrlr->base + ATA_COMMAND, ATA_CMD_PACKET);
         for (i=0; i<packet_size; i+=2)
-          outportw(ata->cntrlr->base + ATA_DATA, packet[i] | (packet[i+1] << 8));
+          outpw(ata->cntrlr->base + ATA_DATA, packet[i] | (packet[i+1] << 8));
       } else      
-        outportb(ata->cntrlr->base + ATA_COMMAND, ATA_CMD_READ);
+        outpb(ata->cntrlr->base + ATA_COMMAND, ATA_CMD_READ);
       // This assumes that all sectors will be a multiple of 512 bytes.
       // We could easily check for smaller sectors down to a multiple of 2 bytes
       //  by checking the DRQ bit after every word read.  This will give us a multiple of 2 bytes.
       // However, every sector should be a multiple of 512-bytes...
       while (ata_wait(ata, ATA_STATUS_DRQ, (atapi) ? ATAPI_WAIT_RDY : ATA_WAIT_RDY)) {
         for (i=0; i<(512>>1); i++)
-          inportw(ata->cntrlr->base + ATA_DATA);
+          inpw(ata->cntrlr->base + ATA_DATA);
         cnt += 256;
       }
     } else
@@ -1635,11 +1691,11 @@ bool ata_get_dma_mode(struct S_ATA *ata) {
   // if we found a type, let's set the controller to that type and mode
   if (ata->transfer_type != DMA_TYPE_NONE) {
     ata_select_drv(ata->cntrlr->base, ata->drv, 0, 0);
-    outportb(ata->cntrlr->base + ATA_FEATURE_CODE, ATA_FEATURE_SET_TRANSFER_MODE);
-    outportb(ata->cntrlr->base + ATA_FEATURE_CODE_1, ((ata->transfer_type << 3) | ata->transfer_mode));
-    outportb(ata->cntrlr->base + ATA_COMMAND, CMD_SET_FEATURES); // set feature command
+    outpb(ata->cntrlr->base + ATA_FEATURE_CODE, ATA_FEATURE_SET_TRANSFER_MODE);
+    outpb(ata->cntrlr->base + ATA_FEATURE_CODE_1, ((ata->transfer_type << 3) | ata->transfer_mode));
+    outpb(ata->cntrlr->base + ATA_COMMAND, CMD_SET_FEATURES); // set feature command
     if (ata_wait(ata, ATA_STATUS_RDY, ATA_WAIT_RDY)) {  // wait for drive ready.
-      if (inportb(ata->cntrlr->base + ATA_FEATURE_RESULT) & ATA_ERROR_ABRT)
+      if (inpb(ata->cntrlr->base + ATA_FEATURE_RESULT) & ATA_ERROR_ABRT)
         printf("Error setting DMA to type %i, mode %i\n", ata->transfer_type, ata->transfer_mode);
       else
         ret = TRUE;
@@ -1667,9 +1723,9 @@ bool ata_get_status(struct S_ATA *ata, struct S_BLOCK_STATUS *status) {
     //  "Removable Media Status Notification" feature set is active.
     if (ata->atapi && (ata->info.command_set1 & (1 << 2))) {
       ata_select_drv(ata->cntrlr->base, ata->drv, 0, 0);
-      outportb(ata->cntrlr->base + ATA_COMMAND, ATA_CMD_GET_MEDIA_STATUS);
+      outpb(ata->cntrlr->base + ATA_COMMAND, ATA_CMD_GET_MEDIA_STATUS);
       if (ata_wait(ata, ATA_STATUS_RDY, ATA_WAIT_RDY)) {  // wait for drive ready.
-        error = inportb(ata->cntrlr->base + ATA_ERROR);
+        error = inpb(ata->cntrlr->base + ATA_ERROR);
         if (!(error & ATA_ERROR_ABRT)) {
           status->write_prot = ((error & ATA_ERROR_WP)  > 0);
           status->changed    = ((error & ATA_ERROR_MC)  > 0);
@@ -1833,13 +1889,13 @@ volatile bool ata_drv_stats = FALSE;
 
 void ata_irq_master(void) {
   ata_drv_stats = TRUE;
-  outportb(0x20, 0x20); // EOI
+  outpb(0x20, 0x20); // EOI
 }
 
 void ata_irq_slave(void) {
   ata_drv_stats = TRUE;
-  outportb(0xA0, 0x20); // EOI
-  outportb(0x20, 0x20); // EOI
+  outpb(0xA0, 0x20); // EOI
+  outpb(0x20, 0x20); // EOI
 }
 
 // wait for completion interrupt
@@ -1852,7 +1908,7 @@ bool ata_wait_int(const struct S_ATA *ata, int timeout) {
       // VirtualBox does not set the BM_STATUS_INTR bit correctly.
       // Comment out this line and return TRUE with the second line
       //  if you are using VirtualBox.
-      if (inportb(ata->cntrlr->bus_master + BM0_STATUS) & BM_STATUS_INTR)
+      if (inpb(ata->cntrlr->bus_master + BM0_STATUS) & BM_STATUS_INTR)
         return TRUE;
     }
     mdelay(1); // hold for 1 millisecond
@@ -1869,7 +1925,7 @@ _go32_dpmi_seginfo ata_old, ata_new;
 void init_ext_int(const int irq_num) {
   
   if (irq_num >= 16)
-		return;
+    return;
   
   int vector = irq_to_vect[irq_num];
   
@@ -1892,8 +1948,8 @@ void init_ext_int(const int irq_num) {
 
 void exit_ext_int(const int irq_num) {
   
-	if (irq_num >= 16)
-		return;
+  if (irq_num >= 16)
+    return;
   
   int vector = irq_to_vect[irq_num];
   
@@ -1908,12 +1964,12 @@ void enable_irq_at_8259(int irq_num) {
     return;
   
   if (irq_num >= 8) {
-    outportb(0x21, inportb(0x21) & ~0x04);
+    outpb(0x21, inpb(0x21) & ~0x04);
     irq_num = 1 << (irq_num - 8);
-    outportb(0xA1, inportb(0xA1) & ~irq_num);
+    outpb(0xA1, inpb(0xA1) & ~irq_num);
   } else {
     irq_num = 1 << irq_num;
-    outportb(0x21, inportb(0x21) & ~irq_num);
+    outpb(0x21, inpb(0x21) & ~irq_num);
   }
 }
 
@@ -1923,10 +1979,10 @@ void disable_irq_at_8259(int irq_num) {
   
   if (irq_num >= 8) {
     irq_num = 1 << (irq_num - 8);
-    outportb(0xA1, inportb(0xA1) | irq_num);
+    outpb(0xA1, inpb(0xA1) | irq_num);
   } else {
     irq_num = 1 << irq_num;
-    outportb(0x21, inportb(0x21) | irq_num);
+    outpb(0x21, inpb(0x21) | irq_num);
   }
 }
 
@@ -1941,13 +1997,13 @@ void dma_init_dma(const struct S_ATA *ata, const bit32u address, const int size)
       table[1] = 0x80000000 | size; // EOT plus size of sector
       dosmemput((const void *) table, sizeof(bit32u) * 2, address);
       if (ata->cntrlr->channel == ATA_CHANNEL_PRIMARY) {
-        outportb(ata->cntrlr->bus_master + BM0_COMMAND, 0);
-        outportb(ata->cntrlr->bus_master + BM0_STATUS, (1 << 2) | (1 << 1));
-        outportl(ata->cntrlr->bus_master + BM0_ADDRESS, address);
+        outpb(ata->cntrlr->bus_master + BM0_COMMAND, 0);
+        outpb(ata->cntrlr->bus_master + BM0_STATUS, (1 << 2) | (1 << 1));
+        outpd(ata->cntrlr->bus_master + BM0_ADDRESS, address);
       } else {
-        outportb(ata->cntrlr->bus_master + BM1_COMMAND, 0);
-        outportb(ata->cntrlr->bus_master + BM1_STATUS, (1 << 2) | (1 << 1));
-        outportl(ata->cntrlr->bus_master + BM1_ADDRESS, address);
+        outpb(ata->cntrlr->bus_master + BM1_COMMAND, 0);
+        outpb(ata->cntrlr->bus_master + BM1_STATUS, (1 << 2) | (1 << 1));
+        outpd(ata->cntrlr->bus_master + BM1_ADDRESS, address);
       }
     } else {
       // Is pci device, but no bus_master...
@@ -1966,9 +2022,9 @@ void dma_start_dma(const struct S_ATA *ata, const bool dir) {
   if (ata->cntrlr->is_pci_dev) {
     if (ata->cntrlr->bus_master) {
       if (ata->cntrlr->channel == ATA_CHANNEL_PRIMARY)
-        outportb(ata->cntrlr->bus_master + BM0_COMMAND, (dir << 3) | (1 << 0));
+        outpb(ata->cntrlr->bus_master + BM0_COMMAND, (dir << 3) | (1 << 0));
       else
-        outportb(ata->cntrlr->bus_master + BM1_COMMAND, (dir << 3) | (1 << 0));
+        outpb(ata->cntrlr->bus_master + BM1_COMMAND, (dir << 3) | (1 << 0));
     } else {
       // is pci device, but no bus_master...
     }
@@ -1983,16 +2039,16 @@ bit8u dma_stop_dma(const struct S_ATA *ata) {
   if (ata->cntrlr->is_pci_dev) {
     if (ata->cntrlr->bus_master) {
       if (ata->cntrlr->channel == ATA_CHANNEL_PRIMARY) {
-                 inportb(ata->cntrlr->bus_master + BM0_STATUS);
-        status = inportb(ata->cntrlr->bus_master + BM0_STATUS);
-        outportb(ata->cntrlr->bus_master + BM0_COMMAND, (0 << 0));
-        outportb(ata->cntrlr->bus_master + BM0_STATUS, status);
+                 inpb(ata->cntrlr->bus_master + BM0_STATUS);
+        status = inpb(ata->cntrlr->bus_master + BM0_STATUS);
+        outpb(ata->cntrlr->bus_master + BM0_COMMAND, (0 << 0));
+        outpb(ata->cntrlr->bus_master + BM0_STATUS, status);
         return status;
       } else {
-                 inportb(ata->cntrlr->bus_master + BM1_STATUS);
-        status = inportb(ata->cntrlr->bus_master + BM1_STATUS);
-        outportb(ata->cntrlr->bus_master + BM1_COMMAND, (0 << 0));
-        outportb(ata->cntrlr->bus_master + BM1_STATUS, status);
+                 inpb(ata->cntrlr->bus_master + BM1_STATUS);
+        status = inpb(ata->cntrlr->bus_master + BM1_STATUS);
+        outpb(ata->cntrlr->bus_master + BM1_COMMAND, (0 << 0));
+        outpb(ata->cntrlr->bus_master + BM1_STATUS, status);
         return status;
       }
     } else {
@@ -2035,13 +2091,13 @@ bool get_parameters(int argc, char *argv[]) {
 
 void dump_regs(const struct S_ATA *ata) {
   printf("Controller Base = 0x%04X, drv = %i\n", ata->cntrlr->base, ata->drv);
-  printf("  Error = 0x%02X\n", inportb(ata->cntrlr->base + ATA_ERROR));
-  printf("  Count = 0x%02X\n", inportb(ata->cntrlr->base + ATA_SECTOR_COUNT));
-  printf("    Low = 0x%02X\n", inportb(ata->cntrlr->base + ATA_LBA_LOW_BYTE));
-  printf("    Mid = 0x%02X\n", inportb(ata->cntrlr->base + ATA_LBA_MID_BYTE));
-  printf("   High = 0x%02X\n", inportb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE));
-  printf(" Drv_Hd = 0x%02X\n", inportb(ata->cntrlr->base + ATA_DRV_HEAD));
-  printf(" Status = 0x%02X\n", inportb(ata->cntrlr->alt_base + ATA_ALT_STATUS));
+  printf("  Error = 0x%02X\n", inpb(ata->cntrlr->base + ATA_ERROR));
+  printf("  Count = 0x%02X\n", inpb(ata->cntrlr->base + ATA_SECTOR_COUNT));
+  printf("    Low = 0x%02X\n", inpb(ata->cntrlr->base + ATA_LBA_LOW_BYTE));
+  printf("    Mid = 0x%02X\n", inpb(ata->cntrlr->base + ATA_LBA_MID_BYTE));
+  printf("   High = 0x%02X\n", inpb(ata->cntrlr->base + ATA_LBA_HIGH_BYTE));
+  printf(" Drv_Hd = 0x%02X\n", inpb(ata->cntrlr->base + ATA_DRV_HEAD));
+  printf(" Status = 0x%02X\n", inpb(ata->cntrlr->alt_base + ATA_ALT_STATUS));
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2095,13 +2151,13 @@ bool ata_sata_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit
   //       this to allow that controller.  ***
   //  *** This code is for example only. ***
   //
-  addr_map = read_pci(pci_bus, pci_dev, pci_func, 0x90, sizeof(bit16u));
+  addr_map = pci_read_word(pci_bus, pci_dev, pci_func, 0x90);
   mode = (addr_map & 0x00C0) >> 6;
   printf("\nThis controller is currently in %s\n", modestr[mode]);
   
-  bit32u base = read_pci(pci_bus, pci_dev, pci_func, 0x24, sizeof(bit32u));
+  bit32u base = pci_read_dword(pci_bus, pci_dev, pci_func, 0x24);
   // mem I/O access enable and bus master enable
-  write_pci(pci_bus, pci_dev, pci_func, 0x04, sizeof(bit16u), (1 << 2) | (1 << 1));
+  pci_write_word(pci_bus, pci_dev, pci_func, 0x04, (1 << 2) | (1 << 1));
   
   // set up the memmapped I/O access
   // The AHCI controller uses the dword at base5 and is memmapped access
@@ -2122,7 +2178,7 @@ bool ata_sata_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit
         case SATA_MODE_AHCI:
           // switch to AHCI mode and fall through
           if ((addr_map & 3) == 0) {
-            write_pci(pci_bus, pci_dev, pci_func, 0x90, sizeof(bit16u), ((addr_map & ~0x00C0) | (SATA_MODE_AHCI << 6)));
+            pci_write_word(pci_bus, pci_dev, pci_func, 0x90, ((addr_map & ~0x00C0) | (SATA_MODE_AHCI << 6)));
             _farpokel(cntrlr->base_selector, HBA_HC_Glob_host_cntrl, 0x80000000); // make sure the EA bit is set
             printf("Switching to AHCI mode...\n");
             // and fall through
@@ -2143,7 +2199,7 @@ bool ata_sata_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit
         case SATA_MODE_IDE:
           // switch to IDE mode
           if ((addr_map & 3) == 0) {
-            write_pci(pci_bus, pci_dev, pci_func, 0x90, sizeof(bit16u), ((addr_map & ~0x00C0) | (SATA_MODE_IDE << 6)));
+            pci_write_word(pci_bus, pci_dev, pci_func, 0x90, ((addr_map & ~0x00C0) | (SATA_MODE_IDE << 6)));
             _farpokel(cntrlr->base_selector, HBA_HC_Glob_host_cntrl, 0x00000000); // make sure the EA bit is clear
             printf("Switching to IDE mode...\n");
             return ata_ide_detect(cntrlr, pci_bus, pci_dev, pci_func, str);
@@ -2160,7 +2216,7 @@ bool ata_sata_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit
         case SATA_MODE_IDE:
           // switch to IDE mode
           if ((addr_map & 3) == 0) {
-            write_pci(pci_bus, pci_dev, pci_func, 0x90, sizeof(bit16u), ((addr_map & ~0x00C0) | (SATA_MODE_IDE << 6)));
+            pci_write_word(pci_bus, pci_dev, pci_func, 0x90, ((addr_map & ~0x00C0) | (SATA_MODE_IDE << 6)));
             _farpokel(cntrlr->base_selector, HBA_HC_Glob_host_cntrl, 0x00000000); // make sure the EA bit is clear
             printf("Switching to IDE mode...\n");
             return ata_ide_detect(cntrlr, pci_bus, pci_dev, pci_func, str);
@@ -2172,7 +2228,7 @@ bool ata_sata_detect(struct S_ATA_CNTRLR *cntrlr, const bit8u pci_bus, const bit
           // switch to AHCI mode
           if ((addr_map & 3) == 0) {
             printf("Switching to AHCI mode...\n");
-            write_pci(pci_bus, pci_dev, pci_func, 0x90, sizeof(bit16u), ((addr_map & ~0x00C0) | (SATA_MODE_AHCI << 6)));
+            pci_write_word(pci_bus, pci_dev, pci_func, 0x90, ((addr_map & ~0x00C0) | (SATA_MODE_AHCI << 6)));
             _farpokel(cntrlr->base_selector, HBA_HC_Glob_host_cntrl, 0x80000000); // make sure the EA bit is set
           } else {
             printf("ADDR_MAP:MV != 0.  Not switching to AHCI mode...\n");
@@ -2512,10 +2568,10 @@ bool sata_gain_ownership(struct S_ATA_CNTRLR *cntrlr) {
 bit32u sata_get_port_type(struct S_ATA *ata) {
   bit32u ssts = _farpeekl(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxSSTS));
   
-	if (HBA_PORT_SSTS_DET(ssts) != HBA_PORT_PxSSTS_DET_PRES_PHY)
-		return SATA_SIG_NONE;
-	if (HBA_PORT_SSTS_IPM(ssts) != HBA_PORT_PxSSTS_IPM_ACTIVE)
-		return SATA_SIG_NON_ACT;
+  if (HBA_PORT_SSTS_DET(ssts) != HBA_PORT_PxSSTS_DET_PRES_PHY)
+    return SATA_SIG_NONE;
+  if (HBA_PORT_SSTS_IPM(ssts) != HBA_PORT_PxSSTS_IPM_ACTIVE)
+    return SATA_SIG_NON_ACT;
   
   return _farpeekl(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxSIG));
 }
@@ -2622,7 +2678,7 @@ void sata_start_cmd(struct S_ATA *ata) {
     }
   }
   
-	// Set FRE (bit4) and ST (bit0)
+  // Set FRE (bit4) and ST (bit0)
   dword = _farpeekl(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxCMD));
   _farpokel(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxCMD),
     dword | HBA_PORT_CMD_fre(1) | HBA_PORT_CMD_st(1));
@@ -2661,12 +2717,12 @@ bool sata_stop_cmd(struct S_ATA *ata) {
       return FALSE;
   }
   
-	// If FRE (bit4) is set, clear it 
+  // If FRE (bit4) is set, clear it 
   if (HBA_PORT_CMD_FRE(_farpeekl(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxCMD)))) {
     _farpokel(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxCMD),
       _farpeekl(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxCMD)) & ~HBA_PORT_CMD_fre(1));
     
-	  // Wait until FR (bit14) is cleared or 500 milliseconds
+    // Wait until FR (bit14) is cleared or 500 milliseconds
     timer = 500;
     while (HBA_PORT_CMD_FR(_farpeekl(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxCMD)))) {
       mdelay(1);
@@ -2753,7 +2809,7 @@ bool sata_tx_rx_data(const struct S_ATA *ata, const bool dir, const bit8u comman
     return FALSE;
   }
   
-	// command list entry
+  // command list entry
   ata->cntrlr->drive[ata->drv].cmd_list[slot].prdbc = 0;
   ata->cntrlr->drive[ata->drv].cmd_list[slot].dword0 = CMD_LIST_prdtl(prdts)  |    // PRDT entries count
                                               CMD_LIST_a(is_atapi)            |    // ATAPI command ?
@@ -2766,9 +2822,9 @@ bool sata_tx_rx_data(const struct S_ATA *ata, const bool dir, const bit8u comman
   // command table for this slot
   memset(&cmd_table, 0, sizeof(struct S_HBA_CMD_TABLE));
   
-	struct S_FIS_REG_H2D *cmd_fis = (struct S_FIS_REG_H2D *) &cmd_table.cfis;
+  struct S_FIS_REG_H2D *cmd_fis = (struct S_FIS_REG_H2D *) &cmd_table.cfis;
   cmd_fis->fis_type = FIS_TYPE_REG_H2D;
-	cmd_fis->flags = FIS_REG_H2D_c(1);   // Command
+  cmd_fis->flags = FIS_REG_H2D_c(1);   // Command
   if (is_atapi) {
     // is ATAPI command, so initialize Command Table area
     memcpy(cmd_table.acmd, packet, 16); 
@@ -2791,21 +2847,21 @@ bool sata_tx_rx_data(const struct S_ATA *ata, const bool dir, const bit8u comman
    *  A 28-bit command will only use LBA0, 1, 2, and half of dev_head.
    *  A 48-bit command will only use LBA0, 1, 2, 3, 4, and 5, not dev_head.
    */
-	cmd_fis->lba_0 = (bit8u) ((lba & (bit64u) 0x0000000000FF) >>  0);
-	cmd_fis->lba_1 = (bit8u) ((lba & (bit64u) 0x00000000FF00) >>  8);
-	cmd_fis->lba_2 = (bit8u) ((lba & (bit64u) 0x000000FF0000) >> 16);
+  cmd_fis->lba_0 = (bit8u) ((lba & (bit64u) 0x0000000000FF) >>  0);
+  cmd_fis->lba_1 = (bit8u) ((lba & (bit64u) 0x00000000FF00) >>  8);
+  cmd_fis->lba_2 = (bit8u) ((lba & (bit64u) 0x000000FF0000) >> 16);
   
   cmd_fis->dev_head = 0xA0
     | ATA_DH_ISLBA
     | ((bit8u) ((lba & (bit64u) 0x00000F000000) >> 24));
   
-	cmd_fis->lba_3 = (bit8u) ((lba & (bit64u) 0x0000FF000000) >> 24);
-	cmd_fis->lba_4 = (bit8u) ((lba & (bit64u) 0x00FF00000000) >> 32);
-	cmd_fis->lba_5 = (bit8u) ((lba & (bit64u) 0xFF0000000000) >> 40);
+  cmd_fis->lba_3 = (bit8u) ((lba & (bit64u) 0x0000FF000000) >> 24);
+  cmd_fis->lba_4 = (bit8u) ((lba & (bit64u) 0x00FF00000000) >> 32);
+  cmd_fis->lba_5 = (bit8u) ((lba & (bit64u) 0xFF0000000000) >> 40);
   cmd_fis->features_exp = 0x00;
   
-	cmd_fis->sect_count_low  = (bit8u) ((count & 0x00FF) >> 0);
-	cmd_fis->sect_count_high = (bit8u) ((count & 0xFF00) >> 8);
+  cmd_fis->sect_count_low  = (bit8u) ((count & 0x00FF) >> 0);
+  cmd_fis->sect_count_high = (bit8u) ((count & 0xFF00) >> 8);
   cmd_fis->reserved = 0x00;
   cmd_fis->control = 0x08; // setting bit 3 ensures that this FIS gets sent since the Device Control
                            //  register will have bit 3 cleared.  A FIS will only be sent if the
@@ -2829,12 +2885,12 @@ bool sata_tx_rx_data(const struct S_ATA *ata, const bool dir, const bit8u comman
       phy_address += cnt;
       cnt = 0;
     }
-	}
+  }
   
   // store it to physical memory
   dosmemput(&cmd_table, sizeof(struct S_HBA_CMD_TABLE), ata->cntrlr->drive[ata->drv].cmd_list[slot].ctba);
   
-	// wait until the port is no longer busy before issuing a new command
+  // wait until the port is no longer busy before issuing a new command
   spin = 0;
   while ((_farpeekl(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxTFD)) & (ATA_STATUS_BSY | ATA_STATUS_DRQ)) && (spin < 1000000))
     spin++;
@@ -2852,11 +2908,11 @@ bool sata_tx_rx_data(const struct S_ATA *ata, const bool dir, const bit8u comman
   
   // Wait for completion
   while (1)	{
-		// In some longer duration reads, it may be helpful to spin on the DPS bit 
-		// in the PxIS port field as well (1 << 5)
-		if ((_farpeekl(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxCI)) & (1 << slot)) == 0) 
-			break;
-		// Task file error
+    // In some longer duration reads, it may be helpful to spin on the DPS bit 
+    // in the PxIS port field as well (1 << 5)
+    if ((_farpeekl(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxCI)) & (1 << slot)) == 0) 
+      break;
+    // Task file error
     if (HBA_PORT_IS_TFES(_farpeekl(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxIS)))) {
       printf("Disk error\n");
       ret = FALSE;
@@ -2864,7 +2920,7 @@ bool sata_tx_rx_data(const struct S_ATA *ata, const bool dir, const bit8u comman
     }
   }
   
-	// Check again
+  // Check again
   if (HBA_PORT_IS_TFES(_farpeekl(ata->cntrlr->base_selector, HBA_PORT_ADDR(ata->drv, HBA_PORT_PxIS)))) {
     printf("Disk error\n");
     ret = FALSE;
