@@ -1,30 +1,78 @@
-/*             Author: Benjamin David Lunt
- *                     Forever Young Software
- *                     Copyright (c) 1984-2016
- *  
- *  This code is included on the disc that is included with the book
- *   FYSOS: Input and Output Devices, and is for that purpose only.  You have
- *   the right to use it for learning purposes only.  You may not modify it for
- *   redistribution for any other purpose unless you have written permission
- *   from the author.
+/*
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
+
+/*
+ *  SERIAL.EXE
  *
- *  You may modify and use it in your own projects as long as they are
- *   for non profit only and not distributed.  Any project for profit that 
- *   uses this code must have written permission from the author.
+ *  Assumptions/prerequisites:
+ *   - This example is coded and compiled for 16-bit DOS using a 16-bit compiler.
+ *   - There is no need for a DPMI driver.
+ *   - All variables and numbers are 16-bit.
+ *      char = bit8s = byte = 8-bits  (AL)
+ *       int = bit16s = word = 16-bits (AX)
+ *      long = bit32s = dword = 32-bits (DX:AX)
  *
- *  compile using MS QuickC 2.5
+ *  Last updated: 15 July 2020
  *
- *  usage:
+ *  Compile using MS QuickC 2.5
+ *
+ *  Usage:
  *    serial
- *    
- * Notes:
- *  - This example is coded and compiled for 16-bit DOS using a 16-bit compiler.
- *  - There is no need for a DPMI driver.
- *  - All variables and numbers are 16-bit.
- *     char = bit8s = byte = 8-bits  (AL)
- *      int = bit16s = word = 16-bits (AX)
- *     long = bit32s = dword = 32-bits (DX:AX)
- *
  */
 
 #include <conio.h>
@@ -39,13 +87,13 @@
 #include "serial.h"
 
 struct DET_SER {
-	bit16u base;      // base of this controller
-	bit8u  irq;       // irq of port
+  bit16u base;      // base of this controller
+  bit8u  irq;       // irq of port
 } det_ser[SER_NUM] = {
-	{ 0x03F8, 4 },
-	{ 0x02F8, 3 },
-	{ 0x03E8, 4 },
-	{ 0x02E8, 3 }
+  { 0x03F8, 4 },
+  { 0x02F8, 3 },
+  { 0x03E8, 4 },
+  { 0x02E8, 3 }
 };
 
 // must be same as ENUM
@@ -70,9 +118,9 @@ int main(int argc, char *arg[]) {
   char type_str[STR_LEN + 1]; // must be at least 8+1 bytes
   
   printf("Detect Serial Controller and Mouse.    v1.00.00\n"
-         "Forever Young Software  --  Copyright 1984-2016\n\n");
+         "Forever Young Software  --  Copyright 1984-2020\n\n");
   
-	for (curser=0; curser<SER_NUM; curser++) {
+  for (curser=0; curser<SER_NUM; curser++) {
     info.base = det_ser[curser].base;
     info.irq_num = det_ser[curser].irq;
     info.type = SER_TYPE_NONE;
@@ -80,60 +128,60 @@ int main(int argc, char *arg[]) {
     // write 0x5A and 0xA5 to BAUD RATE LOW register
     //  to see if we can read it back
     ser_set_dlab(info.base, 1);
-		if (ser_iotest(info.base, 0x5A) && ser_iotest(info.base, 0xA5)) {
-			info.type = SER_TYPE_8250;  // we at least have a controller of some kind (could be a 8250)
+    if (ser_iotest(info.base, 0x5A) && ser_iotest(info.base, 0xA5)) {
+      info.type = SER_TYPE_8250;  // we at least have a controller of some kind (could be a 8250)
       
-			// now check if the scratch pad register is working (missing on 8250)
+      // now check if the scratch pad register is working (missing on 8250)
       ser_set_dlab(info.base, 0);
-			if (ser_iotest(info.base + SER_SCRATCH, 0x5A) && ser_iotest(info.base + SER_SCRATCH, 0xA5)) {
-				// check for 1655x and 82510 FIFO versions
-				if ((inpb(info.base + SER_INT_ID) & 0xC0) != 0xC0) {
-					// try to enable the FIFO on 1655x
-					outpb(info.base + SER_INT_ID, 0x01);
-					byte = inpb(info.base + SER_INT_ID) & 0xC0;
-					outpb(info.base + SER_INT_ID, 0x00);
-					if (byte != 0xC0) {
-						if (byte == 0x40)
-							info.type = SER_TYPE_16550AF_C_CF;
-						else if (byte == 0x80)
-							info.type = SER_TYPE_16550_BAD_FIFO;
-						else {
-							// not 16550, so now check for possible 82510 by switching to
-							// bank 3 (which is only possible on a 82510)
-							outpb(info.base + SER_ALT_FUNC, 0x60);
-							byte = inpb(info.base + SER_ALT_FUNC);
-							outpb(info.base + SER_ALT_FUNC, 0x00);
-							if ((byte & 0x60) != 0x60) {
-								// no FIFO, so UART is 8250A or 16450 variant
-								// Check if power down bit functions on this UART,
-								//  in the modem control register
+      if (ser_iotest(info.base + SER_SCRATCH, 0x5A) && ser_iotest(info.base + SER_SCRATCH, 0xA5)) {
+        // check for 1655x and 82510 FIFO versions
+        if ((inpb(info.base + SER_INT_ID) & 0xC0) != 0xC0) {
+          // try to enable the FIFO on 1655x
+          outpb(info.base + SER_INT_ID, 0x01);
+          byte = inpb(info.base + SER_INT_ID) & 0xC0;
+          outpb(info.base + SER_INT_ID, 0x00);
+          if (byte != 0xC0) {
+            if (byte == 0x40)
+              info.type = SER_TYPE_16550AF_C_CF;
+            else if (byte == 0x80)
+              info.type = SER_TYPE_16550_BAD_FIFO;
+            else {
+              // not 16550, so now check for possible 82510 by switching to
+              // bank 3 (which is only possible on a 82510)
+              outpb(info.base + SER_ALT_FUNC, 0x60);
+              byte = inpb(info.base + SER_ALT_FUNC);
+              outpb(info.base + SER_ALT_FUNC, 0x00);
+              if ((byte & 0x60) != 0x60) {
+                // no FIFO, so UART is 8250A or 16450 variant
+                // Check if power down bit functions on this UART,
+                //  in the modem control register
                 if (ser_can_pwrdown(info.base))
                   info.type = SER_TYPE_16C1450;
-								else 
+                else 
                   info.type = SER_TYPE_8250A_16450;
-							} else 
+              } else 
                 info.type = SER_TYPE_82510;
-						}
-						goto ser_done;
-					} // this needs to fall through
-				} // this too
-				// FIFO detected, must be 16550 series
+            }
+            goto ser_done;
+          } // this needs to fall through
+        } // this too
+        // FIFO detected, must be 16550 series
         ser_set_dlab(info.base, 1);
-				test = ser_iotest(info.base + SER_ALT_FUNC, 0x07);
-				outpb(info.base + SER_ALT_FUNC, 0x00);
-				if (!test) {
-					// Check if power down bit functions on this UART, in the modem control register (only on 16C1550)
+        test = ser_iotest(info.base + SER_ALT_FUNC, 0x07);
+        outpb(info.base + SER_ALT_FUNC, 0x00);
+        if (!test) {
+          // Check if power down bit functions on this UART, in the modem control register (only on 16C1550)
           if (ser_can_pwrdown(info.base))
             info.type = SER_TYPE_16C1550;
-					else 
+          else 
             info.type = SER_TYPE_16550AF_C_CF;
-				} else 
+        } else 
           info.type = SER_TYPE_16552_DUAL;
-			}
-		}
+      }
+    }
     
 ser_done:
-		if (info.type > SER_TYPE_NONE) {
+    if (info.type > SER_TYPE_NONE) {
       ser_set_dlab(info.base, 0);
       
       // reset UART (if it is a 16C1450)
@@ -207,7 +255,7 @@ ser_done:
     } else {
       printf(" Did not find serial controller at: 0x%04X\n", info.base);
     }
-	}
+  }
 }
 
 // Set or clear the Divisor Latch Access bit
@@ -220,8 +268,8 @@ void ser_set_dlab(const bit16u base, const bool set) {
 
 // Write given value to port, then read back value and compare to original value.
 bool ser_iotest(const bit16u port, const bit8u val) {
-	outpb(port, val);
-	return (inpb(port) == val);
+  outpb(port, val);
+  return (inpb(port) == val);
 }
 
 // see if the controller can power down.
@@ -230,9 +278,9 @@ bool ser_can_pwrdown(const bit16u base) {
   bit8u byte;
   
   ser_set_dlab(base, 0);
-	outpb(base + SER_MODEM_CNTRL, 0x80);
-	byte = inpb(base + SER_MODEM_CNTRL);
-	outpb(base + SER_MODEM_CNTRL, 0x00);
+  outpb(base + SER_MODEM_CNTRL, 0x80);
+  byte = inpb(base + SER_MODEM_CNTRL);
+  outpb(base + SER_MODEM_CNTRL, 0x00);
   return ((byte & 0x80) == 0x80);
 }
 
