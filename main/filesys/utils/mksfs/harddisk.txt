@@ -1,6 +1,6 @@
 # Resource file used with MKSFS for the FILESYS book 
 #            by Benjamin David Lunt
-#  Copyright 1984-2017  All Rights Reserved
+#  Copyright 1984-2020  All Rights Reserved
 #
 #  mbrfile=filename   - This is the path/filename of the mbr file to use (should be 1 sector in length)
 #  bootfile=filename  - This is the path/filename of the boot code 
@@ -21,7 +21,7 @@
 imgfile=  D:\fysos\main\filesys\images\sfs_hd.img
 
 # MBR file
-mbrfile=D:\Books\fysos\main\syscore\source\mbr\mbr.bin
+mbrfile=D:\fysos\main\syscore\source\mbr\mbr.bin
 
 # Boot file.  Should be a multiple of 512 bytes
 bootfile= imgfile=  D:\Path\to\your\boot\source\code\sfs_hd.bin

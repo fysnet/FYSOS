@@ -1,6 +1,6 @@
 # Resource file used with MKSFS for the FILESYS book 
 #            by Benjamin David Lunt
-#  Copyright 1984-2017  All Rights Reserved
+#  Copyright 1984-2020  All Rights Reserved
 #
 #  mbrfile=filename   - This is the path/filename of the mbr file to use (should be 1 sector in length)
 #  bootfile=filename  - This is the path/filename of the boot code 
