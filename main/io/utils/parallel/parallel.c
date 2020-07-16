@@ -118,7 +118,7 @@ int main(int argc, char *arg[]) {
   int curpar = 0;
   
   printf("Detect Parallel Port Controllers.    v1.00.00\n"
-         "Forever Young Software -- Copyright 1984-2016\n\n");
+         "Forever Young Software -- Copyright 1984-2020\n\n");
   
   while (det_par[curpar].base) {
     base = det_par[curpar].base;
