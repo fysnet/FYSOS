@@ -1,42 +1,81 @@
-/*             Author: Benjamin David Lunt
- *                     Forever Young Software
- *                     Copyright (c) 1984-2015
- *  
- *  This code is included on the disc that is included with the book
- *   FYSOS: Media Storage Devices, and is for that purpose only.  You have the
- *   right to use it for learning purposes only.  You may not modify it for
- *   redistribution for any other purpose unless you have written permission
- *   from the author.
+/*
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
+
+/*
+ *  FDC_TYPE.EXE
+ *   Will probe the Floppy Disk Controller and return the type found.
  *
- *  You may modify and use it in your own projects as long as they are
- *   for non profit only and not distributed.  Any project for profit that 
- *   uses this code must have written permission from the author.
+ *  Assumptions/prerequisites:
+ *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must have a pre-installed 32-bit DPMI.
+ *   - Will produce unknown behavior if ran under existing operating system other
+ *     than mentioned here.
+ *   - Must have full access to said hardware.
  *
- *  compile using gcc (DJGPP)
+ *  Last updated: 15 July 2020
+ *
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os fdc_type.cpp -o fdc_type.exe -s
  *
- *  usage:
+ *  Usage:
  *    fdc_type [-v]
  *
  *    -v indicates verbose output
- *
- *  Notes:
- *   The 765A does not like us reading from the Data Register (+ 05) if there
- *    is no data to be read.  A controller reset must take place before we can
- *    trust any other data.
- *
- *   This code is written for DOS using a DPMI.  This is soley for the memory
- *    allocation.  Since we do not allocation more than 4096 bytes, it could
- *    easily be written so that it does not need the DOS DPMI.  However, the
- *    current Interrupt Handling would need to be modified also.
- *
- *   It is not my intention to show how to interact with the Host Operating
- *    System, when using this utility as is.  It is my intent to show how you
- *    can code you driver, leaving the memory allocation and interrupt handling
- *    to you.
- *
- *   I simply chose DOS and a DPMI since that is the usualy platform I test with.
- *
  */
 
 #include <conio.h>
@@ -54,6 +93,7 @@
 
 #include "..\include\ctype.h"
 #include "..\include\dma.h"
+#include "..\include\pci.h"
 
 #include "fdc_type.h"
 
@@ -183,9 +223,9 @@ int main(int argc, char *argv[]) {
       }
       
       // reset the controller
-      outp(s_fdc[j].base + FDC_DOR, 0x00);  // reset drive
+      outpb(s_fdc[j].base + FDC_DOR, 0x00);  // reset drive
       delay(2);                             // hold for 2 milliseconds
-      outp(s_fdc[j].base + FDC_DOR, 0x0C);  // release reset
+      outpb(s_fdc[j].base + FDC_DOR, 0x0C);  // release reset
     }
   }
   
@@ -201,32 +241,32 @@ bool fdc_detect(struct S_FLOPPY_CNTRLR *fdc) {
   clock_t delayms;
   
   // initial reading should not be 0xFF
-  if (inp(fdc->base + FDC_MSR) == 0xFF)
+  if (inpb(fdc->base + FDC_MSR) == 0xFF)
     return FALSE;
   
   // the minimum duration of the reset should be 500ns.
   // A write duration to an ISA I/O port takes longer than that.
   // Therefore, if we write it twice, we will be sure to be long enough.
-  outp(fdc->base + FDC_DOR, 0x00); // reset drive
-  outp(fdc->base + FDC_DOR, 0x00);
+  outpb(fdc->base + FDC_DOR, 0x00); // reset drive
+  outpb(fdc->base + FDC_DOR, 0x00);
   
-  outp(fdc->base + FDC_DOR, 0x04); // release reset
+  outpb(fdc->base + FDC_DOR, 0x04); // release reset
   
   // If FDC_MSR:RQM set and FDC_MSR:CB clear before 200 ms,
   //  then controller found
   delayms = clock() + 200;
   while (delayms > clock()) {
-    if (inp(fdc->base + FDC_MSR) == 0x80)
+    if (inpb(fdc->base + FDC_MSR) == 0x80)
       break;
   }
   
   // if the controller isn't read for input after the delay, return FALSE
-  if (inp(fdc->base + FDC_MSR) != 0x80)
+  if (inpb(fdc->base + FDC_MSR) != 0x80)
     return FALSE;
   
   // get the initial register value from DIR
   //  to pass along to the fdc_get_type() function
-  dir = inp(fdc->base + FDC_DIR);
+  dir = inpb(fdc->base + FDC_DIR);
   
   // now see if it will handle a command
   // send the specify command
@@ -246,8 +286,8 @@ bool fdc_detect(struct S_FLOPPY_CNTRLR *fdc) {
            " Data (FIFO) Register: %02X\n"
            "             Reserved: %02X\n"
            "        Digital Input: %02X\n",
-      inp(fdc->base + 0), inp(fdc->base + 1), inp(fdc->base + 2), inp(fdc->base + 3),
-      inp(fdc->base + 4), inp(fdc->base + 5), inp(fdc->base + 6), inp(fdc->base + 7));
+      inpb(fdc->base + 0), inpb(fdc->base + 1), inpb(fdc->base + 2), inpb(fdc->base + 3),
+      inpb(fdc->base + 4), inpb(fdc->base + 5), inpb(fdc->base + 6), inpb(fdc->base + 7));
   
   // if we get here, a controller was found
   // get the type of controller
@@ -529,7 +569,7 @@ bool det_floppy_drive(struct S_FLOPPY *fdd) {
       fdc_command(fdd->cntrlr, buf, 3);
       
       // set data rate speed
-      outp(fdd->cntrlr->base + FDC_CCR, fdd->trans_speed);
+      outpb(fdd->cntrlr->base + FDC_CCR, fdd->trans_speed);
     }
     
     // Verify the drive can "automatically seek" before a read and write.
@@ -618,7 +658,7 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
   
   // TODO: If 82077AA or better (may need index into types), 
   // send 0x00 to port 0x3F7 (500kbps)
-  //outp(fdd->cntrlr->base + FDC_DSR, 0x00);
+  //outpb(fdd->cntrlr->base + FDC_DSR, 0x00);
   
   // Recalibrate (Make sure we are at Track Zero)
   buf[0] = FDC_CMD_RECAL;
@@ -929,9 +969,9 @@ bool fdd_init_controller(struct S_FLOPPY_CNTRLR *fdc) {
   bit8u buf[16];
   
   // reset the controller
-  outp(fdc->base + FDC_DOR, 0x00);   // reset
+  outpb(fdc->base + FDC_DOR, 0x00);  // reset
   delay(2);                          // hold for 2 milliseconds
-  outp(fdc->base + FDC_DOR, 0x0C);   // release
+  outpb(fdc->base + FDC_DOR, 0x0C);  // release
   delay(2);                          // hold for 2 milliseconds
   
   // wait for the interrupt, then sense an interrupt on all four drives
@@ -967,17 +1007,17 @@ void fdc_motor_cntr(struct S_FLOPPY *fdd, const bool on, const bool wait) {
   
   // the FDC_TYPE_765A/B's DOR register is read only, so we can't tell if the drive was on or not
   // therefore simulate a read of 0x00
-  bit8u dor = ((fdd->cntrlr->type == FDC_TYPE_765A) || (fdd->cntrlr->type == FDC_TYPE_765B)) ? 0 : inp(fdd->cntrlr->base + FDC_DOR);
+  bit8u dor = ((fdd->cntrlr->type == FDC_TYPE_765A) || (fdd->cntrlr->type == FDC_TYPE_765B)) ? 0 : inpb(fdd->cntrlr->base + FDC_DOR);
   
   const bool was_off = (dor & (0x10 << fdd->drv)) ? FALSE: TRUE;
   if (on) {
     if (was_off) {
-      outp(fdd->cntrlr->base + FDC_DOR, ((dor & 0xF0) | ((0x10 << fdd->drv) | 0x0C | fdd->drv)));
+      outpb(fdd->cntrlr->base + FDC_DOR, ((dor & 0xF0) | ((0x10 << fdd->drv) | 0x0C | fdd->drv)));
       if (wait)
         delay(FDC_SPINUP);
     }
   } else
-    outp(fdd->cntrlr->base + FDC_DOR, 0x0C | (dor & ~(0x10 << fdd->drv)));
+    outpb(fdd->cntrlr->base + FDC_DOR, 0x0C | (dor & ~(0x10 << fdd->drv)));
 }
 
 volatile bool fdc_drv_stats = FALSE;
@@ -986,7 +1026,7 @@ volatile bool fdc_drv_stats = FALSE;
 
 void floppy_irq(void) {
   fdc_drv_stats = TRUE;
-  outp(0x20, 0x20); // EOI
+  outpb(0x20, 0x20); // EOI
 }
 
 /*
@@ -1065,7 +1105,7 @@ bool fdc_wait_int(int timeout) {
 bool fdc_want_more(struct S_FLOPPY_CNTRLR *fdc) {
   int timeout = 100;
   while (timeout) {
-    if ((inp(fdc->base + FDC_MSR) & 0xC0) == 0x80)
+    if ((inpb(fdc->base + FDC_MSR) & 0xC0) == 0x80)
       return TRUE;
     delay(1); // hold for 1 millisecond
     timeout--;
@@ -1079,8 +1119,8 @@ bool fdc_want_more(struct S_FLOPPY_CNTRLR *fdc) {
 bool write_fdc(struct S_FLOPPY_CNTRLR *fdc, const bit8u val) {
   int timeout = 1000;
   while (timeout) {
-    if ((inp(fdc->base + FDC_MSR) & 0xC0) == 0x80) {
-      outp(fdc->base + FDC_CSR, val);      
+    if ((inpb(fdc->base + FDC_MSR) & 0xC0) == 0x80) {
+      outpb(fdc->base + FDC_CSR, val);      
       return TRUE;
     }
     delay(1); // hold for 1 millisecond
@@ -1117,12 +1157,12 @@ bool fdc_command(struct S_FLOPPY_CNTRLR *fdc, const bit8u *buf, bit8u cnt) {
   bit8u  cur = 0;
   int timeout = FDC_TIMEOUT_CNT;
   while (timeout) {
-    if (inp(fdc->base + FDC_MSR) & 0x80) {       // if not busy
-      if (inp(fdc->base + FDC_MSR) & 0x40) {     // direction?
-        inp(fdc->base + FDC_CSR);
+    if (inpb(fdc->base + FDC_MSR) & 0x80) {       // if not busy
+      if (inpb(fdc->base + FDC_MSR) & 0x40) {     // direction?
+        inpb(fdc->base + FDC_CSR);
         continue;
       } else {
-        outp(fdc->base + FDC_CSR, buf[cur]);
+        outpb(fdc->base + FDC_CSR, buf[cur]);
         if (++cur == cnt)
           return TRUE;
       }
@@ -1140,7 +1180,7 @@ bit8u fdc_return(struct S_FLOPPY_CNTRLR *fdc, const bit8u cnt, bit8u *buf) {
   int timeout = FDC_TIMEOUT_CNT;
   
   while (1) {
-    while (((inp(fdc->base + FDC_MSR) & 0xC0) != 0xC0) && timeout) {
+    while (((inpb(fdc->base + FDC_MSR) & 0xC0) != 0xC0) && timeout) {
       delay(1); // hold for 1 millisecond
       timeout--;
     }
@@ -1148,7 +1188,7 @@ bit8u fdc_return(struct S_FLOPPY_CNTRLR *fdc, const bit8u cnt, bit8u *buf) {
       fdd_init_controller(fdc);
       break;
     } else {
-      buf[cur++] = inp(fdc->base + FDC_CSR);
+      buf[cur++] = inpb(fdc->base + FDC_CSR);
       if (cur == cnt) break;  // don't do more than requested
       timeout = FDC_TIMEOUT_CNT;
     }
@@ -1276,7 +1316,7 @@ bool fdd_inserted(struct S_FLOPPY *fdd, struct S_BLOCK_STATUS *status) {
    * and reinserted.
    */ 
   fdc_motor_cntr(fdd, MOTOR_ON, MOTOR_NO_WAIT);  // turn on motor, no wait
-  if (inp(fdd->cntrlr->base + FDC_DIR) & FDC_DIR_CHNG_LINE) {
+  if (inpb(fdd->cntrlr->base + FDC_DIR) & FDC_DIR_CHNG_LINE) {
     // seek to track 1
     buf[0] = FDC_CMD_SEEK;
     buf[1] = (0 << 2) | fdd->drv;
@@ -1293,7 +1333,7 @@ bool fdd_inserted(struct S_FLOPPY *fdd, struct S_BLOCK_STATUS *status) {
     // wait for the head to settle
     delay(FDC_SLT_AFTER_SEEK);
     
-    status->inserted = ((inp(fdd->cntrlr->base + FDC_DIR) & FDC_DIR_CHNG_LINE) == 0);
+    status->inserted = ((inpb(fdd->cntrlr->base + FDC_DIR) & FDC_DIR_CHNG_LINE) == 0);
     status->changed = TRUE;
   } else {
     status->inserted = TRUE;
@@ -1366,31 +1406,31 @@ bool fdc_get_cur_pos(struct S_FLOPPY *fdd, const bit8u hs, bit32u *cyl, bit32u *
 void dma_init_dma(const bit8u dmacmd, const bit32u address, bit16u size) {
   
   // mask this channel for no interruptions
-  outp(DMA_MASK_REG, (1<<2) | CHANNEL_FDC);  // DMA-1 Mask Register Bit Port (8-bit)
+  outpb(DMA_MASK_REG, (1<<2) | CHANNEL_FDC);  // DMA-1 Mask Register Bit Port (8-bit)
   
   //  DMA-1 Clear Byte Flip-Flop (write anything)
-  outp(DMA_FLIP_FLOP, 0xFF);
+  outpb(DMA_FLIP_FLOP, 0xFF);
   
   // low 16-bits of address
-  outp(0x04, (bit8u) ((address >>  0) & 0xFF)); // DMA-1 Channel 2 Output (low byte)
-  outp(0x04, (bit8u) ((address >>  8) & 0xFF)); // DMA-1 Channel 2 Output (high byte)
+  outpb(0x04, (bit8u) ((address >>  0) & 0xFF)); // DMA-1 Channel 2 Output (low byte)
+  outpb(0x04, (bit8u) ((address >>  8) & 0xFF)); // DMA-1 Channel 2 Output (high byte)
   
   //  DMA-1 Clear Byte Flip-Flop (write anything)
-  outp(DMA_FLIP_FLOP, 0xFF);
+  outpb(DMA_FLIP_FLOP, 0xFF);
   
   // size of transfer
   size--;  // size is always 1 less from sent size
-  outp(0x05, (bit8u) ((size    >>  0) & 0xFF)); // DMA-1 Channel 2 Output size (low byte)
-  outp(0x05, (bit8u) ((size    >>  8) & 0xFF)); // DMA-1 Channel 2 Output size (high byte)
+  outpb(0x05, (bit8u) ((size    >>  0) & 0xFF)); // DMA-1 Channel 2 Output size (low byte)
+  outpb(0x05, (bit8u) ((size    >>  8) & 0xFF)); // DMA-1 Channel 2 Output size (high byte)
   
   // page register (bits 23-16 of address)
-  outp(0x81, (bit8u) ((address >> 16) & 0xFF)); // DMA-1 Channel 2 Output (page value)
+  outpb(0x81, (bit8u) ((address >> 16) & 0xFF)); // DMA-1 Channel 2 Output (page value)
   
   // write command code
-  outp(DMA_MODE_REG, dmacmd | CHANNEL_FDC);     // Set DMA-1 Mode Register port
+  outpb(DMA_MODE_REG, dmacmd | CHANNEL_FDC);     // Set DMA-1 Mode Register port
   
   // select (unmask the channel)
-  outp(DMA_MASK_REG, CHANNEL_FDC);              // DMA-1 Mask Register Bit Port (8-bit)
+  outpb(DMA_MASK_REG, CHANNEL_FDC);              // DMA-1 Mask Register Bit Port (8-bit)
 }
 
 // simply parses the command line parameters for specific values
