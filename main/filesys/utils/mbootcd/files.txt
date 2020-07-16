@@ -1,5 +1,5 @@
 # Resource file used with MBOOTCD for the FILESYS book by Benjamin David Lunt
-#  Copyright 1984-2018  All Rights Reserved
+#  Copyright 1984-2020  All Rights Reserved
 #
 #  mbrfile=filename   - Ignored
 #  bootfile=filename  - Ignored
