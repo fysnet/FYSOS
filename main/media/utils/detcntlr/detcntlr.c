@@ -1,35 +1,88 @@
-/*             Author: Benjamin David Lunt
- *                     Forever Young Software
- *                     Copyright (c) 1984-2015
- *  
- *  This code is included on the disc that is included with the book
- *   FYSOS: Media Storage Devices, and is for that purpose only.  You have the
- *   right to use it for learning purposes only.  You may not modify it for
- *   redistribution for any other purpose unless you have written permission
- *   from the author.
+/*
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
+
+/*
+ *  DETCNTLR.EXE
+ *   Will enumerate through the PCI, finding all (S)ATA controllers.
  *
- *  You may modify and use it in your own projects as long as they are
- *   for non profit only and not distributed.  Any project for profit that 
- *   uses this code must have written permission from the author.
+ *  Assumptions/prerequisites:
+ *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must have a pre-installed 32-bit DPMI.
+ *   - Will produce unknown behavior if ran under existing operating system other
+ *     than mentioned here.
+ *   - Must have full access to said hardware.
+ *   - This code assumes the attached device is a high-speed device.  If a full-
+ *     or low-speed device is attached, the device will not be found by this code.
+ *     Use GD_UHCI or GD_OHCI for full- and low-speed devices.
  *
- *  compile using gcc (DJGPP)
+ *  Last updated: 15 July 2020
+ *
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os detcntlr.c -o detcntlr.exe -s
  *
- *  usage:
- *    detcntlr [-v -d]
- *
- *    -v indicates verbose output
- *    -d indicates to dump the config space for each found (S)ATA controller
- *
+ *  Usage:
+ *    detcntlr
  */
 
 #include <ctype.h>
 #include <conio.h>
 #include <string.h>
 #include <stdio.h>
-
-//#define MDELAY(x) mdelay(x)  // use our mS delay
-#define MDELAY(x) delay(x)  // use DJGPP's mS delay
 
 #include "..\include\ctype.h"
 #include "..\include\pci.h"
@@ -49,7 +102,7 @@ int main(int argc, char *argv[]) {
   bool is_multi;
   
   printf("Detect ATA Controllers on a PCI Bus. v1.00.00\n"
-         "Forever Young Software -- Copyright 1984-2015\n");
+         "Forever Young Software -- Copyright 1984-2020\n");
   
   // parse the command line parameters
   if (!get_parameters(argc, argv))
@@ -62,11 +115,11 @@ int main(int argc, char *argv[]) {
       for (pci_func=0; is_multi && (pci_func < PCI_MAX_FUNC); pci_func++) {
         // read the first 16-bit word of the function
         // if it is not 0xFFFF, then we have a valid function at this 'address'
-        if (read_pci(pci_bus, pci_dev, pci_func, 0x00, sizeof(bit16u)) != 0xFFFF) {
+        if (pci_read_word(pci_bus, pci_dev, pci_func, 0x00) != 0xFFFF) {
           
           // read in the 256 bytes (64 dwords)
           for (i=0; i<64; i++)
-            pcidata[i] = read_pci(pci_bus, pci_dev, pci_func, (i<<2), sizeof(bit32u));
+            pcidata[i] = pci_read_dword(pci_bus, pci_dev, pci_func, (i<<2));
           
           if (verbose) {
             printf("\nFound Device:\n");
@@ -142,12 +195,12 @@ int main(int argc, char *argv[]) {
         }
       }
     }
-	}
+  }
   
   printf("\nFound %i PCI ATA Controllers\n", cnt);
   
   // return to host OS
-	return 0;
+  return 0;
 }
 
 // simply parses the command line parameters for specific values
