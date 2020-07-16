@@ -104,7 +104,7 @@ int main(int argc, char *arg[]) {
   int dma, dma16;
   
   printf("Detect Sound Blaster.                v1.00.00\n"
-         "Forever Young Software -- Copyright 1984-2016\n\n");
+         "Forever Young Software -- Copyright 1984-2020\n\n");
   
   base = detect_base();
   if (base == 0) {
