@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
   bool mode = KEY_MODE_PS2;
   
   printf("Detect PS/2 Controller and Mouse.      v1.00.00\n"
-         "Forever Young Software  --  Copyright 1984-2016\n\n");
+         "Forever Young Software  --  Copyright 1984-2020\n\n");
   
   // for slow machines, don't count so high
   // for fast machines, delay needs to be larger counter
