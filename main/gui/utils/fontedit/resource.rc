@@ -1,0 +1,129 @@
+//Microsoft Developer Studio generated resource script.
+//
+#include "resource.h"
+#include "winuser.h"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+ICO1                    ICON    DISCARDABLE     "fontedit.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+hMenu MENU DISCARDABLE 
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&New",                        ID_FILE_NEW
+        MENUITEM "&Open",                       ID_FILE_OPEN
+        MENUITEM "&Save",                       ID_FILE_SAVE, GRAYED
+        MENUITEM "Save &as...",                 ID_FILE_SAVEAS, GRAYED
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit",                       ID_FILE_EXIT
+    END
+    POPUP "&Edit"
+    BEGIN
+        MENUITEM "Cut\tCtrl+X",                 ID_EDIT_CUT, GRAYED
+        MENUITEM "&Copy\tCtrl+C",               ID_EDIT_COPY, GRAYED
+        MENUITEM "Cl&ear\tDel",                 ID_EDIT_CLEAR, GRAYED
+        MENUITEM "&Paste\tCtrl+V",              ID_EDIT_PASTE, GRAYED
+        MENUITEM SEPARATOR
+        MENUITEM "G&oto...\tCtrl+G",            ID_EDIT_GOTO, GRAYED
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "&Show Grid Numbers",          ID_VIEW_SHOW_NUMS, GRAYED
+    END
+    POPUP "&Utilities"
+    BEGIN
+        MENUITEM "Convert...",                  IDC_CONV_CUR, GRAYED
+        MENUITEM "Name...",                     IDC_NAME_CUR, GRAYED
+        MENUITEM "Dump...",                     IDC_DUMP, GRAYED
+    END
+    POPUP "&Help"
+    BEGIN
+        MENUITEM "&About",                      IDC_ABOUT
+    END
+END
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_SIZE DIALOG DISCARDABLE  0, 0, 199, 100
+CAPTION "Please enter the size of the font"
+FONT 8, "Courier New"
+BEGIN
+    EDITTEXT        IDC_WIDTH,156,5,28,12,ES_AUTOHSCROLL | ES_NUMBER | ES_RIGHT
+    EDITTEXT        IDC_HEIGHT,156,20,28,12,ES_AUTOHSCROLL | ES_NUMBER | ES_RIGHT
+    EDITTEXT        IDC_START,156,35,28,12,ES_AUTOHSCROLL | ES_NUMBER | ES_RIGHT
+    EDITTEXT        IDC_ENDING,156,50,28,12,ES_AUTOHSCROLL | ES_NUMBER | ES_RIGHT
+    EDITTEXT        IDC_FONT_NAME,90,65,94,12,ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "OK",IDOK,109,85,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,42,85,50,14
+    CONTROL         "Fixed",IDC_FIXED,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,
+                    15,7,39,10,WS_EX_RIGHT | WS_EX_STATICEDGE
+    RTEXT           "Average width. (ex: 8):",IDC_STATIC,57,7,94,13
+    RTEXT           "     And fixed height. (8 -> 24):",IDC_STATIC,11,22,140,13
+    RTEXT           "     Starting ASCII Number. (ex: 0):",IDC_STATIC,7,37,144,13
+    RTEXT           "Ending ASCII Number. (ex: 127):",IDC_STATIC,7,52,144,13
+    RTEXT           "Name of Font: ",IDC_STATIC,7,67,80,13
+END
+
+IDD_GOTO DIALOG DISCARDABLE  0, 0, 120, 50
+CAPTION "Please enter index"
+FONT 8, "Courier New"
+BEGIN
+    EDITTEXT        IDC_INDEX,88,5,28,12,ES_AUTOHSCROLL | ES_NUMBER | ES_RIGHT
+    DEFPUSHBUTTON   "Okay",IDOK,70,25,35,14
+    PUSHBUTTON      "Cancel",IDCANCEL,20,25,35,14
+    RTEXT           "Index. (ex: 128):",IDC_STATIC,2,7,80,13
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
+BEGIN
+    IDD_SIZE, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 195
+        TOPMARGIN, 1
+        BOTTOMMARGIN, 89
+    END
+END
+#endif    // APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
