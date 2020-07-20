@@ -61,7 +61,7 @@
  ;  Last updated: 19 July 2020
  ;
  ;  Assembled using (NBASM v00.26.74) (http://www.fysnet/newbasic.htm)
- ;   nbasm embr
+ ;   nbasm rdtsc
  ;
 
 .model tiny                        ;
