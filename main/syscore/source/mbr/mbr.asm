@@ -1,67 +1,99 @@
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;    Copyright (c) 1984-2015    Forever Young Software  Benjamin David Lunt
-;
-; This code is intended for use with the book it accompanies.
-; You may use this code for that purpose only.  You may modify it,
-;  and/or include it within your own code as long as you do not
-;  distribute it.
-; You may not distribute this code to anyone with out permission
-;  from the author.
-;
-;             -- All rights reserved -- Use at your own risk -- 
-; 
-; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-comment /******************************************************************\
-*                            FYS OS version 2.0                            *
-* FILE: mbr.asm                                                            *
-*                                                                          *
-*  Built with:  NBASM ver 00.26.52                                         *
-*                 http:\\www.fysnet.net\newbasic.htm                       *
-*     Version: 1.30.20                                                     *
-* Last Update: 21 August 2015                                              *
-*                                                                          *
-****************************************************************************
-* Notes:                                                                   *
-* MBR Boot.  This is the boot sector that gets placed in the               *
-*   first sector of the actual, physical disk.                             *
-* This boot code does the following:                                       *
-*  - moves itself to 0:7C00h+200h (just passed this sector)                *
-*  - Finds active partition, will search extended partitions               *
-*  - Loads and executes active partition                                   *
-*  - If this code does not find an active partition, it checks             *
-*    the next BIOS disk number for a valid disk, then loads that           *
-*    MBR and jumps to it (if a valid sig of 0xAA55 or 0x55AA is found).    *
-*                                                                          *
-* Assumptions:                                                             *
-*  - When USE_LARGE_DISK is set, this code will assume that the            *
-*    IBM-MS INT 13 Extensions - EXTENDED READ function is available.       *
-*    Since the utility that will write this MBR to the disk, should know   *
-*    whether it does or not, there is no reason to check for it.  The      *
-*    only draw-back would be if the user pulls this disk from one machine  *
-*    and places it into another that does not support this function.       *
-*    Make sure to clear USE_LARGE_DISK when you only want the standard     *
-*    BIOS disk read service (02h) to be used.                              *
-*  - This code assumes a 32-bit 80x386 compatible processor starting in    *
-*    real mode. Most of the time, MBR's should not assume 32-bit code.     *
-*    However, without the 32-bit code, the 32-bit LBA values would be a    *
-*    lot more work and code.  It will be up to you if you assume 32-bit    *
-*    or not.                                                               *
-*                                                                          *
-* On entry to this boot code:                                              *
-*     cs:ip = usually 0000:7C00h or 07C0:0000h but can be different        *
-*        dl = boot drive number                                            *
-*                                                                          *
-*                                                                          *
-* This code also assumes you will not be on a floppy disk.                 *
-*                                                                          *
-****************************************************************************
-*                                                                          *
-* If you have any modifications, improvements, or comments, please let me  *
-*  know by posting to alt.os.development or emailing me at                 *
-*    fys@fysnet.net                                                        *
-*                                                                          *
-\**************************************************************************/
+ ;
+ ;                             Copyright (c) 1984-2020
+ ;                              Benjamin David Lunt
+ ;                             Forever Young Software
+ ;                            fys [at] fysnet [dot] net
+ ;                              All rights reserved
+ ; 
+ ; Redistribution and use in source or resulting in  compiled binary forms with or
+ ; without modification, are permitted provided that the  following conditions are
+ ; met.  Redistribution in printed form must first acquire written permission from
+ ; copyright holder.
+ ; 
+ ; 1. Redistributions of source  code must retain the above copyright notice, this
+ ;    list of conditions and the following disclaimer.
+ ; 2. Redistributions in printed form must retain the above copyright notice, this
+ ;    list of conditions and the following disclaimer.
+ ; 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ ;    this list of  conditions and the following  disclaimer in the  documentation
+ ;    and/or other materials provided with the distribution.
+ ; 
+ ; THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ ; AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ ; ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ ; WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ ; DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ ; ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ ; (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ ; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ ; ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ ; (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ ; PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ ; USES AS THEIR OWN RISK.
+ ; 
+ ; Any inaccuracy in source code, code comments, documentation, or other expressed
+ ; form within Product,  is unintentional and corresponding hardware specification
+ ; takes precedence.
+ ; 
+ ; Let it be known that  the purpose of this Product is to be used as supplemental
+ ; product for one or more of the following mentioned books.
+ ; 
+ ;   FYSOS: Operating System Design
+ ;    Volume 1:  The System Core
+ ;    Volume 2:  The Virtual File System
+ ;    Volume 3:  Media Storage Devices
+ ;    Volume 4:  Input and Output Devices
+ ;    Volume 5:  ** Not yet published **
+ ;    Volume 6:  The Graphical User Interface
+ ;    Volume 7:  ** Not yet published **
+ ;    Volume 8:  USB: The Universal Serial Bus
+ ; 
+ ; This Product is  included as a companion  to one or more of these  books and is
+ ; not intended to be self-sufficient.  Each item within this distribution is part
+ ; of a discussion within one or more of the books mentioned above.
+ ; 
+ ; For more information, please visit:
+ ;             http://www.fysnet.net/osdesign_book_series.htm
+ 
+ ;
+ ;  mbr.asm
+ ; Notes:
+ ; MBR Boot.  This is the boot sector that gets placed in the
+ ;   first sector of the actual, physical disk.
+ ; This boot code does the following:
+ ;  - moves itself to 0:7C00h+200h (just passed this sector)
+ ;  - Finds active partition, will search extended partitions
+ ;  - Loads and executes active partition
+ ;  - If this code does not find an active partition, it checks
+ ;    the next BIOS disk number for a valid disk, then loads that
+ ;    MBR and jumps to it (if a valid sig of 0xAA55 or 0x55AA is found).
+ ;
+ ; Assumptions:
+ ;  - When USE_LARGE_DISK is set, this code will assume that the
+ ;    IBM-MS INT 13 Extensions - EXTENDED READ function is available.
+ ;    Since the utility that will write this MBR to the disk, should know
+ ;    whether it does or not, there is no reason to check for it.  The
+ ;    only draw-back would be if the user pulls this disk from one machine
+ ;    and places it into another that does not support this function.
+ ;    Make sure to clear USE_LARGE_DISK when you only want the standard
+ ;    BIOS disk read service (02h) to be used.
+ ;  - This code assumes a 32-bit 80x386 compatible processor starting in
+ ;    real mode. Most of the time, MBR's should not assume 32-bit code.
+ ;    However, without the 32-bit code, the 32-bit LBA values would be a
+ ;    lot more work and code.  It will be up to you if you assume 32-bit
+ ;    or not.
+ ;
+ ; On entry to this boot code:
+ ;     cs:ip = usually 0000:7C00h or 07C0:0000h but can be different
+ ;        dl = boot drive number
+ ;
+ ; This code also assumes you will not be on a floppy disk.
+ ;
+ ;  Last updated: 19 July 2020
+ ;
+ ;  Assembled using (NBASM v00.26.74) (http://www.fysnet/newbasic.htm)
+ ;   nbasm usbboot
+ ;
 
 outfile 'mbr.bin'    ; name of the file to create
 
