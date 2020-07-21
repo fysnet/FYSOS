@@ -1,55 +1,103 @@
-/*             Author: Benjamin David Lunt
- *                     Forever Young Software
- *                     Copyright (c) 1984-2015
- *  
- *  This code is included on the disc that is included with the book
- *   FYSOS: The System Core, and is for that purpose only.  You have the
- *   right to use it for learning purposes only.  You may not modify it for
- *   redistribution for any other purpose unless you have written permission
- *   from the author.
- *
- *  You may modify and use it in your own projects as long as they are
- *   for non profit only and not distributed.  Any project for profit that 
- *   uses this code must have written permission from the author.
+/*
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
  * 
- * File Version: 1.00.00
- * Last mod: 23 June 2013
- *
- * This code is designed to add the 32-byte FYSOS System File header
- *  to a file.
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
  * 
- * To use this code, type the following at the command prompt:
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
  * 
- *   make_hdr target.sys source.sys /l0x00600000 /c0 /e /y
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
  * 
- * The 'target.sys' parameter is the filename of the target file.
- *  This is the resultant file after the header is added.
- * The 'source.sys' parameter is the source filename of the file
- *  you want to add the header to
- * If you don't include the 'source.sys' filename parameter, this
- *  code will create a temp file as the target file.  Then when
- *  complete, will delete the source file and rename the temp file
- *  to the source file's filename.
- * The /l parameter indicates what physical address the loader will
- *  place the file
- * The /c parameter indicates what type of compression the file has.
- *  0 = none. No compression. File is byte for byte the file to load
- *            to memory.
- *  1 = Bz2.  This compression is explained at:
- *              http://en.wikipedia.org/wiki/Bzip2
- *  2-9 = not implemented yet.
- * (Please note that the file has already been compressed. This code
- *  does not compress the file. It assumes the file already has been)
- * The /e parameter indicates to set the "Halt on Error" flag in the
- *  header of this file.
- * The /k parameter indicates to set the "This is the Kernel" flag in the
- *  header of this file.
- * The /y parameter indicates to not prompt for [Y].
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
+
+/*
+ *  MAKE_HDR.EXE
+ *  This code is designed to add the 32-byte FYSOS System File header
+ *   to a file.
  *
- * This code assumes the following:
- * - You are running in a TRUE DOS environment, with a DPMI
- * - You have enough memory accessable to your program
+ *  Assumptions/prerequisites:
+ *   - You are running in a TRUE DOS environment, with a DPMI
+ *   - You have enough memory accessable to your program
  *
+ *  Last updated: 20 July 2020
+ *
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
+ *   gcc -Os make_hdr.c -o make_hdr.exe -s
+ *
+ *  Usage:
+ *   To use this code, type the following at the command prompt:
+ *   
+ *     make_hdr target.sys source.sys /l0x00600000 /c0 /e /y
+ *   
+ *   The 'target.sys' parameter is the filename of the target file.
+ *    This is the resultant file after the header is added.
+ *   The 'source.sys' parameter is the source filename of the file
+ *    you want to add the header to
+ *   If you don't include the 'source.sys' filename parameter, this
+ *    code will create a temp file as the target file.  Then when
+ *    complete, will delete the source file and rename the temp file
+ *    to the source file's filename.
+ *   The /l parameter indicates what physical address the loader will
+ *    place the file
+ *   The /c parameter indicates what type of compression the file has.
+ *    0 = none. No compression. File is byte for byte the file to load
+ *              to memory.
+ *    1 = Bz2.  This compression is explained at:
+ *                http://en.wikipedia.org/wiki/Bzip2
+ *    2-9 = not implemented yet.
+ *   (Please note that the file has already been compressed. This code
+ *    does not compress the file. It assumes the file already has been)
+ *   The /e parameter indicates to set the "Halt on Error" flag in the
+ *    header of this file.
+ *   The /k parameter indicates to set the "This is the Kernel" flag in the
+ *    header of this file.
+ *   The /y parameter indicates to not prompt for [Y].
  */
 
 #include <ctype.h>
