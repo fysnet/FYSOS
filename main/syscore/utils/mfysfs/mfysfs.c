@@ -1,41 +1,86 @@
-/*             Author: Benjamin David Lunt
- *                     Forever Young Software
- *                     Copyright (c) 1984-2017
- *  
- *  This code is included on the disc that is included with the book
- *   FYSOS: The Virtual File System, and is for that purpose only.  You have
- *   the right to use it for learning purposes only.  You may not modify it
- *   for redistribution for any other purpose unless you have written
- *   permission from the author.
- *
- *  You may modify and use it in your own projects as long as they are
- *   for non profit only and not distributed.  Any project for profit that 
- *   uses this code must have written permission from the author.
- *
- * Last update:  2 May 2017
- *
- * usage:
- *   mfysfs filename.txt /L /E
+/*
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
  * 
- * See the included files.txt file for an example of the resource file
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
+
+/*
+ *  MFYSFS.EXE
+ *   See the included files.txt file for an example of the resource file
  *
- * This utility will take a list of filenames and include those
+ *   This utility will take a list of filenames and include those
  *    files in the image, creating root entries.
  *
- * Assumptions:
+ *  Assumptions/prerequisites:
+ *   - this utility assumes that the count of files you add to this image
+ *     will fit within the amount of clusters you allocate for the root
  *
- *  - this utility assumes that the count of files you add to this image
- *    will fit within the amount of clusters you allocate for the root
+ *   - Remember, I didn't write this utility to be complete or robust.
+ *     I wrote it to simply make a fysfs image for use with this book.
+ *     Please consider this if you add or modify to this utility.
  *
- *  - Remember, I didn't write this utility to be complete or robust.
- *    I wrote it to simply make a fysfs image for use with this book.
- *    Please consider this if you add or modify to this utility.
+ *  Last updated: 15 July 2020
  *
- *  Thank you for your purchase and interest in my work.
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
+ *   gcc -Os mfysfs.c -o mfysfs.exe -s
  *
- * compile using gcc
- *  gcc -Os mfysfs.c -o mfysfs.exe -s
+ *  Usage:
+ *    mfysfs filename.txt /L /E
  */
+
+#pragma warning(disable: 4996)  // disable the _s warning for sprintf(), etc.
 
 #include <ctype.h>
 #include <conio.h>
@@ -88,7 +133,7 @@ int main(int argc, char *argv[]) {
   bit32u cylinders = (bit32u) (resources->tot_sectors + ((16*63)-1)) / (16*63);    // cylinders used
   bit32u add = (bit32u) (((bit64u) cylinders * (16*63)) - resources->tot_sectors); // sectors to add to boundary on cylinder
   if (add && (resources->tot_sectors > 2880)) {  // don't add if floppy image
-    printf("\n Total Sectors does not end on cylinder boundary. Expand to %i? [Y|N] ", resources->tot_sectors + add);
+    printf("\n Total Sectors does not end on cylinder boundary. Expand to %" LL64BIT "i? [Y|N] ", resources->tot_sectors + add);
     if (toupper(getche()) == 'Y') {
       resources->tot_sectors += add;
       // need to calculate again since we added sectors
@@ -112,7 +157,7 @@ int main(int argc, char *argv[]) {
   memset(&super, 0, sizeof(struct S_FYSFS_SUPER));
   super.sig[0] = 0x46595346;  // signature ‘FYSF’ ‘SUPR’ (0x46595346 0x53555052)
   super.sig[1] = 0x53555052;
-  super.ver = 0x0161;         // 1.61
+  super.ver = 0x0162;         // 1.62
   super.sect_clust = SPCLUST;
   super.encryption = 0; // none
   super.bitmaps = BITMAPS;
@@ -160,7 +205,7 @@ int main(int argc, char *argv[]) {
       fread(buffer, 512, 1, src);
     
       // create and write the Disk Indentifier
-      srand(time(NULL));  // seed the randomizer
+      srand((unsigned int) time(NULL));  // seed the randomizer
       // We call rand() multiple times because rand() usually is set for 0 -> 32768 only.
       * (bit32u *) &buffer[0x01B8] = (bit32u) ((rand() << 20) | (rand() << 10) | (rand() << 0));
       * (bit16u *) &buffer[0x01BC] = 0x0000;
@@ -397,7 +442,7 @@ void create_root_entry(struct S_FYSFS_ROOT *root, char *filename, const bit64u f
   r->attribute = FYSFS_ATTR_ARCHIVE;
   r->created = r->lastaccess = get_seconds();
   
-  int name_len = strlen(filename);
+  int name_len = (int) strlen(filename);
   if (name_len <= NAME_FS_SPACE) {
     memcpy(r->name_fat, filename, name_len);
     r->namelen = name_len;
