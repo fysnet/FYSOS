@@ -1,70 +1,84 @@
-/************************************************************************ 
-  MSECTCPY  COPY a file to an image    v00.10.00
-  Forever Young Software            Benjamin David Lunt
+/*
+ *                             Copyright (c) 1984-2020
+ *                              Benjamin David Lunt
+ *                             Forever Young Software
+ *                            fys [at] fysnet [dot] net
+ *                              All rights reserved
+ * 
+ * Redistribution and use in source or resulting in  compiled binary forms with or
+ * without modification, are permitted provided that the  following conditions are
+ * met.  Redistribution in printed form must first acquire written permission from
+ * copyright holder.
+ * 
+ * 1. Redistributions of source  code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in printed form must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 3. Redistributions in  binary form must  reproduce the above copyright  notice,
+ *    this list of  conditions and the following  disclaimer in the  documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE, DOCUMENTATION, BINARY FILES, OR OTHER ITEM, HEREBY FURTHER KNOWN
+ * AS 'PRODUCT', IS  PROVIDED BY THE COPYRIGHT  HOLDER AND CONTRIBUTOR "AS IS" AND
+ * ANY EXPRESS OR IMPLIED  WARRANTIES, INCLUDING, BUT NOT  LIMITED TO, THE IMPLIED
+ * WARRANTIES  OF  MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE 
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT  OWNER OR CONTRIBUTOR BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
+ * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
+ * USES AS THEIR OWN RISK.
+ * 
+ * Any inaccuracy in source code, code comments, documentation, or other expressed
+ * form within Product,  is unintentional and corresponding hardware specification
+ * takes precedence.
+ * 
+ * Let it be known that  the purpose of this Product is to be used as supplemental
+ * product for one or more of the following mentioned books.
+ * 
+ *   FYSOS: Operating System Design
+ *    Volume 1:  The System Core
+ *    Volume 2:  The Virtual File System
+ *    Volume 3:  Media Storage Devices
+ *    Volume 4:  Input and Output Devices
+ *    Volume 5:  ** Not yet published **
+ *    Volume 6:  The Graphical User Interface
+ *    Volume 7:  ** Not yet published **
+ *    Volume 8:  USB: The Universal Serial Bus
+ * 
+ * This Product is  included as a companion  to one or more of these  books and is
+ * not intended to be self-sufficient.  Each item within this distribution is part
+ * of a discussion within one or more of the books mentioned above.
+ * 
+ * For more information, please visit:
+ *             http://www.fysnet.net/osdesign_book_series.htm
+ */
 
-  This utility was desinged for use with Bochs to copy a file 
-   to an image.
+/*
+ *  MSECTCPY.EXE
+ *   Copies a file to a file at a specified sector offset.
+ *
+ *  Assumptions/prerequisites:
+ *
+ *  Last updated: 20 July 2020
+ *
+ *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
+ *   gcc -Os msectcpy.c -o msectcpy.exe -s
+ *
+ *  Usage:
+ *   msectcpy image_file_name.img file_to_copy.bin 0
+ *
+ *    Places the file_to_copy.bin image into the 'image_file_name.img' at sector 0
+ *
+ *    The third parameter is Radix aware.  i.e: the code can determine hex, dec, and oct.
+ *     012  is oct (leading zero)
+ *     123  is dec
+ *     0x12 is hex
+ */
 
-  Bochs is located at:
-    http://bochs.sourceforge.net
-
-  I designed this program to be used for testing my own OS,
-   though you are welcome to use it any way you wish.
-
-  Please note that I release it and it's code for others to
-   use and do with as they want.  You may copy it, modify it,
-   do what ever you want with it as long as you release the
-   source code and display this entire comment block in your
-   source or documentation file.
-   (you may add to this comment block if you so desire)
-
-  Please use at your own risk.  I do not specify that this
-   code is correct and unharmful.  No warranty of any kind
-   is given for its release.
-
-  I take no blame for what may or may not happen by using
-   this code with your purposes.
-
-  'nuff of that!  You may modify this to your liking and if you
-   see that it will help others with their use of Bochs, please
-   send the revised code to fys@fysnet.net.  I will then
-   release it as I have this one.
-
-  You may get the latest and greatest at:
-    http://www.fysnet.net/fysos.htm
-
-  Thanks, and thanks to those who contributed to Bochs....
-
-  ********************************************************
-
-  Things to know:
-  - the third parameter is Radix aware.  i.e: the code
-    can determine hex, dec, and oct.
-    012  is oct (leading zero)
-    123  is dec
-    0x12 is hex
-
-  ********************************************************
-  
-  To compile using DJGPP:  (http://www.delorie.com/djgpp/)
-     gcc -Os msectcpy.c -o msectcpy.exe -s  (DOS .EXE requiring DPMI)
-
-  Compiles as is with MS VC++ 6.x       (Win32 .EXE file)
-
-  Compiles as is with MS QC2.5          (TRUE DOS only)
-
-  ********************************************************
-
-  Usage:
-    MSECTCPY image_file_name.img file_to_copy.bin 0
-
-  It places the file_to_copy.bin image into the 'image_file_name.img' 
-   at sector 0
-
-************************************************************************/
-
-// don't know which ones are needed or not needed.  I just copied them
-//  across from another project. :)
+// don't know which ones are needed or not needed.  I just copied them across from another project. :)
 #include <ctype.h>
 #include <conio.h>
 #include <stdio.h>
