@@ -98,6 +98,10 @@
 
 char out_file[128] = "\0";
 
+// define this to zero if you do not want to prepend the DSDT Header
+//  to the outfile before writing the AML code to the file
+#define INCLUDE_DSDT_HDR  1  // set to 1 by default
+
 int main(int argc, char *argv[]) {
   __dpmi_meminfo base_mi;
   int selector;
@@ -106,7 +110,7 @@ int main(int argc, char *argv[]) {
   int i;
   
   // print start string
-  printf("\nDump ACPI  v00.10.00 (C)opyright   Forever Young Software 1984-2020\n\n");
+  printf("\nDump ACPI  v00.10.05 (C)opyright   Forever Young Software 1984-2020\n\n");
   
   // if -o outfile.bin is on the command line, save the filename
   if ((argc == 3) && (!strcmp(argv[1], "-o")))
@@ -470,8 +474,13 @@ void acpi_enum_tble(const bit32u addr) {
       
     // this is the AML Code stuff
     case 'TDSD':
+#if INCLUDE_DSDT_HDR
+      len = _farpeekl(selector, base + 4);
+      printf(" ACPI: DSDT:  AML code size %i\n", len - ACPI_TBLE_HDR_SIZE);
+#else
       len = _farpeekl(selector, base + 4) - ACPI_TBLE_HDR_SIZE;
       printf(" ACPI: DSDT:  AML code size %i\n", len);
+#endif
       
       // check crc
       if (acpi_crc_check(selector, base + 0, _farpeekl(selector, base + 4)) != 0) {
@@ -481,7 +490,11 @@ void acpi_enum_tble(const bit32u addr) {
         if (aml_code != NULL) {
           // copy the aml code to our buffer
           for (i=0; i<len; i++)
+#if INCLUDE_DSDT_HDR
+            aml_code[i] = _farpeekb(selector, base + i);
+#else
             aml_code[i] = _farpeekb(selector, base + ACPI_TBLE_HDR_SIZE + i);
+#endif
           acpi_decode_aml(aml_code, len);
         } else
           puts("Error trying to allocate memory for AML code...");
@@ -502,6 +515,9 @@ void acpi_enum_tble(const bit32u addr) {
 void acpi_decode_aml(bit8u *aml_code, const int len) {
   FILE *fp;
   
+  // remember that if INCLUDE_DSDT_HDR is not zero, there
+  //  will be ACPI_TBLE_HDR_SIZE bytes of the DSDT header prepended
+  //  to this buffer and the len field will include this header.
   printf("Decode %i bytes of aml here...\n", len);
   
   // if filename given on command line, write the AML code
