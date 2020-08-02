@@ -17,6 +17,9 @@ Each folder contains all of the files needed for that specific book.
 #### License
 Please be sure and read the [license](https://github.com/fysnet/FYSOS/blob/master/main/license.txt) for this source code so that you understand its purpose.
 
+#### More Information
+Please [read this](http://www.fysnet.net/book_series/more_info.htm) for more information.
+
 #### CWSDPMI
 Some of the utilities included here require a DOS Protected Mode Interface (DPMI).
 Each utility has been tested with [CWSDPMI](https://en.wikipedia.org/wiki/CWSDPMI) version [0.90r7](http://sandmann.dotster.com/cwsdpmi/)
