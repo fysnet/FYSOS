@@ -57,18 +57,8 @@
  */
 
 /*
- *  BOOT.C
- *  This is the main C source file for a demo bootable image for UEFI.
- *  This code will simply print a few chars to the screen.
- *
- *  To use:
- *   You need a GPT formatted disk image with at least one partition entry
- *   formatted to FAT32 (FAT16 works with most EFI systems), with the following
- *    files in the \EFI\BOOT\ directory:
- *     BOOTIA32.EFI
- *     startup.nsh
- *   Then boot the image using an EFI compatible emulator such as Oracle VM VirtualBox
- *    or QEMU
+ *  EFI-32.H
+ *  This is a helper source file for a demo bootable image for UEFI.
  *
  *  Assumptions/prerequisites:
  *    32-bit only
@@ -76,49 +66,118 @@
  *  Last updated: 23 Aug 2020
  *
  *  To Build:
- *   You need the NewBasic C Compiler found at:  http://www.fysnet.net/newbasic.htm
- *    and the Flat Assembler found at: https://flatassembler.net/
- *   Then use the following command lines to build 'BOOTIA32.EFI'
- *
- *   nbc boot.c -fasm -efi
- *   fasm boot.asm
- *   ren boot.efi BOOTIA32.EFI
+ *   See BOOT.C
  */
 
-#pragma proc(486)     // allow atleast 486 instructions
-#pragma proc(long)    // we want 32-bit offsets
-#pragma ptype(pmode)  //.pmode (all EFI code is in pmode)
+#pragma pack(push, 1)
 
-#include "../include/ctype.h"
-#include "efi_32.h"
+typedef unsigned int EFI_STATUS;
+typedef void *EFI_HANDLE;
+
+#define  EFI_SUCCESS   0
+
+#define  EFI_SYSTEM_TABLE_SIGNATURE       0x20494249
+#define  EFI_SYSTEM_TABLE_SIGNATURE2      0x54535953
+#define  EFI_RUNTIME_SERVICES_SIGNATURE   0x544E5552
+#define  EFI_RUNTIME_SERVICES_SIGNATURE2  0x56524553
+
+struct EFI_TABLE_HEADER {
+  bit32u Signature[2];
+  bit32u Revision;
+  bit32u HeaderSize;
+  bit32u CRC32;
+  bit32u Reserved;
+};
+
+struct EFI_GUID {
+  bit32u  Data1;
+  bit16u  Data2;
+  bit16u  Data3;
+  bit8u   Data4[8]; 
+};
+
+struct EFI_CONFIGURATION_TABLE {
+  struct EFI_GUID VendorGuid;
+  void *VendorTable;
+};
+
+struct EFI_SYSTEM_TABLE {
+  struct EFI_TABLE_HEADER Hdr;
+  bit16u    *FirmwareVendor;
+  bit32u     FirmwareRevision;
+
+  EFI_HANDLE ConsoleInHandle;
+  struct EFI_SIMPLE_TEXT_INPUT_PROTOCOL *ConIn;
+
+  EFI_HANDLE ConsoleOutHandle;
+  struct SIMPLE_TEXT_OUTPUT_INTERFACE *ConOut;
+
+  EFI_HANDLE StandardErrorHandle;
+  struct SIMPLE_TEXT_OUTPUT_INTERFACE *StdErr;
+
+  struct EFI_RUNTIME_SERVICES *RuntimeServices;
+  
+  void  *BootServices;
+  
+  bit32u NumberOfTableEntries;
+  
+  struct EFI_CONFIGURATION_TABLE *ConfigurationTable;
+};
 
 /*
- * include the remaining parts of the library
+ * The Simple Text Output Interface protocol
+ *  we only "define" the two used functions.  if you use
+ *  any of the others, you will need to define their parameters.
+ *  (see the efi_boot source folder for a more detailed and
+ *   an already defined set.)
  */
-#include "efi_32.c"
-#include "conout.c"
-
+struct SIMPLE_TEXT_OUTPUT_INTERFACE {
+  void  *Reset;
+  void  (*OutputString)(bit16u *text, struct SIMPLE_TEXT_OUTPUT_INTERFACE *ConOut);
+  void  *TestString;
+  void  *QueryMode;
+  void  *SetMode;
+  void  *SetAttribute;
+  void (*ClearScreen)(struct SIMPLE_TEXT_OUTPUT_INTERFACE *ConOut);
+  void  *SetCursorPosition;
+  void  *EnableCursor;
+  void  *Mode;
+};
 
 /*
- * efi_main()
- * this is what gets called by the EFI boot services
+ * The Simple Text Output Interface protocol
  */
-EFI_STATUS efi_main(EFI_HANDLE ImageHandle, struct EFI_SYSTEM_TABLE *SystemTable) {
-  
-  // initialize our library code
-  if (!InitializeLib(ImageHandle, SystemTable))
-    return 1;
-  
-  // clear the screen
-  cls();
-  
-  // print the Hello World string
-  puts(L"Hello, World!");
-  
-  // freeze
-  while (1)
-    _asm ("hlt \n");
-  
-  // done
-  return EFI_SUCCESS;
-}
+struct EFI_SIMPLE_TEXT_INPUT_PROTOCOL {
+  void  *Reset;
+  void  *ReadKeyStroke;
+  void  *WaitForKey;
+};
+
+/*
+ * The Runtime Serives
+ *  (see the efi_boot source folder for a more detailed and
+ *   an already defined set.)
+ */
+struct EFI_RUNTIME_SERVICES {
+  struct EFI_TABLE_HEADER Hdr;
+  void  *GetTime;
+  void  *SetTime;
+  void  *GetWakeUpTime;
+  void  *SetWakeUpTime;
+  void  *SetVirtualAddressMap;
+  void  *ConvertPointer;
+  void  *GetVariable;
+  void  *GetNextVariableName;
+  void  *SetVariable;
+  void  *GetNextHighMonotonicCount;
+  void  *ResetSystem;
+};
+
+#pragma pack(pop)
+
+/*
+ * Our prototypes
+ */
+bool InitializeLib(EFI_HANDLE ImageHandle, struct EFI_SYSTEM_TABLE *SystemTable);
+void cls(void);
+void puts(wchar_t *);

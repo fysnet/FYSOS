@@ -57,18 +57,8 @@
  */
 
 /*
- *  BOOT.C
- *  This is the main C source file for a demo bootable image for UEFI.
- *  This code will simply print a few chars to the screen.
- *
- *  To use:
- *   You need a GPT formatted disk image with at least one partition entry
- *   formatted to FAT32 (FAT16 works with most EFI systems), with the following
- *    files in the \EFI\BOOT\ directory:
- *     BOOTIA32.EFI
- *     startup.nsh
- *   Then boot the image using an EFI compatible emulator such as Oracle VM VirtualBox
- *    or QEMU
+ *  EFI_32.C
+ *  This is a helper C source file for a demo bootable image for UEFI.
  *
  *  Assumptions/prerequisites:
  *    32-bit only
@@ -76,49 +66,32 @@
  *  Last updated: 23 Aug 2020
  *
  *  To Build:
- *   You need the NewBasic C Compiler found at:  http://www.fysnet.net/newbasic.htm
- *    and the Flat Assembler found at: https://flatassembler.net/
- *   Then use the following command lines to build 'BOOTIA32.EFI'
- *
- *   nbc boot.c -fasm -efi
- *   fasm boot.asm
- *   ren boot.efi BOOTIA32.EFI
+ *   See BOOT.C
  */
-
-#pragma proc(486)     // allow atleast 486 instructions
-#pragma proc(long)    // we want 32-bit offsets
-#pragma ptype(pmode)  //.pmode (all EFI code is in pmode)
-
-#include "../include/ctype.h"
-#include "efi_32.h"
 
 /*
- * include the remaining parts of the library
+ * these two hold our global Image handle and System Table handle
+ *  each passed to us by the efi at efi_main()
  */
-#include "efi_32.c"
-#include "conout.c"
-
+EFI_HANDLE gImageHandle;
+struct EFI_SYSTEM_TABLE *gSystemTable;
 
 /*
- * efi_main()
- * this is what gets called by the EFI boot services
+ * we call this in efi_main() to check the signature to be sure
+ *  we are actually using a known and valid efi system, and to
+ *  set our global variables.
  */
-EFI_STATUS efi_main(EFI_HANDLE ImageHandle, struct EFI_SYSTEM_TABLE *SystemTable) {
+bool InitializeLib(EFI_HANDLE ImageHandle, struct EFI_SYSTEM_TABLE *SystemTable) {
   
-  // initialize our library code
-  if (!InitializeLib(ImageHandle, SystemTable))
-    return 1;
+  // checking the signature
+  if ((SystemTable->Hdr.Signature[0] != EFI_SYSTEM_TABLE_SIGNATURE) ||
+      (SystemTable->Hdr.Signature[1] != EFI_SYSTEM_TABLE_SIGNATURE2))
+        return FALSE;
   
-  // clear the screen
-  cls();
+  // set the global variables
+  gImageHandle = ImageHandle;
+  gSystemTable = SystemTable;
   
-  // print the Hello World string
-  puts(L"Hello, World!");
-  
-  // freeze
-  while (1)
-    _asm ("hlt \n");
-  
-  // done
-  return EFI_SUCCESS;
+  // successfully initialized our code
+  return TRUE;
 }
