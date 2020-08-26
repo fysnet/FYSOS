@@ -57,57 +57,33 @@
  */
 
 /*
- *  BOOT.CPP
- *  This is the main C source file for a demo bootable image for UEFI.
- *  This code will simply print a few chars to the screen.
- *
- *  To use:
- *   You need a GPT formatted disk image with at least one partition entry
- *   formatted to FAT32 (FAT16 works with most EFI systems), with the following
- *    files in the \EFI\BOOT\ directory:
- *     BOOTIA32.EFI (or)
- *     BOOTx64.EFI
- *     startup.nsh
- *   Then boot the image using an EFI compatible emulator such as Oracle VM VirtualBox
- *    or QEMU
+ *  CONOUT.CPP
+ *  This is a helper C source file for a demo bootable image for UEFI.
  *
  *  Assumptions/prerequisites:
- *    32-bit or 64-bit
+ *    32-bit only
  *
  *  Last updated: 23 Aug 2020
  *
  *  To Build:
- *   Use a fairly modern compiler that can generate EFI PE/COFF files.
- *
- *   I use a Windows based compiler set for either 32-bit code or 64-bit code.
- *
+ *   See BOOT.CPP
  */
 
 #include "../include/ctype.h"
 #include "efi_common.h"
 
-#include "conout.h"
+/*
+ * cls()
+ * call the efi's console out protocol to clear the screen
+ */
+void cls(void) {
+  gSystemTable->ConOut->ClearScreen(gSystemTable->ConOut);
+}
 
 /*
- * efi_main()
- * this is what gets called by the EFI boot services
+ * puts()
+ * call the efi's console out protocol to write a string to the screen
  */
-EFI_STATUS efi_main(EFI_HANDLE ImageHandle, struct EFI_SYSTEM_TABLE *SystemTable) {
-  
-  // initialize our library code
-  if (!InitializeLib(ImageHandle, SystemTable))
-    return 1;
-  
-  // clear the screen
-  cls();
-  
-  // print the Hello World string
-  puts(L"Hello, World!");
-  
-  // freeze
-  while (1)
-    ;
-  
-  // done
-  return EFI_SUCCESS;
+void puts(CHAR16 *text) {
+  gSystemTable->ConOut->OutputString(gSystemTable->ConOut, text);
 }
