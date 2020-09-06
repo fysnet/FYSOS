@@ -1,0 +1,74 @@
+
+Dump ACPI  v00.10.00 (C)opyright   Forever Young Software 1984-2020
+
+ Root System Descriptor Pointer Structure: 0x000F7540
+             Signature: 'RSD PTR ' (0x20445352 0x20525450)
+               OEM sig: 'VIA601'
+               Version: 0 (1.0)
+          RSDT Address: 0x177F3000
+
+ -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ Root System Descriptor Table: 0x177F3000
+             Signature: 'RSDT' (0x54445352)
+          Table Length: 44  (2 entries)
+               Version: 1 (1.0)
+               OEM sig: 'VIA601'
+                OEM ID: 'MSI ACPI'
+           OEM Version: '1.0B'
+   Creator/ASL Compiler ID: 'AWRD'
+  Creator/ASL Compiler Ver: 0x00000000
+
+ -=-= Table Header Pointer =-=-=-=-=-=-=-=-=
+              Entry #0: 0x177F3040
+
+ ACPI: DSDT:  AML code size 11641
+Decode 11641 bytes of aml here...
+
+ -=-= Table Header Pointer =-=-=-=-=-=-=-=-=
+              Entry #1: 0x177F5E80
+
+ -=-= Header -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+             Signature: 'APIC' (0x43495041)
+          Table Length: 84
+               Version: 1 (1.0)
+               OEM sig: 'VIA601'
+                OEM ID: 'AWRDACPI'
+           OEM Version: '1.0B'
+   Creator/ASL Compiler ID: 'AWRD'
+  Creator/ASL Compiler Ver: 0x00000000
+
+ -=-= Body -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ APIC: LAPIC Address: 0xFEE00000
+ APIC:     Dual-8259: yes
+
+ -=-= Items -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+ APIC sub-type 0 found...
+  Processor Local APIC
+ APIC:  ACPI Processor ID: 0
+ APIC:            APIC ID: 0
+ APIC:             Usable: yes
+
+ APIC sub-type 1 found...
+  I/O APIC
+ APIC:        I/O APIC ID: 2
+ APIC:   I/O APIC Address: 0xFEC00000
+ APIC:     Interrupt Base: 0
+
+ APIC sub-type 2 found...
+  Interrupt Source Overrides
+ APIC:                Bus: 0
+ APIC:             Source: 0
+ APIC:   System Interrupt: 2
+ APIC:              Flags: 0x0000
+                 Polarity: Comforms to Specifications of the bus
+             Trigger mode: Comforms to Specifications of the bus
+
+ APIC sub-type 2 found...
+  Interrupt Source Overrides
+ APIC:                Bus: 0
+ APIC:             Source: 11
+ APIC:   System Interrupt: 11
+ APIC:              Flags: 0x0000
+                 Polarity: Comforms to Specifications of the bus
+             Trigger mode: Comforms to Specifications of the bus
+
