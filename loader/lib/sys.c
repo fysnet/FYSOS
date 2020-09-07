@@ -105,7 +105,7 @@ bool intx(int i, struct REGS *regs) {
 //  Check for 64-bit machine.  
 //  First we have to check for a 486+ with the CPUID instruction.
 //  Then if found, using EAX = 1, check bit 30 in EDX.
-//  Bit 30 tells us that we are 64-bit machine, currently emulating a x86
+//  Bit 29 tells us that we are 64-bit machine, currently emulating a x86
 //    returns
 //         0 = 8086, 1 = 186, 2 = 286, (see note)
 //         3 = 386+
@@ -120,14 +120,14 @@ int chk_64bit(void) {
   asm (
     "  pushf                   ; save the original flags value\n"
     
-    "  mov  ax,00h             ; Assume an 8086\n"
+    "  mov  ax,0               ; Assume an 8086\n"
     "  mov  cx,0121h           ; If CH can be shifted by 21h,\n"
     "  shl  ch,cl              ; then it's an 8086, because\n"
     "  jz   chk486done         ; a 186+ limits shift counts.\n"
     "  push sp                 ; If SP is pushed as its\n"
     "  pop  ax                 ; original value, then\n"
     "  cmp  ax,sp              ; it's a 286+.\n"
-    "  mov  ax,01h             ; is 186\n"
+    "  mov  ax,1               ; is 186\n"
     "  jne  chk486done         ;\n"
     "  mov  ax,7000h           ; if bits 12,13,14 are still set\n"
     "  push ax                 ; after pushing/poping to/from\n"
@@ -136,7 +136,7 @@ int chk_64bit(void) {
     "  pop  ax                 ;\n"
     "  and  ax,7000h           ;\n"
     "  cmp  ax,7000h           ;\n"
-    "  mov  ax,02h             ; is 286\n"
+    "  mov  ax,2               ; is 286\n"
     "  jne  chk486done         ; it's a 386\n"
     
     "  ; =-=-=-=-=- test for 486\n"
@@ -155,7 +155,7 @@ int chk_64bit(void) {
     "  popfd\n"
     "  sti\n"       
     "  xor  eax,ebx\n"
-    "  mov  eax,03             ; is 386\n"
+    "  mov  eax,3              ; is 386\n"
     "  jz   short chk486done   ; else it's a 486+\n"
     
     "  ; =-=-=-=-=- test for CPUID\n"
@@ -174,7 +174,7 @@ int chk_64bit(void) {
     "  popfd\n"
     "  sti\n"       
     "  xor  eax,ebx\n"
-    "  mov  eax,04             ; is 486+ without CPUID\n"
+    "  mov  eax,4              ; is 486+ without CPUID\n"
     "  jz   short chk486done   ; else it's a 486+ with CPUID\n"
     
     "  ; =-=-=-=-=- test for the RDTSC instruction\n"
@@ -183,7 +183,7 @@ int chk_64bit(void) {
     "  mov  eax,0x00000001\n"
     "  cpuid\n"
     "  test edx,00000010h     ; bit 4\n"
-    "  mov  eax,05            ; is 486+ with CPUID, but no RDTSC\n"
+    "  mov  eax,5             ; is 486+ with CPUID, but no RDTSC\n"
     "  jz   short chk486done\n"
     
     "  ; =-=-=-=-=- test for 64-bit\n"
@@ -192,7 +192,7 @@ int chk_64bit(void) {
     "  mov  eax,0x80000001\n"
     "  cpuid\n"
     "  test edx,20000000h     ; bit 29\n"
-    "  mov  eax,06            ; is 486+ with CPUID, with RDTSC, not 64-bit\n"
+    "  mov  eax,6             ; is 486+ with CPUID, with RDTSC, not 64-bit\n"
     "  jz   short chk486done\n"
     
     "  ; =-=-=-=-=- We have a 64-bit machine\n"
