@@ -1,6 +1,6 @@
 /*             Author: Benjamin David Lunt
  *                     Forever Young Software
- *                     Copyright (c) 1984-2018
+ *                     Copyright (c) 1984-2020
  *  
  *  This code is donated to the Freeware communitee.  You have the
  *   right to use it for learning purposes only.  You may not modify it
@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  10 Aug 2018
+ * Last update:  07 Sept 2020
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -25,38 +25,53 @@
 #ifndef _LOADER_H
 #define _LOADER_H
 
-#include "apm.h"
+#define TITLE_BUILD_VER " FYSOS v2.0 Loader (32/64-bit) (Build 3600)"
+
 #include "disks.h"
 #include "malloc.h"
-#include "pci.h"
 #include "time.h"
 #include "video.h"
 
-// Set this define to allow for older machines with:
-//  - no CPUID or RDTSC instruction
-//  - less memory (16 Meg required)
-// Still requires a 80x386 (32-bit) machine...
-#define  ALLOW_SMALL_MACHINE  0  // 0 = error on 486 or less (486+ w/ CPUID *and* RDTSC required)
-                                 // 1 = allow 486 without CPUID and/or RDTSC
-#if ALLOW_SMALL_MACHINE
-  #define MEMORY_MIN_REQUIRED  0x01000000  // 16 meg
-  #define DECOMP_BUFFER_SIZE   0x00400000  //  4 meg
-#else
-  #define MEMORY_MIN_REQUIRED  0x08000000  // 128 meg
-  #define DECOMP_BUFFER_SIZE   0x01000000  // 16 meg
-#endif
+#define MEMORY_MIN_REQUIRED  0x08000000  // 128 meg
+#define DECOMP_BUFFER_SIZE   0x01000000  // 16 meg
+
+#define FILES_IS_KERNEL  (1<<0)
+#define FILES_IS_BSOD    (1<<1)
+struct FILES {
+  char   FileName[64];
+  void  *Data;
+  bit32u Size;
+  bit32u Target;
+  bit32u Flags;
+};
+
+struct BSOD_HEADER {
+  bit32u start_address[2];       // start address (relative to 0x00010000)
+  struct S_MODE_INFO mode_info;  // video information
+  bit32u reserved[8];            // reserved for future use
+};
 
 // if one or more of these are defined, that respected fs code is
 //  included with this loader.  If one or more lines are commented
 //  out, that fs system is also commented out.
-//#define FS_LEAN     1
-//#define FS_EXT2     2
-//#define FS_SFS      3
+// usually, you only have one defined at a time, since you are building
+//  the loader.sys file for a single file system.
+// however, if you define more than one, or all of them, you only
+//  have to build this loader once, then just copy it to each file-
+//  system supported.
+#define FS_LEAN     1
+#define FS_EXT2     2
+#define FS_SFS      3
 #define FS_FAT12   12
 #define FS_FAT16   16
 #define FS_FAT32   32
-//#define FS_FYSFS   22
-//#define FS_EXFAT   11
+#define FS_FYSFS   22
+#define FS_EXFAT   11
+
+#if !defined(FS_LEAN) && !defined(FS_EXT2) && !defined(FS_SFS) && !defined(FS_FAT12) && \
+    !defined(FS_FAT16) && !defined(FS_FAT32) && !defined(FS_FYSFS) && !defined(FS_EXFAT)
+  #error "Must define at least one file system."
+#endif
 
 #ifdef FS_LEAN
   bit32u fs_leanfs(const char *, void *);
@@ -95,44 +110,35 @@ struct S_BOOT_DATA {
 #define SYS_B_MAGIC3  0x534F4654  // 'SOFT'
 
 struct S_SYS_BLOCK {
-  bit32u magic0;  // first magic number                                                //    4
-  bit16u gdtoff;  // = ((256*8)-1);  // Address of our GDT                             //    2
-  bit32u gdtoffa; // = 0x00110000;  // KERN_GDT in memory.h                            //    4
-  bit16u idtoff;  // = ((256*8)-1);  // 256 = number of interrupts we allow            //    2
-  bit32u idtoffa; // = 0x00110800;  // KERN_IDT in memory.h                            //    4
-  bit32u bios_type;             // 'BIOS' = legacy BIOS, 'UEFI' = UEFI booted          //    4
-  bit32u uefi_image_handle;     // UEFI Image Handle                                   //    4
-  bit32u uefi_system_table;     // UEFI System Table Pointer                           //    4
-  struct S_BOOT_DATA boot_data; // booted data                                         //   48
-  bit8u  resv0[32];             // reserved                                            //   32
-  bit32u magic1;  // second magic number                                               //    4
-  struct S_BIOS_PCI bios_pci;   // PCI information from the BIOS                       //    8
-  bit32u org_int1e;             // original INT1Eh address                             //    4
-  struct S_FLOPPY1E floppy_1e;  // floppies status                                     //   11
-  struct S_TIME time;         // current time passed to kernel                         //   14
-  struct S_APM apm;           // Advanced Power Management                             //   44
-  bool   has_cpuid;           // set if we detect a 486+ with a CPUID instruction      //    1
-  bool   has_rdtsc;           // set if we detect a 486+ with a RDTSC instruction      //    1
-  bool   is_small_machine;    // set if we detect/set for a "small" machine            //    1
-  bit16u bios_equip;          // bios equipment list at INT 11h (or 0040:0010h)        //    2
-  bit8u  kbd_bits;            // bits at 0x00417                                       //    1
-  bit32u magic2;  // third magic number                                                //    4
-  struct S_MEMORY memory;     // memory blocks returned by INT 15h memory services     // 1356
-  bit8u  a20_tech;            // the technique number used to enable the a20 line      //    1
-  bool   text_only;           // Use screen mode 3, text only                          //    1
-  bit16u vid_mode_cnt;        // count of video mode info blocks found                 //    2
-  bit16u cur_vid_index;       // index into mode_info[] of chosen/default/current mode //    2
-  struct S_MODE_INFO mode_info[VIDEO_MAX_MODES]; // video modes information for kernel //   VIDEO_MAX_MODES * 24
-  bit8u  resv2[28];           // reserved                                              //   28
-  struct S_DRV_PARAMS drive_params[10];  // up to 10 hard drive parameter tables       //  960
-  bit8u  padding[1795];       // padding to xxxx bytes                                 // 
-  bit32u magic3;  // fourth magic number                                               //    4
+  bit32u magic0;                // first magic number
+  bit32u bios_type;             // 'BIOS' = legacy BIOS, 'UEFI' = UEFI booted
+  bit32u uefi_image_handle;     // UEFI Image Handle
+    bit32u uefi_image_handle_hi;
+  bit32u uefi_system_table;     // UEFI System Table Pointer
+    bit32u uefi_system_table_hi;
+  bit32u uefi_rsdp_pointer;     // UEFI System Table Pointer
+    bit32u uefi_rsdp_pointer_hi;
+  struct S_BOOT_DATA boot_data; // booted data
+  bit32u magic1;              // second magic number
+  struct S_TIME time;         // current time passed to kernel
+  struct S_MEMORY memory;     // memory blocks returned by INT 15h memory services
+  bit32u magic2;              // third magic number
+  bit16u vid_mode_cnt;        // count of video mode info blocks found
+  bit16u cur_vid_index;       // index into mode_info[] of chosen/default/current mode
+  struct S_MODE_INFO mode_info[VIDEO_MAX_MODES]; // video modes information for kernel
+  bool   has_cpuid;           // set if we detect a 486+ with a CPUID instruction
+  bit8u  a20_tech;            // number of technique loader.sys used to enable the a20 line
+  bool   text_only;           // Use screen mode 3, text only
+  bit8u  padding[1151];       // reserved
+  bit32u magic3;              // fourth magic number
 };
 
 #pragma pack(pop)
 
 extern struct S_SYS_BLOCK sys_block;
 
-void finish();
+void finish_32bit();
+void finish_64bit();
+void LoadFile(struct FILES *);
 
 #endif // _LOADER_H
