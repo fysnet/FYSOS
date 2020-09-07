@@ -16,7 +16,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  7 Aug 2020
+ * Last update:  07 Sept 2020
  *
  * compile using SmallerC  (https://github.com/alexfru/SmallerC/)
  *  smlrcc @make.txt
@@ -102,31 +102,33 @@ bool intx(int i, struct REGS *regs) {
 }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-//  Checks for a 486+ machine with the CPUID and RDTSC instructions.
-//  on entry: nothing
-//  on exit:
+//  Check for 64-bit machine.  
+//  First we have to check for a 486+ with the CPUID instruction.
+//  Then if found, using EAX = 1, check bit 30 in EDX.
+//  Bit 30 tells us that we are 64-bit machine, currently emulating a x86
 //    returns
 //         0 = 8086, 1 = 186, 2 = 286, (see note)
 //         3 = 386+
 //         4 = 486+ without CPUID, 
-//         5 = 486+ with CPUID but not RDTSC,
+//         5 = 486+ with CPUID but not RDTSC
 //         6 = 486+ with CPUID and RDTSC
+//        64 = 64-bit machine
 //  Note: we have already checked for at least an 80x386 via the boot code
 //   that loaded this loader.sys file.  i.e.: it won't return less than '3'
 //   since if it was, wouldn't have gotten this far anyway.
-int chk_486(void) {
+int chk_64bit(void) {
   asm (
     "  pushf                   ; save the original flags value\n"
-    "  \n"
+    
     "  mov  ax,00h             ; Assume an 8086\n"
     "  mov  cx,0121h           ; If CH can be shifted by 21h,\n"
     "  shl  ch,cl              ; then it's an 8086, because\n"
-    "  jz   short chk486done   ; a 186+ limits shift counts.\n"
+    "  jz   chk486done         ; a 186+ limits shift counts.\n"
     "  push sp                 ; If SP is pushed as its\n"
     "  pop  ax                 ; original value, then\n"
     "  cmp  ax,sp              ; it's a 286+.\n"
     "  mov  ax,01h             ; is 186\n"
-    "  jne  short chk486done   ;\n"
+    "  jne  chk486done         ;\n"
     "  mov  ax,7000h           ; if bits 12,13,14 are still set\n"
     "  push ax                 ; after pushing/poping to/from\n"
     "  popf                    ; the flags register then we have\n"
@@ -135,9 +137,9 @@ int chk_486(void) {
     "  and  ax,7000h           ;\n"
     "  cmp  ax,7000h           ;\n"
     "  mov  ax,02h             ; is 286\n"
-    "  jne  short chk486done   ; it's a 386\n"
-    "  \n"
-    "  ; =-=-=-=-=- test for .486\n"
+    "  jne  chk486done         ; it's a 386\n"
+    
+    "  ; =-=-=-=-=- test for 486\n"
     "  ; if we can toggle bit 18 in EFLAGS (AC bit) we have a\n"
     "  ;  486+.  The 386 doesn't have the AC bit.\n"
     "  cli\n"
@@ -153,9 +155,9 @@ int chk_486(void) {
     "  popfd\n"
     "  sti\n"       
     "  xor  eax,ebx\n"
-    "  mov  ax,03              ; is 386\n"
+    "  mov  eax,03             ; is 386\n"
     "  jz   short chk486done   ; else it's a 486+\n"
-    "  \n"
+    
     "  ; =-=-=-=-=- test for CPUID\n"
     "  ; if we can toggle bit 21 in EFLAGS (ID bit) we have a\n"
     "  ;  486+ with the CPUID instruction\n"
@@ -172,23 +174,31 @@ int chk_486(void) {
     "  popfd\n"
     "  sti\n"       
     "  xor  eax,ebx\n"
-    "  mov  ax,04              ; is 486+ without CPUID\n"
+    "  mov  eax,04             ; is 486+ without CPUID\n"
     "  jz   short chk486done   ; else it's a 486+ with CPUID\n"
-    "  \n"
-    "  ; =-=-=-=-=- test for RDTSC\n"
-    "  ; do a CPUID with function 1.  If bit 4 of EDX on return,\n"
-    "  ;  we have the RDTSC instruciton\n"
-    "  mov  eax,1\n"
+    
+    "  ; =-=-=-=-=- test for the RDTSC instruction\n"
+    "  ; do a CPUID with standard function 1.  If bit 4 of EDX is set on return,\n"
+    "  ;  we have a 486+, with CPUID, and the RDTSC instruction.\n"
+    "  mov  eax,0x00000001\n"
     "  cpuid\n"
-    "  test edx,10h\n"
-    "  mov  ax,05              ; is 486+ with CPUID but without RDTSC\n"
+    "  test edx,00000010h     ; bit 4\n"
+    "  mov  eax,05            ; is 486+ with CPUID, but no RDTSC\n"
     "  jz   short chk486done\n"
-    "  \n"
-    "  ; =-=-=-=-=- We got a 486+ with the CPUID and RDTSC instructions\n"
-    "  mov  ax,06              ; is 486+ with CPUID and RDTSC\n"
-    "  \n"
+    
+    "  ; =-=-=-=-=- test for 64-bit\n"
+    "  ; do a CPUID with extended function 1.  If bit 29 of EDX is set on return,\n"
+    "  ;  we have a 64-bit machine capable of long mode.\n"
+    "  mov  eax,0x80000001\n"
+    "  cpuid\n"
+    "  test edx,20000000h     ; bit 29\n"
+    "  mov  eax,06            ; is 486+ with CPUID, with RDTSC, not 64-bit\n"
+    "  jz   short chk486done\n"
+    
+    "  ; =-=-=-=-=- We have a 64-bit machine\n"
+    "  mov  eax,64\n"
+    
     "chk486done: \n"
-    "  movzx eax,ax \n" 
     "  popf                    ; restore the original flags value\n"
   );
 }
@@ -205,21 +215,12 @@ void add64(void *targ, void *src) {
   );  
 }
 
-void get_bios_equ_list(bit16u *bios_equip, bit8u *kbd_bits) {
-  *bios_equip = * (bit16u *) 0x00410;
-  *kbd_bits = * (bit8u *) 0x00417;
-}
-
 // reads the current value of the Time Stamp Counter
 bit32u read_tsc(void) {
-#if ALLOW_SMALL_MACHINE
-  return 0;
-#else
   asm (" rdtsc ");
   // at this point, edx contains the high order dword
   // however, we have a 32-bit compiler, so it will be
   //  ignored on return.
-#endif
 }
 
 // disable interrupts  (using 'cli')
@@ -252,7 +253,7 @@ bool restore_ints(const bool state) {
 }
 
 // hook a BIOS vector
-hook_vector(const int i, const void *addr, bit32u *old_isr) {
+void hook_vector(const int i, const void *addr, bit32u *old_isr) {
   bool ints;
   
   ints = disable_ints();
@@ -346,13 +347,13 @@ void keyboard_isr(void) {
     }
   }
   
-  // else, it was any other key, so pass it on to the BIOS' handler
+  // else, it was any other key, so pass it on to the BIOS handler
   asm (
     "  popad             \n"  // restore all registers used
     "  mov  ebp,[dword _old_isr9]  \n"
-    "  pop  ds           \n"  //
+    "  pop  ds           \n"  
     "  add  sp,8         \n"  // remove the 'keycode' and 'i' local parameters
-    "  xchg ebp,[esp]    \n"  // place the return value on the stack and restore the epb register
+    "  xchg ebp,[esp]    \n"  // place the return value on the stack and restore the ebp register (without changing sp)
     "  retf              \n"
   );
 }
