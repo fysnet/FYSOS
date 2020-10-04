@@ -69,7 +69,7 @@
  *     than mentioned here.
  *   - Must have full access to said hardware.
  *
- *  Last updated: 14 July 2020
+ *  Last updated: 3 Oct 2020
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os gd_xhci.c -o gd_xhci.exe -s
@@ -77,7 +77,6 @@
  *  Usage:
  *    gd_xhci
  */
-
 
 #include <ctype.h>
 #include <conio.h>
@@ -96,6 +95,12 @@
 #include "../include/usb.h"
 
 #include "gd_xhci.h"
+
+// QEMU doesn't quite handle SETUP/DATA/STATUS transactions correctly.
+// If you plan to use QEMU with this code, be sure to define this next line:
+//  (read the note where this define is used to see why)
+//  (See bug report: https://bugs.launchpad.net/qemu/+bug/1859378 )
+#define QEMU_EMULATION
 
 // common constant dwords
 bit32u hccparams1, hccparams2, hcsparams1, hcsparams2, rts_offset, db_offset;
@@ -136,17 +141,18 @@ struct xHCI_EP_CONTEXT ep;
 bit32u cur_ep_ring_ptr;
 bool   cur_ep_ring_cycle;
 
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // we currently don't use any command line parameters, but still leave them here
 int main(int argc, char *argv[]) {
   struct PCI_DEV pci_dev;
   struct PCI_POS pci_pos;
   
   // print header string
-  printf("\n GD_xHCI -- xHCI: Get Device Descriptor.   v1.10.20" COPYRIGHT);
+  printf("\n GD_xHCI -- xHCI: Get Device Descriptor.   v1.10.52" COPYRIGHT "\n");
   
   // setup the timer delay code
   if (!setup_timer()) {
-    printf("\n I didn't find a processor with the RDTSC instruction.");
+    puts(" I didn't find a processor with the RDTSC instruction.");
     return E_NO_RDTSC;
   }
   
@@ -158,7 +164,7 @@ int main(int argc, char *argv[]) {
   while (get_next_cntrlr(&pci_dev, &pci_pos)) {
     if (pci_dev.p_interface == xHC_TYPE_XHCI) {
       // print that we found a controller at this 'address'
-      printf("\n  Found xHCI controller at: 0x%08X", pci_dev.base0 & ~0xF);
+      printf("  Found xHCI controller at: 0x%08X\n", pci_dev.base0 & ~0xF);
       // call the function to see if there is a device attached
       process_xhci(&pci_dev, &pci_pos);
     }
@@ -166,10 +172,37 @@ int main(int argc, char *argv[]) {
     pci_pos.func++;
   }
   
-  printf("\n");
   return 0;
 }
 
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Note: QEMU doesn't allow us to read from a non-dword aligned boundary
+//        when reading from the xHCI controller space.
+//       therefore, we must read from the dword-aligned address and "shift-out"
+//        the value wanted.
+
+// We have to do this for all byte and word reads.  All dword reads within
+//  this code are already on dword aligned boundaries.
+bit8u our_farpeekb(const int base_selector, bit32u offset) {
+  return (bit8u) (_farpeekl(base_selector, offset & ~3) >> ((offset & 3) * 8));
+}
+
+// We call the byte_read twice incase the address crosses a 32-bit boundary
+bit16u our_farpeekw(const int base_selector, bit32u offset) {
+  return (our_farpeekb(base_selector, offset + 1) << 8) |
+          our_farpeekb(base_selector, offset);
+}
+
+// if needed, we call the word_read twice incase the address crosses a 32-bit boundary
+bit32u our_farpeekl(const int base_selector, bit32u offset) {
+  if (offset & 3)
+    return (our_farpeekw(base_selector, offset + 2) << 16) |
+            our_farpeekw(base_selector, offset);
+  else
+    return _farpeekl(base_selector, offset);
+}
+
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // reset the controller, create a few rings, set the address, and request the device descriptor.
 bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   int timeout, ndp = 0, i, k;
@@ -184,7 +217,7 @@ bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   base_mi.address = pci_dev->base0 & ~0xF;
   base_mi.size = 65536;
   if (!get_physical_mapping(&base_mi, &base_selector)) {
-    printf("\n Error 'allocating' physical memory for operational registers.");
+    puts(" Error 'allocating' physical memory for operational registers.");
     return FALSE;
   }
   
@@ -193,7 +226,7 @@ bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   heap_mi.address = HEAP_START;
   heap_mi.size = HEAP_SIZE;
   if (!get_physical_mapping(&heap_mi, &heap_selector)) {
-    printf("\n Error 'allocating' physical memory for our heap.");
+    puts(" Error 'allocating' physical memory for our heap.");
     __dpmi_free_physical_address_mapping(&base_mi);
     return FALSE;
   }
@@ -203,7 +236,7 @@ bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   pci_write_byte(pos->bus, pos->dev, pos->func, 0x61, 0x20);
   
   // read the version register (just a small safety check)
-  if (_farpeekw(base_selector, xHC_CAPS_IVersion) < 0x95)
+  if (our_farpeekw(base_selector, xHC_CAPS_IVersion) < 0x95)
     return FALSE;
   
   // if it is a Panther Point device, make sure sockets are xHCI controlled.
@@ -216,7 +249,7 @@ bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   
   // calculate the operational base
   // must be before any xhci_read_op_reg() or xhci_write_op_reg() calls
-  op_base_off = (bit32u) _farpeekb(base_selector, xHC_CAPS_CapLength);
+  op_base_off = our_farpeekl(base_selector, xHC_CAPS_CapLength) & 0xFF;
   
   // reset the controller, returning false after 500mS if it doesn't reset
   // Be sure to read the section on reseting the xHCI controller in the book
@@ -230,7 +263,7 @@ bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   }
   
   /*
-   * if we get here, we have a valid xHCI controller, so set it up.
+   * If we get here, we have a valid xHCI controller, so set it up.
    * First we need to find out which port access arrays are USB2 and which are USB3
    */
   
@@ -246,13 +279,13 @@ bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   
   // Turn off legacy support for Keyboard and Mice
   if (!xhci_stop_legacy(ext_caps_off)) {
-    printf("\n BIOS did not release Legacy support...");
+    puts(" BIOS did not release Legacy support...");
     return FALSE;
   }
   
   // get num_ports from XHCI's HCSPARAMS1 register
   ndp = (bit8u) ((hcsparams1 & 0xFF000000) >> 24);
-  printf("\n  Found %i (virtual) root hub ports.", ndp);
+  printf("  Found %i (virtual) root hub ports.\n", ndp);
   
   // Get protocol of each port
   //  Each physical port will have a USB3 and a USB2 PortSC register set.
@@ -309,6 +342,16 @@ bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
       port_info[i].flags |= xHCI_PROTO_ACTIVE;
   }
   
+  // uncomment these lines to see the pairing
+  /*
+  for (i=0; i<ndp; i++) {
+    xhci_get_proto_offset(ext_caps_off, xHCI_IS_USB3_PORT(i) ? 3 : 2, &offset, NULL, NULL);
+    printf(" port %i: USB%i %s paired, %sactive, proto offset %i, other offset %i\n", i,
+      xHCI_IS_USB3_PORT(i) ? 3 : 2, xHCI_HAS_PAIR(i) ? "is" : "non", xHCI_IS_ACTIVE(i) ? "" : "in",
+      offset + port_info[i].offset, port_info[i].other_port_num);
+  }
+  */
+  
   /*
    * Now that we have the protocol for each port, let's set up the controller
    *  we need a command ring and a single endpoint ring with it's event ring.
@@ -358,7 +401,7 @@ bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   
   // start the interrupter
   if (set_interrupt_handler(pci_dev->irq, (int) xhci_irq) != 0) {
-    printf("\n Error allocating irq.");
+    puts(" Error allocating irq.");
     return FALSE;
   }
   
@@ -427,7 +470,7 @@ bit32u heap_alloc(bit32u size, const bit32u alignment, const bit32u boundary) {
   
   // check to see if we are out of bounds
   if ((((cur_heap_ptr + size) - 1) >= HEAP_SIZE) || ((boundary > 0) && (size > boundary))) {
-    printf("\n Error in allocating memory within our heap");
+    puts(" Error in allocating memory within our heap");
     exit(-1);
   }
   
@@ -450,11 +493,15 @@ bool xhci_get_descriptor(const int port) {
   bit32u HCPortStatusOff = xHC_OPS_USBPortSt + (port * 16);
   struct DEVICE_DESC dev_desc;
   
+  // clear it out
+  memset(&dev_desc, 0, sizeof(struct DEVICE_DESC));
+  
   // port has been reset, and is ready to be used
   // we have a port that has a device attached and is ready for data transfer.
   // so lets create our stack and send it along.
   dword = xhci_read_op_reg(HCPortStatusOff + xHC_Port_PORTSC);
   int speed = ((dword & (0xF << 10)) >> 10); // FULL = 1, LOW = 2, HI = 3, SS = 4
+  
   /*
    * Some devices will only send the first 8 bytes of the device descriptor
    *  while in the default state.  We must request the first 8 bytes, then reset
@@ -493,10 +540,14 @@ bool xhci_get_descriptor(const int port) {
     
     // initialize the device/slot context
     bit32u slot_addr = xhci_initialize_slot(slot_id, port, speed, max_packet);
+    
     // send the address_device command
-    xhci_set_address(slot_addr, slot_id, TRUE);
+    if (!xhci_set_address(slot_addr, slot_id, TRUE))
+      return FALSE;
+    
     // now send the "get_descriptor" packet (get 8 bytes)
-    xhci_control_in(&dev_desc, 8, slot_id, max_packet);
+    if (xhci_control_in(&dev_desc, 8, slot_id, max_packet) == 0)
+      return FALSE;
     
     // TODO: if the dev_desc.max_packet was different than what we have as max_packet,
     //       you would need to change it here and in the slot context by doing a
@@ -506,27 +557,29 @@ bool xhci_get_descriptor(const int port) {
     xhci_reset_port(port);
     
     // send set_address_command again
-    xhci_set_address(slot_addr, slot_id, FALSE);
+    if (!xhci_set_address(slot_addr, slot_id, FALSE))
+      return FALSE;
     
     // get the whole packet.
-    xhci_control_in(&dev_desc, 18, slot_id, max_packet);
+    if (xhci_control_in(&dev_desc, 18, slot_id, max_packet) == 0)
+      return FALSE;
     
     // print the descriptor
-    printf("\n  Found Device Descriptor:"
-           "\n                 len: %i"
-           "\n                type: %i"
-           "\n             version: %01X.%02X"
-           "\n               class: %i"
-           "\n            subclass: %i"
-           "\n            protocol: %i"
-           "\n     max packet size: %i"
-           "\n           vendor id: 0x%04X"
-           "\n          product id: 0x%04X"
-           "\n         release ver: %i%i.%i%i"
-           "\n   manufacture index: %i (index to a string)"
-           "\n       product index: %i"
-           "\n        serial index: %i"
-           "\n   number of configs: %i",
+    printf("  Found Device Descriptor:\n"
+           "                 len: %i\n"
+           "                type: %i\n"
+           "             version: %01X.%02X\n"
+           "               class: %i\n"
+           "            subclass: %i\n"
+           "            protocol: %i\n"
+           "     max packet size: %i\n"
+           "           vendor id: 0x%04X\n"
+           "          product id: 0x%04X\n"
+           "         release ver: %i%i.%i%i\n"
+           "   manufacture index: %i (index to a string)\n"
+           "       product index: %i\n"
+           "        serial index: %i\n"
+           "   number of configs: %i\n",
            dev_desc.len, dev_desc.type, dev_desc.usb_ver >> 8, dev_desc.usb_ver & 0xFF, dev_desc._class, dev_desc.subclass, 
            dev_desc.protocol, dev_desc.max_packet_size, dev_desc.vendorid, dev_desc.productid, 
            (dev_desc.device_rel & 0xF000) >> 12, (dev_desc.device_rel & 0x0F00) >> 8,
@@ -554,18 +607,18 @@ bool xhci_get_descriptor(const int port) {
 bit32u xhci_get_proto_offset(bit32u list_off, const int version, int *offset, int *count, bit16u *flags) {
   bit32u next;
   
-  *count = 0;  // mark that there isn't any to begin with
+  if (count) *count = 0;  // mark that there isn't any to begin with
   
   do {
     // calculate next item position
-    bit32u item_next = _farpeekb(base_selector, list_off + 1);
+    bit32u item_next = our_farpeekb(base_selector, list_off + 1);
     next = (item_next) ? (list_off + (item_next * 4)) : 0;
     
     // is this a protocol item and if so, is it the version we are looking for?
-    if ((_farpeekb(base_selector, list_off + 0) == xHC_xECP_ID_PROTO) && (_farpeekb(base_selector, list_off + 3) == version)) {
-      *offset = _farpeekb(base_selector, list_off + 8) - 1;  // make it zero based
-      *count = _farpeekb(base_selector, list_off + 9);
-      *flags = _farpeekw(base_selector, list_off + 10) & 0x0FFF;
+    if ((our_farpeekb(base_selector, list_off + 0) == xHC_xECP_ID_PROTO) && (our_farpeekb(base_selector, list_off + 3) == version)) {
+      if (offset) *offset = our_farpeekb(base_selector, list_off + 8) - 1;  // make it zero based
+      if (count) *count = our_farpeekb(base_selector, list_off + 9);
+      if (flags) *flags = our_farpeekw(base_selector, list_off + 10) & 0x0FFF;
       return next;
     }
     
@@ -588,24 +641,38 @@ bit32u xhci_get_proto_offset(bit32u list_off, const int version, int *offset, in
  * Ownership is released when bit 24 is set *and* bit 16 is clear.
  * This will wait xHC_xECP_LEGACY_TIMEOUT ms for the BIOS to release ownership.
  *   (It is unknown the exact time limit that the BIOS has to release ownership.)
- *
- * This assumes there is a Legacy entry *and* that it is the first entry.
- * You will need to code it so that this is not assumed...
- *
  */
 bool xhci_stop_legacy(bit32u list_off) {
+  bit32u next;
   
   // set bit 24 asking the BIOS to release ownership
-  xhci_write_cap_reg(list_off, xhci_read_cap_reg(list_off) | xHC_xECP_LEGACY_OS_OWNED);
+  do {
+    // calculate next item position
+    bit32u item_next = our_farpeekb(base_selector, list_off + 1);
+    next = (item_next) ? (list_off + (item_next * 4)) : 0;
+    
+    // is this the legacy entry?
+    if (our_farpeekb(base_selector, list_off + 0) == xHC_xECP_ID_LEGACY) {
+      xhci_write_cap_reg(list_off, xhci_read_cap_reg(list_off) | xHC_xECP_LEGACY_OS_OWNED);
+      
+      // Timeout if bit 24 is not set and bit 16 is not clear after xHC_xECP_LEGACY_TIMEOUT milliseconds
+      int timeout = xHC_xECP_LEGACY_TIMEOUT;
+      while (timeout--) {
+        if ((our_farpeekl(base_selector, list_off) & xHC_xECP_LEGACY_OWNED_MASK) == xHC_xECP_LEGACY_OS_OWNED)
+          return TRUE;
+        mdelay(1);
+      }
+      break;
+    }
+    
+    // point to next item
+    list_off = next;
+  } while (list_off);
   
-  // Timeout if bit 24 is not set and bit 16 is not clear after xHC_xECP_LEGACY_TIMEOUT milliseconds
-  int timeout = xHC_xECP_LEGACY_TIMEOUT;
-  while (timeout--) {
-    if ((xhci_read_cap_reg(list_off) & xHC_xECP_LEGACY_OWNED_MASK) == xHC_xECP_LEGACY_OS_OWNED)
-      return TRUE;
-    mdelay(1);
-  }
-  return FALSE;
+  // if we get here, either there was not a legacy entry,
+  //  or the BIOS didn't give it up.
+  // We return TRUE anyway, just to see if we can keep going.
+  return TRUE;
 }
 
 // 4.9: Initially when the TRB Ring is created in memory, or if it is ever re-initialized, 
@@ -656,7 +723,7 @@ bool xhci_send_command(struct xHCI_TRB *trb, const bool ring_it) {
       timer--;
     }
     if (timer == 0) {
-      printf("\n USB xHCI Command Interrupt wait timed out.");
+      puts(" USB xHCI Command Interrupt wait timed out.");
       return TRUE;
     } else {
       xhci_get_trb(trb, org_trb_addr);  // retrieve the trb data
@@ -681,7 +748,7 @@ int xhci_wait_for_interrupt(bit32u status_addr) {
         case BABBLE_DETECTION:
           return STALL_ERROR;
         default:
-          printf("\n USB xHCI wait interrupt status = 0x%08X (%i)", xhci_read_phy_mem(status_addr), TRB_GET_COMP_CODE(xhci_read_phy_mem(status_addr)));
+          printf(" USB xHCI wait interrupt status = 0x%08X (%i)\n", xhci_read_phy_mem(status_addr), TRB_GET_COMP_CODE(xhci_read_phy_mem(status_addr)));
           return ERROR_UNKNOWN;
       }
     }
@@ -690,7 +757,7 @@ int xhci_wait_for_interrupt(bit32u status_addr) {
     mdelay(1);
   }
   
-  printf("\n USB xHCI Interrupt wait timed out.");
+  puts(" USB xHCI Interrupt wait timed out.");
   return ERROR_TIME_OUT;
 }
 
@@ -709,7 +776,7 @@ void xhci_set_trb(struct xHCI_TRB *trb, const bit32u address) {
 bit32u create_event_ring(const int trbs, bit32u *ret_addr) {
   
   // Please note that 'trbs' should be <= 4096 or you will need to make multiple segments
-  // I only use one here.
+  // I only use one segment here.
   
   const bit32u table_addr = heap_alloc(64, 64, 0);  // min 16 bytes on a 64 byte alignment, no boundary requirements
   const bit32u addr = heap_alloc((trbs * sizeof(struct xHCI_TRB)), 64, 65536); // 16 * trbs, 64 byte alignment, 64k boundary
@@ -770,8 +837,7 @@ bool xhci_reset_port(const int port) {
       // success
       ret = TRUE;
     }
-  } else
-    printf("\n Reset Timed out");
+  }
   
   // if we have a successful USB2 reset, we need to make sure this port is marked active,
   //  and if it has a paired port, it is marked inactive
@@ -802,6 +868,9 @@ bit32u xhci_initialize_slot(const int slot_id, const int port, const int speed, 
   // write the address of the slot in the slot array
   xhci_write_phy_mem64(dcbaap_start + (slot_id * sizeof(bit64u)), slot_addr);
   
+  // clear it out first
+  memset(&slot, 0, sizeof(struct xHCI_SLOT_CONTEXT));
+  
   // set the initial values
   slot.entries = 1;            // the control ep
   slot.speed = speed;          // speed
@@ -830,12 +899,15 @@ void xhci_initialize_ep(const bit32u slot_addr, const int slot_id, const int ep_
   if (type != CONTROL_EP)
     return;
   
+  // clear it out first
+  memset(&ep, 0, sizeof(struct xHCI_EP_CONTEXT));
+  
   // allocate the EP's Transfer Ring
   ep.tr_dequeue_pointer = create_ring(TRBS_PER_RING);
   ep.dcs = TRB_CYCLE_ON;
   
   // save for the control_in stuff
-  cur_ep_ring_ptr = ep.tr_dequeue_pointer;
+  cur_ep_ring_ptr = (bit32u) ep.tr_dequeue_pointer;
   cur_ep_ring_cycle = ep.dcs;
   
   // set the initial values
@@ -947,12 +1019,10 @@ bool xhci_set_address(const bit32u slot_addr, const int slot_id, const bool bloc
     return FALSE;
 }
 
-bool xhci_control_in(void *targ, const int len, const int slot_id, const int max_packet) {
-  bit8u dir = xHCI_DIR_IN;
-  bit8u dirb = xHCI_DIR_IN_B;
+int xhci_control_in(void *targ, const int len, const int slot_id, const int max_packet) {
   bit32u status_addr = heap_alloc(4, 16, 16);  // we need a dword status buffer with a physical address
-  bit32u status;
   bit32u buffer_addr = heap_alloc(256, 1, 0);  // get a physical address buffer and then copy from it later
+  bit32u status;
   
   static struct REQUEST_PACKET packet = { STDRD_GET_REQUEST, GET_DESCRIPTOR, ((DEVICE << 8) | 0), 0, 0 };
   packet.length = len;
@@ -960,12 +1030,23 @@ bool xhci_control_in(void *targ, const int len, const int slot_id, const int max
   xhci_setup_stage(&packet, xHCI_DIR_IN);
   xhci_data_stage(buffer_addr, DATA_STAGE, len, xHCI_DIR_IN_B, max_packet, status_addr);
   
+// QEMU doesn't quite handle SETUP/DATA/STATUS transactions correctly.
+// It will wait for the STATUS TRB before it completes the transfer.
+// Technically, you need to check for a good transfer before you send the
+//  STATUS TRB.  However, since QEMU doesn't update the status until after
+//  the STATUS TRB, waiting here will not complete a successful transfer.
+//  Bochs and real hardware handles this correctly, however QEMU does not.
+// If you are using QEMU, do not ring the doorbell here.  Ring the doorbell
+//  *after* you place the STATUS TRB on the ring.
+// (See bug report: https://bugs.launchpad.net/qemu/+bug/1859378 )
+#ifndef QEMU_EMULATION
   // Now ring the doorbell and wait for the interrupt to happen
   xhci_write_doorbell(slot_id, xHCI_CONTROL_EP);   // ring the doorbell
   status = xhci_wait_for_interrupt(status_addr);
   
   if (status != TRB_SUCCESS)
     return 0;
+#endif
   
   xhci_status_stage(xHCI_DIR_IN_B ^ 1, status_addr);
   
@@ -984,14 +1065,14 @@ bool xhci_control_in(void *targ, const int len, const int slot_id, const int max
 
 int xhci_setup_stage(const struct REQUEST_PACKET *request, const bit8u dir) {
   bit64u param = (bit64u) (((request->value << 16) | (request->request << 8) | request->request_type) | 
-                                  ((bit64u) request->length << 48) | ((bit64u) request->index << 32));
-
+                   ((bit64u) request->length << 48) | ((bit64u) request->index << 32));
+  
   xhci_write_phy_mem64(cur_ep_ring_ptr, param);
   xhci_write_phy_mem(cur_ep_ring_ptr +  8, (0 << 22) | 8);
   xhci_write_phy_mem(cur_ep_ring_ptr + 12, (dir << 16) | TRB_SET_TYPE(SETUP_STAGE) | (1 << 6) | (0 << 5) | cur_ep_ring_cycle);
   
   // this assumes that we will always have room in the ring for these TRB's
-  cur_ep_ring_ptr += 16;
+  cur_ep_ring_ptr += sizeof(struct xHCI_TRB);
   
   return 1;
 }
@@ -1040,7 +1121,7 @@ int xhci_status_stage(const bit8u dir, const bit32u status_addr) {
   xhci_write_phy_mem(cur_ep_ring_ptr + 12, (dir << 16) | TRB_SET_TYPE(STATUS_STAGE) | (0 << 5) | (1 << 4) | (0 << 1) | cur_ep_ring_cycle);
   
   // this assumes that we will always have room in the ring for these TRB's
-  cur_ep_ring_ptr += 16;
+  cur_ep_ring_ptr += sizeof(struct xHCI_TRB);
   
   xhci_write_phy_mem(status_addr, 0); // clear the status dword
   
@@ -1049,7 +1130,7 @@ int xhci_status_stage(const bit8u dir, const bit32u status_addr) {
   xhci_write_phy_mem(cur_ep_ring_ptr + 12, TRB_SET_TYPE(EVENT_DATA) | (1 << 5) | (0 << 4) | (0 << 1) | cur_ep_ring_cycle);
   
   // this assumes that we will always have room in the ring for these TRB's
-  cur_ep_ring_ptr += 16;
+  cur_ep_ring_ptr += sizeof(struct xHCI_TRB);
   
   return 2;
 }
@@ -1075,15 +1156,15 @@ void xhci_write_op_reg64(const bit32u offset, const bit64u val) {
 
 
 bit32u xhci_read_cap_reg(const bit32u offset) {
-  return _farpeekl(base_selector, offset);
+  return our_farpeekl(base_selector, offset);
 }
 
 bit64u xhci_read_cap_reg64(const bit32u offset) {
   if (hccparams1 & 1)
-    return (_farpeekl(base_selector, offset) |
-      ((bit64u) _farpeekl(base_selector, offset + 4) << 32));
+    return (our_farpeekl(base_selector, offset) |
+      ((bit64u) our_farpeekl(base_selector, offset + 4) << 32));
   else
-    return _farpeekl(base_selector, offset);
+    return our_farpeekl(base_selector, offset);
 }
 
 bit32u xhci_read_op_reg(const bit32u offset) {
@@ -1113,18 +1194,23 @@ void xhci_write_phy_mem64(const bit32u address, bit64u val) {
 }
 
 bit32u xhci_read_phy_mem(const bit32u address) {
-  return _farpeekl(heap_selector, get_linear(address));
+  return our_farpeekl(heap_selector, get_linear(address));
 }
 
 bit64u xhci_read_phy_mem64(const bit32u address) {
   if (hccparams1 & 1)
-    return (_farpeekl(heap_selector, get_linear(address)) |
-      ((bit64u) _farpeekl(heap_selector, get_linear(address) + 4) << 32));
+    return (our_farpeekl(heap_selector, get_linear(address)) |
+      ((bit64u) our_farpeekl(heap_selector, get_linear(address) + 4) << 32));
   else
-    return _farpeekl(heap_selector, get_linear(address));
+    return our_farpeekl(heap_selector, get_linear(address));
 }
 
 void xhci_write_doorbell(const bit32u slot_id, const bit32u val) {
+  // make sure everything is written to physical memory before we ring the doorbell
+  // it should be since writing to the doorbell will be after all other writes,
+  //  but we do this to be sure.
+  __asm__ __volatile__ ( "sfence\n" );
+  
   _farpokel(base_selector, db_offset + (slot_id * sizeof(bit32u)), val); // ring a doorbell
 }
 
@@ -1139,15 +1225,15 @@ void xhci_write_primary_intr64(const bit32u offset, const bit64u val) {
 }
 
 bit32u xhci_read_primary_intr(const bit32u offset) {
-  return _farpeekl(base_selector, (rts_offset + 0x20) + offset);
+  return our_farpeekl(base_selector, (rts_offset + 0x20) + offset);
 }
 
 bit64u xhci_read_primary_intr64(const bit32u offset) {
   if (hccparams1 & 1)
-    return (_farpeekl(base_selector, (rts_offset + 0x20) + offset) |
-      ((bit64u) _farpeekl(base_selector, (rts_offset + 0x20) + offset + 4) << 32));
+    return (our_farpeekl(base_selector, (rts_offset + 0x20) + offset) |
+      ((bit64u) our_farpeekl(base_selector, (rts_offset + 0x20) + offset + 4) << 32));
   else
-    return _farpeekl(base_selector, (rts_offset + 0x20) + offset);
+    return our_farpeekl(base_selector, (rts_offset + 0x20) + offset);
 }
 
 

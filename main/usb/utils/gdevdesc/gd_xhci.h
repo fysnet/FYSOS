@@ -96,7 +96,7 @@ void write_to_slot(const bit32u, struct xHCI_SLOT_CONTEXT *);
 void write_to_ep(const bit32u, struct xHCI_EP_CONTEXT *);
 void read_from_slot(struct xHCI_SLOT_CONTEXT *, const bit32u);
 void read_from_ep(struct xHCI_EP_CONTEXT *, const bit32u);
-bool xhci_control_in(void *, const int, const int, const int);
+int  xhci_control_in(void *, const int, const int, const int);
 
 int xhci_setup_stage(const struct REQUEST_PACKET *, const bit8u);
 int xhci_data_stage(bit32u, bit8u, const bit32u, bit8u, const bit16u, const bit32u);
