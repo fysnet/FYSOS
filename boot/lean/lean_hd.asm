@@ -30,7 +30,7 @@ comment |*******************************************************************
 *               NBASM ver 00.26.74                                         *
 *          Command line: nbasm lean_hd<enter>                              *
 *                                                                          *
-* Last Updated: 27 Sept 2017                                               *
+* Last Updated: 15 Nov 2020                                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -345,11 +345,12 @@ f_loader:  mov  si,offset os_load_str  ; loading message
            
            ; move past INODE and ea's
            ; since the loader file can be > 64k, we have to allow for roll-over
+           shr  ebx,4      ; ebx = loader address from above
+           mov  es,bx      ; for inode read below
            mov  si,sizeof(S_LEAN_INODE)
            test dword es:[S_LEAN_INODE->attributes],LEAN_ATTR_INLINEXTATTR
            jz   short @f
            mov  si,512
-@@:        shr  ebx,4      ; ebx = loader address from above
 @@:        mov  ds,bx
            mov  es,bx
            xor  di,di
