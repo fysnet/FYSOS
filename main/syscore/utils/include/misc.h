@@ -57,7 +57,7 @@
  */
 
 /*
- *  Last updated: 20 July 2020
+ *  Last updated: 2 Dec 2020
  */
 
 #ifndef FYSOS_MISC
@@ -178,17 +178,17 @@ void get_a_string(FILE *fp, char *str) {
   // skip all leading spaces
   while (!feof(fp)) {
     ch = fgetc(fp);
-    if (ch == ' ')
-      continue;
-    else
+    if (ch != ' ')
       break;
   }
   
   while (1) {
     if (feof(fp))
       break;
-    if (ch == 13)
+    if (ch == 13) {  // skip CR character
+      ch = fgetc(fp);
       continue;
+    }
     if (strchr("\xA,=#", ch))
       break;
     *t++ = ch;
