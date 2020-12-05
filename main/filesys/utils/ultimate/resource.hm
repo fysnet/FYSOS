@@ -1,0 +1,10 @@
+// Microsoft Developer Studio generated Help ID include file.
+// Used by ultimate.rc
+//
+#define HIDC_FORCE_GPT                  0x806603f5    // IDD_ULTIMATE_DIALOG
+#define HIDC_FORCE_GPT_ENUM             0x806603f6    // IDD_ULTIMATE_DIALOG
+#define HIDC_FORCE_MBR                  0x806603f4    // IDD_ULTIMATE_DIALOG
+#define HIDC_FORCE_NO_MBR               0x806603f8    // IDD_ULTIMATE_DIALOG
+#define HIDC_FORCE_READONLY             0x806603f7    // IDD_ULTIMATE_DIALOG
+#define HIDC_IMAGE_BAR                  0x806603ea    // IDD_ULTIMATE_DIALOG
+#define HIDC_SECT_SIZE                  0x8066041e    // IDD_ULTIMATE_DIALOG
