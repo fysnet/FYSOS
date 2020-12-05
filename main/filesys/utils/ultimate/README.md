@@ -35,7 +35,7 @@ made if you wish to compile for 32-bit Windows.
 
 ## To Build
 - [X] 64-bit Windows: Using Microsoft Visual Studio (2019), create an empty workspace.  Add all of the files in this folder and then the 'res' folder.  Rebuild Solution. (I am sure you will need to tweak some settings: 'Release:x64', etc.)
-- [X] 32-bit Windows: Using Microsoft Visual C++ 6.0, create an empty workspace.  Add all of the files in this folder and then the 'res' folder.  Rebuild All.
+- [X] 32-bit Windows: Using Microsoft Visual C++ 6.0, create an empty workspace.  Add all of the files in this folder and then the 'res' folder.  Rebuild All.  Note that a few items might need to be modified.  For example, [Line 81 in ultimate.rc](https://github.com/fysnet/FYSOS/blob/master/main/filesys/utils/ultimate/ultimate.rc#L81) currently states a 64-bit version.  I believe there were a few other small changes I had to do to make it compile on 32-bit MSVC++ 6.0, after all MSVC++ 6.0 is copyrighted 1994-98 :-)
 - [ ] I have not built with any other compiler.  I am guessing that someone could build using GCC for Windows, and possibly GCC and mingw (?) for Linux?  However, I do not use Linux or GCC (for Windows), and have no idea if it is even possible.
 
 ## Your contribution
