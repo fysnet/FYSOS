@@ -33,5 +33,10 @@ size, as well as remove the limit of partitions it will allow.
 - [ ] The current code release is for 64-bit Windows.  I few (slight) modifications must be
 made if you wish to compile for 32-bit Windows.
 
+## To Build
+- [X] 64-bit Windows: Using Microsoft Visual Studio (2019), create an empty workspace.  Add all of the files in this folder and then the 'res' folder.  Rebuild Solution. (I am sure you will need to tweak some settings: 'Release:x64', etc.)
+- [X] 32-bit Windows: Using Microsoft Visual C++ 6.0, create an empty workspace.  Add all of the files in this folder and then the 'res' folder.  Rebuild All.
+- [ ] I have not built with any other compiler.  I am guessing that someone could build using GCC for Windows, and possibly GCC and mingw (?) for Linux?  However, I do not use Linux or GCC (for Windows), and have no idea if it is even possible.
+
 ## Your contribution
 If you wish to contribute to this project--and I hope you do--or wish to point out a bug, please contact me at: fys [at] fysnet [dot] net.
