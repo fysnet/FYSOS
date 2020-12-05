@@ -3,7 +3,7 @@
 These are the Windows Executables for the [Ultimate](http://www.fysnet.net/ultimate/index.htm) utility.
 
 ## Last Update:
-05 Nov 2020
+Current version: 00.50.00 and is dated: 05 Nov 2020
 
 ## Please note:
 <pre>
