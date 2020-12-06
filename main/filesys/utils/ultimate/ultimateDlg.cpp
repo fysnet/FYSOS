@@ -175,7 +175,6 @@ BEGIN_MESSAGE_MAP(CUltimateDlg, CDialog)
   ON_WM_QUERYDRAGICON()
   ON_COMMAND(ID_FILE_NEW, OnFileNew)
   ON_COMMAND(ID_FILE_OPEN, OnFileOpen)
-  ON_COMMAND(ID_FILE_OPENDRIVE, OnFileOpenDrive)
   ON_COMMAND(ID_FILE_CLOSE, OnFileClose)
   ON_COMMAND(ID_TOOLS_RESIZE, OnToolsResize)
   ON_COMMAND(ID_TOOLS_ERASE_IMAGE, OnToolsErase)
@@ -640,44 +639,6 @@ void CUltimateDlg::OnFileOpen() {
   
   POSITION pos = dlg.GetStartPosition();
   FileOpen(dlg.GetNextPathName(pos));
-}
-
-void CUltimateDlg::OnFileOpenDrive() {
-
-  AfxMessageBox("Unimplemented...");
-  return;
-
-  /*
-  CGetImage GetImage;
-  struct VOLUMES *volumes;
-  int count;
-  CString cs;
-  
-  volumes = (struct VOLUMES *) calloc(MAX_VOLUMES * sizeof(struct VOLUMES), 1);
-  count = GetImage.GetDrives(volumes, MAX_VOLUMES);
-
-  for (int i=0; i<count; i++) {
-    switch (volumes[i].iType) {
-      case DRIVE_REMOVABLE:
-        cs.Format("%s %s (Removable)", volumes[i].szDriveName, volumes[i].szName);
-        break;
-      case DRIVE_FIXED:
-        cs.Format("%s %s (Fixed)", volumes[i].szDriveName, volumes[i].szName);
-        break;
-      case DRIVE_CDROM:
-        cs.Format("%s %s (CD-ROM)", volumes[i].szDriveName, volumes[i].szName);
-        break;
-      default:
-        cs.Format("%s %s (Unkownn Type)", volumes[i].szDriveName, volumes[i].szName);
-        break;
-    }
-    AfxMessageBox(cs);
-  }
-
-  // can't call FileOpen(), it does a few things we don't want to happen.
-  //  will need a m_file_type member, then use m_file or m_drive_handle accordingly ????
-  */
-
 }
 
 void CUltimateDlg::OnFileClose() {

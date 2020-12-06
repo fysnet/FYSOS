@@ -229,7 +229,6 @@ protected:
   afx_msg HCURSOR OnQueryDragIcon();
   afx_msg void OnFileNew();
   afx_msg void OnFileOpen();
-  afx_msg void OnFileOpenDrive();
   afx_msg void OnFileClose();
   afx_msg void OnFileReload();
   afx_msg void OnFileExit();

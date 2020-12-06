@@ -896,14 +896,13 @@
 #define ID_TOOLS_ERASE_IMAGE            32781
 #define ID_APPEND_VHD                   32782
 #define ID_TOOLS_ADDHYBRIDCDROM         32783
-#define ID_FILE_OPENDRIVE               32784
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        197
-#define _APS_NEXT_COMMAND_VALUE         32785
+#define _APS_NEXT_COMMAND_VALUE         32784
 #define _APS_NEXT_CONTROL_VALUE         1570
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
