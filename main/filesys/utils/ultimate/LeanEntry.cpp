@@ -339,7 +339,7 @@ void CLeanEntry::OnEas() {
   if (m_inode.attributes & LEAN_ATTR_EAS_IN_INODE) {
     // Read in the whole Inode Sector
     void *inode_buf = malloc(MAX_SECT_SIZE);
-    dlg->ReadFromFile(inode_buf, m_parent->m_lba + m_inode.extent_start[0], 1, FALSE);
+    dlg->ReadFromFile(inode_buf, m_parent->m_lba + m_inode.extent_start[0], 1);
     Size = (dlg->m_sect_size - sizeof(struct S_LEAN_INODE));
     memcpy(buffer, (BYTE *) inode_buf + sizeof(struct S_LEAN_INODE), (size_t) Size);
     free(inode_buf);
@@ -421,9 +421,9 @@ void CLeanEntry::OnEas() {
       if (buff_len > 0)
         * (DWORD *) p = buff_len - sizeof(DWORD);
       void *inode_buf = malloc(MAX_SECT_SIZE);
-      dlg->ReadFromFile(inode_buf, m_parent->m_lba + m_inode.extent_start[0], 1, FALSE);
+      dlg->ReadFromFile(inode_buf, m_parent->m_lba + m_inode.extent_start[0], 1);
       memcpy((BYTE *) inode_buf + sizeof(struct S_LEAN_INODE), buffer, dlg->m_sect_size - LEAN_INODE_SIZE);
-      dlg->WriteToFile(inode_buf, m_parent->m_lba + m_inode.extent_start[0], 1, FALSE);
+      dlg->WriteToFile(inode_buf, m_parent->m_lba + m_inode.extent_start[0], 1);
       free(inode_buf);
       free(buffer);
     }
@@ -453,7 +453,7 @@ void CLeanEntry::OnEas() {
         m_fork.Format("%I64i", m_inode.fork); // update the Dialog member
       } else {
         void *inode_buf = malloc(MAX_SECT_SIZE);
-        dlg->ReadFromFile(inode_buf, m_parent->m_lba + m_inode.fork, 1, FALSE);
+        dlg->ReadFromFile(inode_buf, m_parent->m_lba + m_inode.fork, 1);
         m_parent->ReadFileExtents(&extents, m_inode.fork);
         free(inode_buf);
       }
@@ -544,9 +544,9 @@ void CLeanEntry::OnOK() {
   }
   
   // write the new inode data to the disk
-  dlg->ReadFromFile(buffer, m_parent->m_lba + m_inode_num, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_parent->m_lba + m_inode_num, 1);
   memcpy(buffer, &m_inode, sizeof(struct S_LEAN_INODE));
-  dlg->WriteToFile(buffer, m_parent->m_lba + m_inode_num, 1, FALSE);
+  dlg->WriteToFile(buffer, m_parent->m_lba + m_inode_num, 1);
   
   CDialog::OnOK();
 }

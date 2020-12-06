@@ -348,7 +348,7 @@ int CUltimateDlg::DetFileType(void) {
   // also, (temporaritly) set the length so the check won't fail
   m_file_length.QuadPart = 4096;  // need to be at least 4096 incase we are using 4096 sized sectors
   m_file_type = DLG_FILE_TYPE_FLAT;
-  ReadFromFile(buffer, 0, 1, FALSE);
+  ReadFromFile(buffer, 0, 1);
   
   // try a Bochs Virtual disk image
   if (memcmp(&buffer[0], "Bochs Virtual HD Image\0\0\0\0\0\0\0\0\0\0", 32) == 0) {
@@ -458,15 +458,6 @@ void CUltimateDlg::FileOpen(CString csPath) {
   // get and save the length of the image file
   m_file_length = GetFileLength((HANDLE) m_file.m_hFile);
   
-  // check to see if it is an ISO image
-  m_sect_size = m_dflt_sect_size;
-  // Need to use the ReadFromFile() so we can read from physical device (eventually!)
-  ReadFromFile(buffer, 16, 1, TRUE);
-  if ((memcmp(buffer + 1, "CD001", 5) == 0) ||
-      (memcmp(buffer + 1, "BEA01", 5) == 0)) {
-    m_isISOImage = TRUE;
-  }
-  
   // see if there is a companion ".info" file for this image
   // for example, if the image file is named "new_image.img" the
   //   info file will be named "new_image.img.info".
@@ -475,6 +466,25 @@ void CUltimateDlg::FileOpen(CString csPath) {
   if (!FileOpenInfo(csPath)) {
     m_file.Close();
     return;
+  }
+
+  // check to see if it is an ISO image
+  m_sect_size = m_dflt_sect_size;
+  // Need to use the ReadFromFile() so we can read from physical device (eventually!)
+  ReadFromFile(buffer, 16, 1);
+  if ((memcmp(buffer + 1, "CD001", 5) == 0) ||
+      (memcmp(buffer + 1, "BEA01", 5) == 0)) {
+    m_isISOImage = TRUE;
+  } else if (m_sect_size != 2048) {
+    // if the sector size isn't 2048, try again with that sector size
+    m_sect_size = 2048;  // temporarily set the sector size to 2k
+    ReadFromFile(buffer, 16, 1);
+    m_sect_size = m_dflt_sect_size;  // restore the sector size
+    if ((memcmp(buffer + 1, "CD001", 5) == 0) ||
+        (memcmp(buffer + 1, "BEA01", 5) == 0)) {
+      AfxMessageBox("Found CDROM but Sector Size is not 2048!\r\n"
+                    " Change Sector Size to 2048 and try again");
+    }
   }
   
   // now don't allow the user to change the sector size and a few other things
@@ -486,7 +496,7 @@ void CUltimateDlg::FileOpen(CString csPath) {
   GetDlgItem(IDC_SECT_SIZE_1024)->EnableWindow(FALSE);
   GetDlgItem(IDC_SECT_SIZE_2048)->EnableWindow(FALSE);
   GetDlgItem(IDC_SECT_SIZE_4096)->EnableWindow(FALSE);
-  
+
   m_image_bar.m_item_count = 0;
   m_image_bar.m_TabControl = &m_TabControl;
   m_ImageBar.ImageParse(&m_file);
@@ -513,10 +523,8 @@ int CUltimateDlg::GetString(char *buffer, CString &str) {
       break;
   }
   
-  while (1) {
-    if (!buffer[p])
-      break;
-    if (ch != 13) {
+  while (ch) {
+    if (ch != 13) {  // this skips all CRs
       if (strchr("\xA,=#", ch))
         break;
       str += ch;
@@ -529,8 +537,7 @@ int CUltimateDlg::GetString(char *buffer, CString &str) {
   // if it was the '#' char, skip to eol
   if (ch == '#') {
     while (buffer[p]) {
-      ch = buffer[p++];
-      if (ch == 10)
+      if (buffer[p++] == 10)
         break;
     }
   }
@@ -555,6 +562,7 @@ BOOL CUltimateDlg::FileOpenInfo(CString csPath) {
     return TRUE;
 
   // don't allow the file to be larger than 64k in size (just in case...)
+  //  64k is just a number I picked.  No specific reason for this size...
   length = (UINT) file.GetLength();
   if (length > 65535)  // 64k - 1
     length = 65535;
@@ -565,7 +573,7 @@ BOOL CUltimateDlg::FileOpenInfo(CString csPath) {
   file.Close();
   
   // make sure it is null terminated
-  buffer[length] = 0;
+  buffer[length] = '\0';
   
   // parse the file
   pos = buffer;
@@ -1007,7 +1015,7 @@ void CUltimateDlg::OnToolsHybridCDROM() {
   pvd->struct_ver = 1;
       
   // write the PVD
-  WriteToFile(buffer, PVD_SECT, 1, TRUE);
+  WriteToFile(buffer, PVD_SECT, 1);
   
   
   // create Boot Descriptor
@@ -1018,7 +1026,7 @@ void CUltimateDlg::OnToolsHybridCDROM() {
   bvd->ver = 1;
   memcpy(bvd->sys_ident, "EL TORITO SPECIFICATION", 23);
   bvd->boot_cat = BOOT_CAT_SECT;
-  WriteToFile(buffer, BVD_SECT, 1, TRUE);
+  WriteToFile(buffer, BVD_SECT, 1);
   
   // write Termination Volume Descriptor sector
   memset(buffer, 0, 2048);
@@ -1026,7 +1034,7 @@ void CUltimateDlg::OnToolsHybridCDROM() {
   term->id = 255;
   memcpy(term->ident, "CD001", 5);
   term->ver = 1;
-  WriteToFile(buffer, TVD_SECT, 1, TRUE);
+  WriteToFile(buffer, TVD_SECT, 1);
   
   // write Boot Catalog sector
   memset(buffer, 0, 2048);
@@ -1055,11 +1063,11 @@ void CUltimateDlg::OnToolsHybridCDROM() {
   
   // end entry
   boot_cat->end_entry.id = 0x91;          // no more entries follow
-  WriteToFile(buffer, BOOT_CAT_SECT, 1, TRUE);
+  WriteToFile(buffer, BOOT_CAT_SECT, 1);
   
   // root table
   memset(buffer, 0, 2048);
-  WriteToFile(buffer, BOOT_CAT_SECT + 1, 1, TRUE);
+  WriteToFile(buffer, BOOT_CAT_SECT + 1, 1);
   
   // free the buffer
   free(buffer);
@@ -1204,27 +1212,23 @@ BOOL CUltimateDlg::SetFileLength(HANDLE hFile, const DWORD64 Size) {
   return ret;
 }
 
-long CUltimateDlg::ReadFromFile(void *buffer, DWORD64 lba, long count, const bool is_cdrom) {
-  const unsigned int sect_size = (is_cdrom) ? 2048 : m_sect_size;
+long CUltimateDlg::ReadFromFile(void *buffer, DWORD64 lba, long count) {
   CString cs;
   
   switch (m_file_type) {
     case DLG_FILE_TYPE_FLAT: {
       LARGE_INTEGER large_int;
-      large_int.QuadPart = (lba * sect_size);
+      large_int.QuadPart = (lba * m_sect_size);
       
       // if we will be reading from past end of file, give an error
-      if ((large_int.QuadPart + (count * sect_size)) > m_file_length.QuadPart) {
-        if (is_cdrom)
-          cs.Format("ReadFromFile: Error trying to read outside of image file...(%I64i  %i)", lba * 4, count * 4);
-        else
-          cs.Format("ReadFromFile: Error trying to read outside of image file...(%I64i  %i)", lba, count);
+      if ((large_int.QuadPart + (count * m_sect_size)) > m_file_length.QuadPart) {
+        cs.Format("ReadFromFile: Error trying to read outside of image file...(%I64i  %i)", lba, count);
         AfxMessageBox(cs);
         return 0;
       }
       
       ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
-      if (m_file.Read(buffer, count * sect_size) != count * sect_size) {
+      if (m_file.Read(buffer, count * m_sect_size) != count * m_sect_size) {
         cs.Format("Error reading %i sectors from LBA %I64i", count, lba);
         AfxMessageBox(cs);
         return 0;
@@ -1239,30 +1243,25 @@ long CUltimateDlg::ReadFromFile(void *buffer, DWORD64 lba, long count, const boo
 }
 
 // GUI Throws and exception if in error
-void CUltimateDlg::WriteToFile(void *buffer, DWORD64 lba, long count, const bool is_cdrom) {
-  const unsigned int sect_size = (is_cdrom) ? 2048 : m_sect_size;
-
+void CUltimateDlg::WriteToFile(void *buffer, DWORD64 lba, long count) {
   if (!IsDlgButtonChecked(IDC_FORCE_READONLY)) {
     CString cs;
     
     switch (m_file_type) {
       case DLG_FILE_TYPE_FLAT: {
         LARGE_INTEGER large_int;
-        large_int.QuadPart = (lba * sect_size);
+        large_int.QuadPart = (lba * m_sect_size);
         
         // if we will be writing past end of file, give an error
         if (!m_overwrite_okay)
-          if ((large_int.QuadPart + (count * sect_size)) > m_file_length.QuadPart) {
-            if (is_cdrom)
-              cs.Format("WriteToFile: Error trying to write outside of image file...(%I64i  %i)", lba * 4, count * 4);
-            else
-              cs.Format("WriteToFile: Error trying to write outside of image file...(%I64i  %i)", lba, count);
+          if ((large_int.QuadPart + (count * m_sect_size)) > m_file_length.QuadPart) {
+            cs.Format("WriteToFile: Error trying to write outside of image file...(%I64i  %i)", lba, count);
             AfxMessageBox(cs);
             return;
           }
         
         ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
-        m_file.Write(buffer, count * sect_size);
+        m_file.Write(buffer, count * m_sect_size);
       } break;
         
       default:
@@ -1280,9 +1279,9 @@ void CUltimateDlg::InsertSectors(const DWORD64 start_lba, const long count) {
   m_overwrite_okay = TRUE;  // okay to write past eof
   
   while (lba >= start_lba) {
-    if (ReadFromFile(buffer, lba, 1, FALSE) == 0)
+    if (ReadFromFile(buffer, lba, 1) == 0)
       break;
-    WriteToFile(buffer, lba + count, 1, FALSE);
+    WriteToFile(buffer, lba + count, 1);
     if (lba == 0) break; // catch zero since we are unsigned lba value
     lba--;
   }
@@ -1303,9 +1302,9 @@ void CUltimateDlg::RemoveSectors(const DWORD64 start_lba, const long count) {
   for (long i=0; i<count; i++) {
     if (lba >= size) 
       break;
-    if (ReadFromFile(buffer, lba, 1, FALSE) == 0)
+    if (ReadFromFile(buffer, lba, 1) == 0)
       break;
-    WriteToFile(buffer, lba - count, 1, FALSE);
+    WriteToFile(buffer, lba - count, 1);
     lba++;
   }
 
@@ -1334,7 +1333,7 @@ BOOL CUltimateDlg::UpdateSig(DWORD64 lba) {
   struct S_FYSOSSIG *s_sig = (struct S_FYSOSSIG *) (buffer + S_FYSOSSIG_OFFSET);
   CFYSOSSig sig;
   
-  ReadFromFile(buffer, lba, 1, FALSE);
+  ReadFromFile(buffer, lba, 1);
   sig.m_fysos_sig.Format("0x%08X", s_sig->sig);
   sig.m_sig_base.Format("%I64i", s_sig->base);
   sig.m_boot_sig.Format("0x%04X", s_sig->boot_sig);
@@ -1343,12 +1342,11 @@ BOOL CUltimateDlg::UpdateSig(DWORD64 lba) {
     s_sig->sig = convert32(sig.m_fysos_sig);
     s_sig->base = convert64(sig.m_sig_base);
     s_sig->boot_sig = convert16(sig.m_boot_sig);
-    WriteToFile(buffer, lba, 1, FALSE);
+    WriteToFile(buffer, lba, 1);
     return TRUE;
   }
   return FALSE;
 }
-
 
 // Settings Dialog
 void CUltimateDlg::OnAppSettings() {

@@ -168,7 +168,7 @@ void CISOBoot::Start(const DWORD64 lba, DWORD color, BOOL IsNewTab) {
   
   m_boot_cat_lba = bvd->boot_cat;   // sector containing boot catalog.
   if (m_boot_cat_lba > 0)
-    dlg->ReadFromFile(m_boot_cat, m_boot_cat_lba, 1, TRUE);
+    dlg->ReadFromFile(m_boot_cat, m_boot_cat_lba, 1);
   
   DWORD offset = (DWORD) ((BYTE *) bvd->sys_use - (BYTE *) bvd);
   DumpIt(m_sys_use, bvd->sys_use, offset, 2048 - offset, FALSE);
@@ -254,9 +254,9 @@ void CISOBoot::OnApplyB() {
   
   ReceiveFromDialog();
   
-  dlg->WriteToFile(m_descriptor, m_lba, 1, TRUE);
+  dlg->WriteToFile(m_descriptor, m_lba, 1);
   if (m_boot_cat_lba > 0)
-    dlg->WriteToFile(m_boot_cat, m_boot_cat_lba, 1, TRUE);
+    dlg->WriteToFile(m_boot_cat, m_boot_cat_lba, 1);
 }
 
 // Calculate and update the CRC field
@@ -311,7 +311,7 @@ void CISOBoot::OnDiInsert() {
     while (count--) {
       memset(buffer, 0, MAX_SECT_SIZE);  // clear the buffer incase we don't read a full 2048 bytes
       file.Read(buffer, 2048);           // this could happen if the file to insert is smaller than 'count' sectors
-      dlg->WriteToFile(buffer, lba++, 1, TRUE);
+      dlg->WriteToFile(buffer, lba++, 1);
     }
     file.Close();
     AfxMessageBox("Boot image inserted successfully.");
@@ -343,7 +343,7 @@ void CISOBoot::OnDiExtract() {
   int i;
   if (file.Open(csPath, CFile::modeCreate | CFile::modeWrite | CFile::typeBinary | CFile::shareExclusive, NULL) != 0) {
     while (count) {
-      dlg->ReadFromFile(buffer, lba++, 1, TRUE);
+      dlg->ReadFromFile(buffer, lba++, 1);
       for (i=0; i<4 && count; i++, count--)
         file.Write(&buffer[i*512], 512);
     }

@@ -203,12 +203,12 @@ void CSFS::OnSFSApply() {
   
   // make sure the super is up to date
   BYTE buffer[MAX_SECT_SIZE];
-  dlg->ReadFromFile(buffer, m_lba, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_lba, 1);
   memcpy(buffer + SFS_SUPER_LOC, &m_super, sizeof(struct S_SFS_SUPER));
-  dlg->WriteToFile(buffer, m_lba, 1, FALSE);
+  dlg->WriteToFile(buffer, m_lba, 1);
   
   // make sure the index is up to date
-  dlg->WriteToFile(m_indx_buffer, m_lba + m_indx_start, m_indx_size, FALSE);
+  dlg->WriteToFile(m_indx_buffer, m_lba + m_indx_start, m_indx_size);
 }
 
 // clear out the index area, creating the start and label entries, etc.
@@ -264,7 +264,7 @@ bool CSFS::Format(const BOOL AskForBoot) {
   // first, clear out the volume
   buffer = (BYTE *) calloc(MAX_SECT_SIZE, 1);
   for (l=0; l<m_size; l++)
-    dlg->WriteToFile(buffer, m_lba + l, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + l, 1);
   
   // did we request a boot sector?
   if (AskForBoot) {
@@ -288,7 +288,7 @@ bool CSFS::Format(const BOOL AskForBoot) {
           if (filesize > MAX_SECT_SIZE) // must check manually so we don't "shrink" the buffer with realloc()
             buffer = (BYTE *) realloc(buffer, filesize);
           bsfile.Read(buffer, (UINT) filesize);
-          dlg->WriteToFile(buffer, m_lba, (UINT) reserved, FALSE);
+          dlg->WriteToFile(buffer, m_lba, (UINT) reserved);
         } else
           AfxMessageBox("Boot sector must be <= 8192 bytes");
         bsfile.Close();
@@ -310,7 +310,7 @@ bool CSFS::Format(const BOOL AskForBoot) {
   // if a bootsector was loaded, the first 512 bytes will still contain that code
   // however, lets update the super. 
   memcpy(buffer + SFS_SUPER_LOC, &m_super, sizeof(struct S_SFS_SUPER));
-  dlg->WriteToFile(buffer, m_lba, 1, FALSE);
+  dlg->WriteToFile(buffer, m_lba, 1);
   free(buffer);
   
   // now the index
@@ -326,7 +326,7 @@ bool CSFS::Format(const BOOL AskForBoot) {
   id->time_stamp = CalculateTime();
   strcpy((char *) id->name, "A Clean SFS Volume");
   id->crc = -CalculateCRC(id, SFS_ENTRY_SIZE);
-  dlg->WriteToFile(m_indx_buffer, m_lba + m_indx_start, m_indx_size, FALSE);
+  dlg->WriteToFile(m_indx_buffer, m_lba + m_indx_start, m_indx_size);
   
   if (!m_hard_format)
     SendToDialog(&m_super); // Send back to Dialog
@@ -348,7 +348,7 @@ void CSFS::OnUpdateCode() {
   BYTE *buffer = (BYTE *) calloc(reserved, 1);
   
   // first, read in what we already have
-  dlg->ReadFromFile(existing, m_lba, m_super.resv_blocks, FALSE);
+  dlg->ReadFromFile(existing, m_lba, m_super.resv_blocks);
   
   // save the FYSOS signature block incase we restore it below
   memcpy(&s_sig, existing + S_FYSOSSIG_OFFSET, sizeof(struct S_FYSOSSIG));
@@ -387,7 +387,7 @@ void CSFS::OnUpdateCode() {
       memcpy(existing + S_FYSOSSIG_OFFSET, &s_sig, sizeof(struct S_FYSOSSIG));
     
     // write it back
-    dlg->WriteToFile(existing, m_lba, m_super.resv_blocks, FALSE);
+    dlg->WriteToFile(existing, m_lba, m_super.resv_blocks);
     
     AfxMessageBox("Updated Boot Code successfully");
   }
@@ -414,7 +414,7 @@ void CSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   m_color = color;
   m_isvalid = TRUE;
   
-  dlg->ReadFromFile(buffer, lba, 1, FALSE);
+  dlg->ReadFromFile(buffer, lba, 1);
   memcpy(&m_super, buffer + SFS_SUPER_LOC, sizeof(struct S_SFS_SUPER));
   
   // DetectSFS() detected us, so we should be good
@@ -444,7 +444,7 @@ void CSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
     m_indx_start = size - m_indx_size;
     
     m_indx_buffer = (BYTE *) realloc(m_indx_buffer, m_indx_size * 512);
-    dlg->ReadFromFile(m_indx_buffer, m_lba + m_indx_start, m_indx_size, FALSE);
+    dlg->ReadFromFile(m_indx_buffer, m_lba + m_indx_start, m_indx_size);
     
     GetDlgItem(IDC_DIR_TREE)->EnableWindow(TRUE);
     
@@ -740,7 +740,7 @@ void *CSFS::ReadFile(HTREEITEM hItem, DWORD *FileSize) {
     if (eFile->type == SFS_ENTRY_FILE) {
       buffer = malloc((DWORD) eFile->file_len + MAX_SECT_SIZE);
       DWORD start_lsn = (DWORD) (eFile->start_block * ((DWORD64) 1 << (m_super.block_size + 7))) / dlg->m_sect_size; // convert eFile->start_block to lsn
-      dlg->ReadFromFile(buffer, m_lba + start_lsn, (long) ((eFile->file_len + (dlg->m_sect_size - 1)) / dlg->m_sect_size), FALSE);
+      dlg->ReadFromFile(buffer, m_lba + start_lsn, (long) ((eFile->file_len + (dlg->m_sect_size - 1)) / dlg->m_sect_size));
       if (FileSize) *FileSize = (DWORD) eFile->file_len;
     }
   }
@@ -752,7 +752,7 @@ void CSFS::WriteFile(void *buffer, DWORD64 Block, DWORD FileSize) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   
   DWORD64 start_lsn = (DWORD64) (Block * ((DWORD64) 1 << (m_super.block_size + 7))) / dlg->m_sect_size; // convert eFile->start_block to lsn
-  dlg->WriteToFile(buffer, m_lba + start_lsn, (long) ((FileSize + (dlg->m_sect_size - 1)) / dlg->m_sect_size), FALSE);
+  dlg->WriteToFile(buffer, m_lba + start_lsn, (long) ((FileSize + (dlg->m_sect_size - 1)) / dlg->m_sect_size));
 }
 
 // write zeros to this file
@@ -761,7 +761,7 @@ void CSFS::ZeroFile(DWORD64 Start, DWORD64 End) {
   void *zero = (void *) calloc(dlg->m_sect_size, 1);
 
   while (Start < End) {
-    dlg->WriteToFile((BYTE *) zero, m_lba + Start, 1, FALSE);
+    dlg->WriteToFile((BYTE *) zero, m_lba + Start, 1);
     Start++;
   }
   
@@ -1115,7 +1115,7 @@ void CSFS::DeleteFile(HTREEITEM hItem) {
   
   // write back the index
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  dlg->WriteToFile(m_indx_buffer, m_lba + m_indx_start, m_indx_size, FALSE);
+  dlg->WriteToFile(m_indx_buffer, m_lba + m_indx_start, m_indx_size);
   
   m_dir_tree.DeleteItem(hItem);
 }
@@ -1267,7 +1267,7 @@ DWORD64 CSFS::AppendFileToIndex(CString csFPath, CString csName, DWORD Size, BOO
   }
   
   // write back the index
-  dlg->WriteToFile(m_indx_buffer, m_lba + m_indx_start, m_indx_size, FALSE);
+  dlg->WriteToFile(m_indx_buffer, m_lba + m_indx_start, m_indx_size);
   
   // update the block count
   if (fnd_ret == 0) {
@@ -1281,9 +1281,9 @@ DWORD64 CSFS::AppendFileToIndex(CString csFPath, CString csName, DWORD Size, BOO
   
   // write back the super
   BYTE buffer[MAX_SECT_SIZE];
-  dlg->ReadFromFile(buffer, m_lba, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_lba, 1);
   memcpy(buffer + SFS_SUPER_LOC, &m_super, sizeof(struct S_SFS_SUPER));
-  dlg->WriteToFile(buffer, m_lba, 1, FALSE);
+  dlg->WriteToFile(buffer, m_lba, 1);
   
   // return the block to write the file to (if a file), else 0
   return ret;
@@ -1329,7 +1329,7 @@ void CSFS::OnErase() {
   if (AfxMessageBox("This will erase the whole partition!  Continue?", MB_YESNO, 0) == IDYES) {
     memset(buffer, 0, MAX_SECT_SIZE);
     for (DWORD64 lba=0; lba<m_size; lba++)
-      dlg->WriteToFile(buffer, m_lba + lba, 1, FALSE);
+      dlg->WriteToFile(buffer, m_lba + lba, 1);
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
 }

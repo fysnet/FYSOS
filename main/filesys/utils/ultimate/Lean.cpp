@@ -276,7 +276,7 @@ void CLean::OnLeanApply() {
   memcpy(buffer, &m_super, sizeof(struct S_LEAN_SUPER));
 
   // write the buffer to the file
-  dlg->WriteToFile(buffer, m_lba + m_super_lba, 1, FALSE);
+  dlg->WriteToFile(buffer, m_lba + m_super_lba, 1);
 }
 
 void CLean::OnLeanClean() {
@@ -350,7 +350,7 @@ bool CLean::Format(const BOOL AskForBoot) {
   
   // first, clear out the volume
   for (lba=0; lba<m_size; lba++)
-    dlg->WriteToFile(buffer, m_lba + lba, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + lba, 1);
   
   // did we request a boot sector?
   if (AskForBoot) {
@@ -373,7 +373,7 @@ bool CLean::Format(const BOOL AskForBoot) {
         if (filesize <= (31 * dlg->m_sect_size)) {
           reserved = (filesize + (dlg->m_sect_size - 1)) / dlg->m_sect_size;
           bsfile.Read(buffer, (UINT) filesize);
-          dlg->WriteToFile(buffer, m_lba, (UINT) reserved, FALSE);
+          dlg->WriteToFile(buffer, m_lba, (UINT) reserved);
         } else {
           cs.Format("Boot sector must be <= %i bytes", (31 * dlg->m_sect_size));
           AfxMessageBox(cs);
@@ -533,10 +533,10 @@ bool CLean::Format(const BOOL AskForBoot) {
   }
   
   // now write the first band to the disk
-  dlg->WriteToFile(buffer, m_lba + 0, 31 + 1, FALSE); // + 1 to include the super
-  dlg->WriteToFile(bitmap, m_lba + super->bitmap_start, bitmap_size, FALSE);
-  dlg->WriteToFile(root, m_lba + super->root_start, LEAN_ROOT_SIZE, FALSE);
-  dlg->WriteToFile(super, m_lba + super->backup_super, 1, FALSE);
+  dlg->WriteToFile(buffer, m_lba + 0, 31 + 1); // + 1 to include the super
+  dlg->WriteToFile(bitmap, m_lba + super->bitmap_start, bitmap_size);
+  dlg->WriteToFile(root, m_lba + super->root_start, LEAN_ROOT_SIZE);
+  dlg->WriteToFile(super, m_lba + super->backup_super, 1);
   
   // now create and write each remaining band (just the bitmap)
   if (tot_bands > 1) {
@@ -554,7 +554,7 @@ bool CLean::Format(const BOOL AskForBoot) {
     if (((band_size * u) + bitmap_size) > m_size)
       bitmap_size = (unsigned) (m_size - (band_size * u));
     // write the bitmap to current band location
-    dlg->WriteToFile(bitmap, m_lba + lba, bitmap_size, FALSE);
+    dlg->WriteToFile(bitmap, m_lba + lba, bitmap_size);
   }
 
   // set all bits in last bitmap that are past end of volume
@@ -565,7 +565,7 @@ bool CLean::Format(const BOOL AskForBoot) {
     bitmap[k] = 0xFF;
   if (tot_bands == 1)
     lba = super->bitmap_start;
-  dlg->WriteToFile(bitmap, m_lba + lba, bitmap_size, FALSE);
+  dlg->WriteToFile(bitmap, m_lba + lba, bitmap_size);
   
   // before we leave, set/clear EAs_in_Inode per format.m_eas_after_inode
   m_ESs_in_Inode = format.m_eas_after_inode;
@@ -588,7 +588,7 @@ void CLean::OnUpdateCode() {
   BYTE *existing = (BYTE *) calloc(m_super_lba * dlg->m_sect_size, 1);
   
   // first, read in what we already have (at least the first sector)
-  dlg->ReadFromFile(existing, m_lba, 1, FALSE);
+  dlg->ReadFromFile(existing, m_lba, 1);
   
   // save the FYSOS signature block incase we restore it below
   memcpy(&s_sig, existing + S_FYSOSSIG_OFFSET, sizeof(struct S_FYSOSSIG));
@@ -623,7 +623,7 @@ void CLean::OnUpdateCode() {
       memcpy(existing + S_FYSOSSIG_OFFSET, &s_sig, sizeof(struct S_FYSOSSIG));
     
     // write it
-    dlg->WriteToFile(existing, m_lba, m_super_lba, FALSE);
+    dlg->WriteToFile(existing, m_lba, m_super_lba);
   }
   
   free(existing);
@@ -862,7 +862,7 @@ void *CLean::ReadFile(DWORD64 lba, DWORD64 *Size) {
   CString cs;
   
   inode = (struct S_LEAN_INODE *) calloc(MAX_SECT_SIZE, 1);
-  dlg->ReadFromFile(inode, m_lba + lba, 1, FALSE);
+  dlg->ReadFromFile(inode, m_lba + lba, 1);
   
   // check to make sure the inode is valid
   if (!ValidInode(inode)) {
@@ -887,14 +887,14 @@ void *CLean::ReadFile(DWORD64 lba, DWORD64 *Size) {
   if (extents.extent_count > 0) {
     // The first write needs to skip the inode
     if (extents.extent_size[0] > 1) {
-      dlg->ReadFromFile(ptr, m_lba + extents.extent_start[0] + 1, extents.extent_size[0] - 1, FALSE);
+      dlg->ReadFromFile(ptr, m_lba + extents.extent_start[0] + 1, extents.extent_size[0] - 1);
       ptr += ((extents.extent_size[0] - 1) * dlg->m_sect_size);
     }
     // do the remaining extents (if any)
     for (i=1; i<extents.extent_count; i++) {
       // TODO: make sure we don't read past end of buffer
       if (extents.extent_size[i] > 0) {
-        dlg->ReadFromFile(ptr, m_lba + extents.extent_start[i], extents.extent_size[i], FALSE);
+        dlg->ReadFromFile(ptr, m_lba + extents.extent_start[i], extents.extent_size[i]);
         ptr += (extents.extent_size[i] * dlg->m_sect_size);
       }
     }
@@ -912,7 +912,7 @@ void CLean::WriteFile(void *buffer, const struct S_LEAN_SECTORS *extents, DWORD6
   unsigned i;
   
   inode = (struct S_LEAN_INODE *) calloc(MAX_SECT_SIZE, 1);
-  dlg->ReadFromFile(inode, m_lba + extents->extent_start[0], 1, FALSE);
+  dlg->ReadFromFile(inode, m_lba + extents->extent_start[0], 1);
   
   // check to make sure the inode is valid
   if (!ValidInode(inode)) {
@@ -936,14 +936,14 @@ void CLean::WriteFile(void *buffer, const struct S_LEAN_SECTORS *extents, DWORD6
   if (extents->extent_count > 0) {
     // The first write needs to skip the inode
     if (extents->extent_size[0] > 1) {
-      dlg->WriteToFile(ptr, m_lba + extents->extent_start[0] + 1, extents->extent_size[0] - 1, FALSE);
+      dlg->WriteToFile(ptr, m_lba + extents->extent_start[0] + 1, extents->extent_size[0] - 1);
       ptr += ((extents->extent_size[0] - 1) * dlg->m_sect_size);
     }
     // do the remaining extents (if any)
     for (i=1; i<extents->extent_count; i++) {
       // TODO: make sure we don't write past end of buffer
       if (extents->extent_size[i] > 0) {
-        dlg->WriteToFile(ptr, m_lba + extents->extent_start[i], extents->extent_size[i], FALSE);
+        dlg->WriteToFile(ptr, m_lba + extents->extent_start[i], extents->extent_size[i]);
         ptr += (extents->extent_size[i] * dlg->m_sect_size);
       }
     }
@@ -956,7 +956,7 @@ void CLean::WriteFile(void *buffer, const struct S_LEAN_SECTORS *extents, DWORD6
   
   // update the inode's check sum and write it back
   inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
-  dlg->WriteToFile(inode, m_lba + extents->extent_start[0], 1, FALSE);
+  dlg->WriteToFile(inode, m_lba + extents->extent_start[0], 1);
   
   free(inode);
 }
@@ -966,7 +966,7 @@ void CLean::ZeroExtent(DWORD64 ExtentStart, DWORD ExtentSize) {
   void *zero = calloc(dlg->m_sect_size, 1);
 
   for (DWORD i=0; i<ExtentSize; i++)
-    dlg->WriteToFile(zero, m_lba + ExtentStart, 1, FALSE);
+    dlg->WriteToFile(zero, m_lba + ExtentStart, 1);
 
   free(zero);
 }
@@ -984,7 +984,7 @@ BOOL CLean::DetectLeanFS(void) {
   // the lean specs say that the super can be in sector 1 - 32 (zero based)
   // count is 32 when finding primary, and 1 when finding backup
   for (unsigned sector=1; sector<=32; sector++) {
-    dlg->ReadFromFile(buffer, m_lba + sector, 1, FALSE);
+    dlg->ReadFromFile(buffer, m_lba + sector, 1);
     
     // the first entry should be 'LEAN'
     if (super->magic != LEAN_SUPER_MAGIC)
@@ -1574,10 +1574,10 @@ void CLean::FreeExtents(const struct S_LEAN_SECTORS *Extents) {
       if (band != last_band) {
         // need to write the last one before we read a new one?
         if (last_band != 0xFFFFFFFF)
-          dlg->WriteToFile(bitmap, m_lba + bitmap_lba, bitmap_size, FALSE);
+          dlg->WriteToFile(bitmap, m_lba + bitmap_lba, bitmap_size);
         last_band = band;
         bitmap_lba = (band==0) ? m_super.bitmap_start : (band * band_size);
-        dlg->ReadFromFile(bitmap, m_lba + bitmap_lba, bitmap_size, FALSE);
+        dlg->ReadFromFile(bitmap, m_lba + bitmap_lba, bitmap_size);
       }
       // clear the bit in this band
       // calculate sector in this band, byte, and bit within bitmap for 'sector'
@@ -1591,7 +1591,7 @@ void CLean::FreeExtents(const struct S_LEAN_SECTORS *Extents) {
 
   // do we need to write the last modified band?
   if (last_band != 0xFFFFFFFF)
-    dlg->WriteToFile(bitmap, m_lba + bitmap_lba, bitmap_size, FALSE);
+    dlg->WriteToFile(bitmap, m_lba + bitmap_lba, bitmap_size);
 
   // we also need to update the FreeCount in the super.
   m_super.free_sector_count += free_count;
@@ -1621,7 +1621,7 @@ DWORD64 CLean::GetFreeSector(DWORD64 Start, BOOL MarkIt) {
   for (i=0; i<tot_bands; i++) {
     // read in a bitmap
     bitmap_lba = (i==0) ? m_super.bitmap_start : (band_size * i);
-    dlg->ReadFromFile(buffer, m_lba + bitmap_lba, bitmap_size, FALSE);
+    dlg->ReadFromFile(buffer, m_lba + bitmap_lba, bitmap_size);
     pos = 0;
     
     while (pos < bytes_bitmap) {
@@ -1629,7 +1629,7 @@ DWORD64 CLean::GetFreeSector(DWORD64 Start, BOOL MarkIt) {
         if ((buffer[pos] & (1<<j)) == 0) {
           if (MarkIt) {
             buffer[pos] |= (1<<j);  // mark it
-            dlg->WriteToFile(buffer, m_lba + bitmap_lba, bitmap_size, FALSE);
+            dlg->WriteToFile(buffer, m_lba + bitmap_lba, bitmap_size);
             // we also need to update the FreeCount in the super.
             m_super.free_sector_count--;
             // TODO: update super:CRC and write the super to the disk
@@ -1662,7 +1662,7 @@ void CLean::MarkSector(DWORD64 Sector, BOOL MarkIt) {
   
   band = (DWORD) (Sector >> m_super.log_sectors_per_band);
   bitmap_lba = (band==0) ? m_super.bitmap_start : (band * band_size);
-  dlg->ReadFromFile(bitmap, m_lba + bitmap_lba, bitmap_size, FALSE);
+  dlg->ReadFromFile(bitmap, m_lba + bitmap_lba, bitmap_size);
 
   // clear/set the bit in this band
   // calculate sector in this band, byte, and bit within bitmap for 'sector'
@@ -1674,7 +1674,7 @@ void CLean::MarkSector(DWORD64 Sector, BOOL MarkIt) {
   else
     bitmap[byte] &= ~(1 << bit);
   
-  dlg->WriteToFile(bitmap, m_lba + bitmap_lba, bitmap_size, FALSE);
+  dlg->WriteToFile(bitmap, m_lba + bitmap_lba, bitmap_size);
   
   free(bitmap);
 }
@@ -1727,7 +1727,7 @@ int CLean::ReadFileExtents(struct S_LEAN_SECTORS *extents, DWORD64 Inode) {
   indirect = (struct S_LEAN_INDIRECT *) indirect_buffer;
   
   // read the inode
-  dlg->ReadFromFile(inode, m_lba + Inode, 1, FALSE);
+  dlg->ReadFromFile(inode, m_lba + Inode, 1);
   if (!ValidInode(inode))
     return -1;
   
@@ -1746,7 +1746,7 @@ int CLean::ReadFileExtents(struct S_LEAN_SECTORS *extents, DWORD64 Inode) {
     ind_lba = inode->first_indirect;
     while (ind_lba > 0) {
       // read in the indirect sector
-      dlg->ReadFromFile(indirect, m_lba + ind_lba, 1, FALSE);
+      dlg->ReadFromFile(indirect, m_lba + ind_lba, 1);
       if (!ValidIndirect(indirect))
         break;
 
@@ -1828,7 +1828,7 @@ int CLean::WriteFileExtents(const struct S_LEAN_SECTORS *extents, struct S_LEAN_
         indirect->prev_indirect = prev_lba;
         indirect->next_indirect = 0;
       } else
-        dlg->ReadFromFile(indirect_buffer, m_lba + this_lba, 1, FALSE);
+        dlg->ReadFromFile(indirect_buffer, m_lba + this_lba, 1);
       
       // write to the indirect extents
       for (i=0; (i<max_extents) && (count<extents->extent_count); i++) {
@@ -1858,7 +1858,7 @@ int CLean::WriteFileExtents(const struct S_LEAN_SECTORS *extents, struct S_LEAN_
       indirect->checksum = LeanCalcCRC(indirect, dlg->m_sect_size);
       
       // write the indirect back
-      dlg->WriteToFile(indirect_buffer, m_lba + this_lba, 1, FALSE);
+      dlg->WriteToFile(indirect_buffer, m_lba + this_lba, 1);
       
       // initialize for next round
       prev_lba = this_lba;
@@ -1870,7 +1870,7 @@ int CLean::WriteFileExtents(const struct S_LEAN_SECTORS *extents, struct S_LEAN_
   //  we need to free each remaining indirect block
   while (remaining > 0) {
     MarkSector(remaining, FALSE);
-    dlg->ReadFromFile(indirect_buffer, m_lba + remaining, 1, FALSE);
+    dlg->ReadFromFile(indirect_buffer, m_lba + remaining, 1);
     // TODO: Test indirect
     remaining = indirect->next_indirect;
   }
@@ -1950,7 +1950,7 @@ int CLean::AppendToDir(DWORD64 Inode, DWORD Size) {
   Size = (Size + (dlg->m_sect_size - 1)) & ~(dlg->m_sect_size - 1);
   
   inode = (struct S_LEAN_INODE *) calloc(MAX_SECT_SIZE, 1);
-  dlg->ReadFromFile(inode, m_lba + Inode, 1, FALSE);
+  dlg->ReadFromFile(inode, m_lba + Inode, 1);
   
   // check to make sure the inode is valid
   if (!ValidInode(inode)) {
@@ -1974,7 +1974,7 @@ int CLean::AppendToDir(DWORD64 Inode, DWORD Size) {
     AppendToExtents(&extents, Size, Start, TRUE);
     // copy them back to the inode
     WriteFileExtents(&extents, inode);
-    dlg->WriteToFile(inode, m_lba + Inode, 1, FALSE);
+    dlg->WriteToFile(inode, m_lba + Inode, 1);
   } 
   
   // Read in the new set of sectors
@@ -2045,7 +2045,7 @@ void CLean::BuildInode(struct S_LEAN_SECTORS *extents, DWORD64 Size, DWORD Attri
   inode->fork = 0;
 
   WriteFileExtents(extents, inode);  // most write at least the first 6 so the checksum is correct
-  dlg->WriteToFile(inode, m_lba + extents->extent_start[0], 1, FALSE);
+  dlg->WriteToFile(inode, m_lba + extents->extent_start[0], 1);
   free(inode);
 }
 
@@ -2055,12 +2055,12 @@ void CLean::DeleteInode(DWORD64 Inode) {
   struct S_LEAN_INODE *inode = (struct S_LEAN_INODE *) buffer;
   struct S_LEAN_SECTORS extents;
   
-  dlg->ReadFromFile(buffer, m_lba + Inode, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_lba + Inode, 1);
 
   if (inode->links_count > 1) {
     inode->links_count--;
     inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
-    dlg->WriteToFile(buffer, m_lba + Inode, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + Inode, 1);
   } else {
     if (inode->fork)
       DeleteInode(inode->fork);
@@ -2072,7 +2072,7 @@ void CLean::DeleteInode(DWORD64 Inode) {
     
     // also clear the inode or parts of it???
     memset(inode, 0, sizeof(struct S_LEAN_INODE));
-    dlg->WriteToFile(buffer, m_lba + Inode, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + Inode, 1);
   }
 }
 
@@ -2087,17 +2087,17 @@ void CLean::OnLeanEntry() {
     struct S_LEAN_ITEMS *items = (struct S_LEAN_ITEMS *) m_dir_tree.GetDataStruct(hItem);
     if (items) {
       // read the inode
-      dlg->ReadFromFile(buffer, m_lba + items->Inode, 1, FALSE);
+      dlg->ReadFromFile(buffer, m_lba + items->Inode, 1);
       memcpy(&LeanEntry.m_inode, buffer, sizeof(struct S_LEAN_INODE));
       LeanEntry.m_hItem = hItem;
       LeanEntry.m_parent = this;
       LeanEntry.m_inode_num = items->Inode;
       if (LeanEntry.DoModal() == IDOK) { // apply button pressed?
       //  // must read it back in so we don't "destroy" the EA's we might have updated in LeanEntry
-      //  dlg->ReadFromFile(buffer, m_lba + items->Inode, 1, FALSE);
+      //  dlg->ReadFromFile(buffer, m_lba + items->Inode, 1);
       //  memcpy(buffer, &LeanEntry.m_inode, sizeof(struct S_LEAN_INODE));
       //  //inode_buff->checksum = LeanCalcCRC(buffer, LEAN_INODE_SIZE);
-      //  dlg->WriteToFile(buffer, m_lba + items->Inode, 1, FALSE);
+      //  dlg->WriteToFile(buffer, m_lba + items->Inode, 1);
       }
     }
   }
@@ -2170,16 +2170,16 @@ void CLean::OnJournalInode() {
   CLeanEntry LeanEntry;
   
   // read the inode
-  dlg->ReadFromFile(buffer, m_lba + m_super.journal, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_lba + m_super.journal, 1);
   memcpy(&LeanEntry.m_inode, buffer, sizeof(struct S_LEAN_INODE));
   LeanEntry.m_hItem = NULL;
   LeanEntry.m_parent = this;
   LeanEntry.m_inode_num = m_super.journal;
   if (LeanEntry.DoModal() == IDOK) { // apply button pressed?
     // must read it back in so we don't "destroy" the EA's we might have updated in LeanEntry
-    dlg->ReadFromFile(buffer, m_lba + m_super.journal, 1, FALSE);
+    dlg->ReadFromFile(buffer, m_lba + m_super.journal, 1);
     memcpy(buffer, &LeanEntry.m_inode, sizeof(struct S_LEAN_INODE));
-    dlg->WriteToFile(buffer, m_lba + m_super.journal, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + m_super.journal, 1);
   }
 }
 
@@ -2190,7 +2190,7 @@ void CLean::OnErase() {
   if (AfxMessageBox("This will erase the whole partition!  Continue?", MB_YESNO, 0) == IDYES) {
     memset(buffer, 0, MAX_SECT_SIZE);
     for (DWORD64 lba=0; lba<m_size; lba++)
-      dlg->WriteToFile(buffer, m_lba + lba, 1, FALSE);
+      dlg->WriteToFile(buffer, m_lba + lba, 1);
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
 }

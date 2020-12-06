@@ -228,7 +228,7 @@ void CNTFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
   // read the bpb
   if (m_bpb_buffer) free(m_bpb_buffer);
   m_bpb_buffer = malloc(MAX_SECT_SIZE);
-  dlg->ReadFromFile(m_bpb_buffer, lba, 1, FALSE);
+  dlg->ReadFromFile(m_bpb_buffer, lba, 1);
   struct S_NTFS_BPB *bpb = (struct S_NTFS_BPB *) m_bpb_buffer;
   
   dlg->m_NTFSNames[index] = "NTFS";
@@ -256,7 +256,7 @@ void CNTFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
   m_mft_lba = m_lba + (bpb->MFT_cluster * bpb->sect_per_clust);
   m_mft_cur = 0;
   m_mft_dirty = FALSE;
-  dlg->ReadFromFile(m_mft_buffer, m_mft_lba, ((NTFS_MFT_CACHE_SIZE * m_rec_size) / bpb->bytes_per_sect), FALSE);
+  dlg->ReadFromFile(m_mft_buffer, m_mft_lba, ((NTFS_MFT_CACHE_SIZE * m_rec_size) / bpb->bytes_per_sect));
   
   // get the size of the table
   DWORD64 fsize = 0;
@@ -447,7 +447,7 @@ void *CNTFS::ReadFile(const unsigned ref, DWORD64 *FileSize) {
               // can't just read in all of the run at once incase it overwrites our buffer.
               // our buffer is padded with only one (1) extra cluster space
               for (unsigned i=0; i<count && cnt>0; i++) {
-                dlg->ReadFromFile(buffer, m_lba + ((lcn + cluster) * bpb->sect_per_clust) + (i * bpb->sect_per_clust), bpb->sect_per_clust, FALSE);
+                dlg->ReadFromFile(buffer, m_lba + ((lcn + cluster) * bpb->sect_per_clust) + (i * bpb->sect_per_clust), bpb->sect_per_clust);
                 buffer += (bpb->sect_per_clust * bpb->bytes_per_sect);
                 cnt -= (bpb->sect_per_clust * bpb->bytes_per_sect);
               }
@@ -641,7 +641,7 @@ void CNTFS::OnUpdateCode() {
   BYTE *buffer = (BYTE *) calloc(reserved, 1);
   
   // first, read in what we already have
-  dlg->ReadFromFile(existing, m_lba, m_super.resv_blocks, FALSE);
+  dlg->ReadFromFile(existing, m_lba, m_super.resv_blocks);
   
   // save the FYSOS signature block incase we restore it below
   memcpy(&s_sig, existing + S_FYSOSSIG_OFFSET, sizeof(struct S_FYSOSSIG));
@@ -680,7 +680,7 @@ void CNTFS::OnUpdateCode() {
       memcpy(existing + S_FYSOSSIG_OFFSET, &s_sig, sizeof(struct S_FYSOSSIG));
     
     // write it back
-    dlg->WriteToFile(existing, m_lba, m_super.resv_blocks, FALSE);
+    dlg->WriteToFile(existing, m_lba, m_super.resv_blocks);
     
     AfxMessageBox("Updated Boot Code successfully");
   }
@@ -705,7 +705,7 @@ void CNTFS::OnApplyB() {
   ReceiveFromDialog((struct S_NTFS_BPB *) m_bpb_buffer);
   
   // write the sector
-  dlg->WriteToFile(m_bpb_buffer, m_lba, 1, FALSE);
+  dlg->WriteToFile(m_bpb_buffer, m_lba, 1);
 }
 
 void CNTFS::OnExpand() {
@@ -747,7 +747,7 @@ void CNTFS::WriteMFT(void) {
   // write the MFT back?
   if (m_mft_dirty) {
     FixupMFT(FALSE); // create the fixups in the buffer
-    dlg->WriteToFile(m_mft_buffer, m_mft_lba + ((m_mft_cur * m_rec_size) / bpb->bytes_per_sect), ((NTFS_MFT_CACHE_SIZE * m_rec_size) / bpb->bytes_per_sect), FALSE);
+    dlg->WriteToFile(m_mft_buffer, m_mft_lba + ((m_mft_cur * m_rec_size) / bpb->bytes_per_sect), ((NTFS_MFT_CACHE_SIZE * m_rec_size) / bpb->bytes_per_sect));
     m_mft_dirty = FALSE;
   }
 }
@@ -762,7 +762,7 @@ struct S_NTFS_FILE_REC *CNTFS::GetMFT(unsigned index) {
   if ((index < m_mft_cur) || (index >= (m_mft_cur + NTFS_MFT_CACHE_SIZE))) {
     WriteMFT();
     m_mft_cur = (index / NTFS_MFT_CACHE_SIZE) * NTFS_MFT_CACHE_SIZE;
-    dlg->ReadFromFile(m_mft_buffer, m_mft_lba + ((m_mft_cur * m_rec_size) / bpb->bytes_per_sect), ((NTFS_MFT_CACHE_SIZE * m_rec_size) / bpb->bytes_per_sect), FALSE);
+    dlg->ReadFromFile(m_mft_buffer, m_mft_lba + ((m_mft_cur * m_rec_size) / bpb->bytes_per_sect), ((NTFS_MFT_CACHE_SIZE * m_rec_size) / bpb->bytes_per_sect));
     FixupMFT(TRUE);
   }
   
@@ -875,7 +875,7 @@ void CNTFS::OnErase() {
   if (AfxMessageBox("This will erase the whole partition!  Continue?", MB_YESNO, 0) == IDYES) {
     memset(buffer, 0, MAX_SECT_SIZE);
     for (DWORD64 lba=0; lba<m_size; lba++)
-      dlg->WriteToFile(buffer, m_lba + lba, 1, FALSE);
+      dlg->WriteToFile(buffer, m_lba + lba, 1);
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
 }

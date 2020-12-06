@@ -255,7 +255,7 @@ void CFYSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, con
   m_color = color;
   m_isvalid = TRUE;
   
-  dlg->ReadFromFile(buffer, lba + 16, 1, FALSE);
+  dlg->ReadFromFile(buffer, lba + 16, 1);
   memcpy(&m_super, buffer, sizeof(struct S_FYSFS_SUPER));
   
   m_isvalid = TRUE;
@@ -455,7 +455,7 @@ void *CFYSFS::ReadFile(DWORD64 lsn, DWORD64 *size, BOOL IsRoot) {
   if (IsRoot) {
     ptr = calloc(((DWORD) *size * sizeof(struct S_FYSFS_ROOT)) + (MAX_SECT_SIZE - 1), 1);
     if (ptr)
-      dlg->ReadFromFile(ptr, m_lba + m_super.root, (((DWORD) *size * sizeof(struct S_FYSFS_ROOT)) + (512 - 1)) / 512, FALSE);
+      dlg->ReadFromFile(ptr, m_lba + m_super.root, (((DWORD) *size * sizeof(struct S_FYSFS_ROOT)) + (512 - 1)) / 512);
   } else {
     /*
     while (cluster != 0xFFFFFFFF) {
@@ -463,7 +463,7 @@ void *CFYSFS::ReadFile(DWORD64 lsn, DWORD64 *size, BOOL IsRoot) {
         mem_size += (bpb->bytes_per_sect * bpb->sect_per_clust);
         ptr = realloc(ptr, mem_size);
       }
-      dlg->ReadFromFile((BYTE *) ptr + pos, m_lba + m_datastart + ((cluster - 2) * bpb->sect_per_clust), bpb->sect_per_clust, FALSE);
+      dlg->ReadFromFile((BYTE *) ptr + pos, m_lba + m_datastart + ((cluster - 2) * bpb->sect_per_clust), bpb->sect_per_clust);
       prev_cluster = cluster;  // catch an endless loop if next cluster == current cluster
       cluster = GetNextCluster(cluster);
       if (cluster == prev_cluster) {
@@ -728,7 +728,7 @@ void CFYSFS::OnErase() {
   if (AfxMessageBox("This will erase the whole partition!  Continue?", MB_YESNO, 0) == IDYES) {
     memset(buffer, 0, MAX_SECT_SIZE);
     for (DWORD64 lba=0; lba<m_size; lba++)
-      dlg->WriteToFile(buffer, m_lba + lba, 1, FALSE);
+      dlg->WriteToFile(buffer, m_lba + lba, 1);
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
 }
@@ -750,7 +750,7 @@ void CFYSFS::OnUpdateCode() {
   BYTE *buffer = (BYTE *) calloc(reserved, 1);
   
   // first, read in what we already have
-  dlg->ReadFromFile(existing, m_lba, m_super.resv_blocks, FALSE);
+  dlg->ReadFromFile(existing, m_lba, m_super.resv_blocks);
   
   // save the FYSOS signature block incase we restore it below
   memcpy(&s_sig, existing + S_FYSOSSIG_OFFSET, sizeof(struct S_FYSOSSIG));
@@ -789,7 +789,7 @@ void CFYSFS::OnUpdateCode() {
       memcpy(existing + S_FYSOSSIG_OFFSET, &s_sig, sizeof(struct S_FYSOSSIG));
     
     // write it back
-    dlg->WriteToFile(existing, m_lba, m_super.resv_blocks, FALSE);
+    dlg->WriteToFile(existing, m_lba, m_super.resv_blocks);
     
     AfxMessageBox("Updated Boot Code successfully");
   }

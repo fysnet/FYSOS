@@ -120,7 +120,7 @@ void CLean::OnLeanCheck() {
   // therefore, we can rely on the fact that m_super_lba should be correct.
   // *** most of these checks are redundant.  We can't get to here ***
   // *** without these values being correct in the first place.    ***
-  dlg->ReadFromFile(super, m_lba + m_super_lba, 1, FALSE);
+  dlg->ReadFromFile(super, m_lba + m_super_lba, 1);
   
   // How about the check sum
   DWORD crc = 0, *p = (DWORD *) super;
@@ -211,7 +211,7 @@ void CLean::OnLeanCheck() {
   for (i=0; i<tot_bands; i++) {
     // read in a bitmap
     bitmap_lba = (i==0) ? m_super.bitmap_start : (band_size * i);
-    dlg->ReadFromFile(buffer, m_lba + bitmap_lba, bitmap_size, FALSE);
+    dlg->ReadFromFile(buffer, m_lba + bitmap_lba, bitmap_size);
     pos = 0;
     
     while (pos < bytes_bitmap) {
@@ -294,7 +294,7 @@ void CLean::OnLeanCheck() {
   
   // write back the super?
   if (super_dirty)
-    dlg->WriteToFile(super, m_lba + m_super_lba, 1, FALSE);
+    dlg->WriteToFile(super, m_lba + m_super_lba, 1);
   
   cs.Format("\r\n  Found %i errors\r\n", lcErrorCount);
   lcInfo += cs;

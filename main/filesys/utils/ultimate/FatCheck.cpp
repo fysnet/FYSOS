@@ -231,7 +231,7 @@ void CFat::OnFatCheck() {
       modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
       
       alt_buffer = malloc(sect_per_fat * bpb12->bytes_per_sect);
-      dlg->ReadFromFile(alt_buffer, m_lba + bpb12->sect_reserved + (sect_per_fat * i), sect_per_fat, FALSE);
+      dlg->ReadFromFile(alt_buffer, m_lba + bpb12->sect_reserved + (sect_per_fat * i), sect_per_fat);
       
       // now compare the fat with the original fat
       error = FALSE;
@@ -269,7 +269,7 @@ void CFat::OnFatCheck() {
           fcInfo += "Yes\r\n";
           cs.Format("Writing FAT #0 to FAT #%i\r\n", i); 
           fcInfo += cs;
-          dlg->WriteToFile(m_fat_buffer, m_lba + bpb12->sect_reserved + (sect_per_fat * i), sect_per_fat, FALSE);
+          dlg->WriteToFile(m_fat_buffer, m_lba + bpb12->sect_reserved + (sect_per_fat * i), sect_per_fat);
           fcInfo += "Changes applied\r\n";
           AfxMessageBox("Changes applied.");
         } else if (ret == IDNO) {

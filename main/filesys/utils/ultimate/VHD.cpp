@@ -163,7 +163,7 @@ bool CVHD::Exists(DWORD64 LBA) {
   if (LBA == 0)
     return FALSE;
   
-  dlg->ReadFromFile(m_buffer, LBA, 1, FALSE);
+  dlg->ReadFromFile(m_buffer, LBA, 1);
   struct VHD_FOOTER *footer = (struct VHD_FOOTER *) m_buffer;
   
   if (memcmp(footer->cookie, "conectix", 8) != 0)
@@ -230,7 +230,7 @@ void CVHD::OnVhdApply() {
   footer->disk_geometry.heads = convert8(m_head);
   footer->disk_geometry.spt = convert8(m_sect_track);
   
-  dlg->WriteToFile(m_buffer, m_lba, 1, FALSE);
+  dlg->WriteToFile(m_buffer, m_lba, 1);
 }
 
 void CVHD::OnKillfocusGuid() {

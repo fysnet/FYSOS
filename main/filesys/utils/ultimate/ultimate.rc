@@ -2643,7 +2643,6 @@ BEGIN
     BEGIN
         MENUITEM "&New",                        ID_FILE_NEW
         MENUITEM "&Open",                       ID_FILE_OPEN
-        MENUITEM "Open &Drive",                 ID_FILE_OPENDRIVE
         MENUITEM "&Close",                      ID_FILE_CLOSE, GRAYED
         MENUITEM "&Reload",                     ID_FILE_RELOAD, GRAYED
         MENUITEM SEPARATOR

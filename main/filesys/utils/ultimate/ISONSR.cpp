@@ -182,7 +182,7 @@ void CISONSR::Start(const DWORD64 lba, DWORD color, BOOL IsNewTab) {
   m_is_valid = FALSE;
   
   // read in the anchor sector
-  dlg->ReadFromFile(m_avdp_desc, 256, 1, TRUE);
+  dlg->ReadFromFile(m_avdp_desc, 256, 1);
   struct AVDP *avdp = (struct AVDP *) m_avdp_desc;
   
   // send to dialog
@@ -197,7 +197,7 @@ void CISONSR::Start(const DWORD64 lba, DWORD color, BOOL IsNewTab) {
   dword = (len + (CDROM_SECT_SIZE - 1)) & ~(CDROM_SECT_SIZE - 1);
   if (m_descriptors) free(m_descriptors);
   m_descriptors = malloc(dword);
-  dlg->ReadFromFile(m_descriptors, avdp->main_vds.location, dword / CDROM_SECT_SIZE, TRUE);
+  dlg->ReadFromFile(m_descriptors, avdp->main_vds.location, dword / CDROM_SECT_SIZE);
   
   tag = (struct DESC_TAG *) m_descriptors;
   while (len > 0) {
@@ -289,7 +289,7 @@ void CISONSR::Start(const DWORD64 lba, DWORD color, BOOL IsNewTab) {
   
   /*
   struct EX_FILE_ENTRY *entry = (struct EX_FILE_ENTRY *) malloc(MAX_SECT_SIZE);
-  dlg->ReadFromFile(entry, m_lba, 1, TRUE);
+  dlg->ReadFromFile(entry, m_lba, 1);
   
   CString id;
   memcpy(id.GetBuffer(32), entry->implementation_id.ident, 23); id.ReleaseBuffer(23);

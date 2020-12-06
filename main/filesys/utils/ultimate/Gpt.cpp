@@ -191,7 +191,7 @@ bool CGpt::Exists(DWORD64 LBA) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   DWORD dword;
   
-  dlg->ReadFromFile(m_buffer, 1, 1, FALSE);
+  dlg->ReadFromFile(m_buffer, 1, 1);
   memcpy(&m_hdr, m_buffer, sizeof(struct S_GPT_HDR));
   
   // save the LBA
@@ -223,7 +223,7 @@ bool CGpt::Exists(DWORD64 LBA) {
   if (m_exists) {
     // allocate the memory for the entries
     m_entry_buffer = (struct S_GPT_ENTRY *) malloc((m_hdr.entries * m_hdr.entry_size) + (dlg->m_sect_size - 1));
-    dlg->ReadFromFile(m_entry_buffer, m_hdr.entry_offset, ((m_hdr.entries * m_hdr.entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size, FALSE);
+    dlg->ReadFromFile(m_entry_buffer, m_hdr.entry_offset, ((m_hdr.entries * m_hdr.entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
     
     m_gpt_sig.Format("%02X %02X %02X %02X %02X %02X %02X %02X", 
       m_hdr.sig[0], m_hdr.sig[1], m_hdr.sig[2], m_hdr.sig[3],
@@ -389,12 +389,12 @@ void CGpt::OnGptApply() {
   // update the header items
   GetGPTHdr();
   memcpy(m_buffer, &m_hdr, sizeof(struct S_GPT_HDR));
-  dlg->WriteToFile(m_buffer, m_lba, 1, FALSE);
+  dlg->WriteToFile(m_buffer, m_lba, 1);
   
   // update the entries
   GetGPTEntries();
-  //dlg->WriteToFile(m_entry_buffer, m_hdr.entry_offset, ((m_gpt_entries * m_hdr.entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size, FALSE);
-  dlg->WriteToFile(m_entry_buffer, m_hdr.entry_offset, ((m_hdr.entries * m_hdr.entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size, FALSE);
+  //dlg->WriteToFile(m_entry_buffer, m_hdr.entry_offset, ((m_gpt_entries * m_hdr.entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
+  dlg->WriteToFile(m_entry_buffer, m_hdr.entry_offset, ((m_hdr.entries * m_hdr.entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
 }
 
 void CGpt::OnCrcButton() {
@@ -483,10 +483,10 @@ void CGpt::OnGPTBackup() {
   hdr->entry_offset = m_hdr.backup_lba - gpt_entries_size;
   hdr->crc32 = 0;
   hdr->crc32 = crc32(hdr, hdr->hdr_size); // calculate new CRC (since we swapped values)
-  dlg->WriteToFile(m_buffer, m_hdr.backup_lba, 1, FALSE);
+  dlg->WriteToFile(m_buffer, m_hdr.backup_lba, 1);
   
   // update the entries
-  dlg->WriteToFile(m_entry_buffer, hdr->entry_offset, gpt_entries_size, FALSE);
+  dlg->WriteToFile(m_entry_buffer, hdr->entry_offset, gpt_entries_size);
 }
 
 // restore from Backup
@@ -509,7 +509,7 @@ void CGpt::OnGPTFromBackup() {
       return;
 
   // read in the backup header
-  dlg->ReadFromFile(hdr, m_hdr.backup_lba, 1, FALSE);
+  dlg->ReadFromFile(hdr, m_hdr.backup_lba, 1);
 
   // need to swap the myLBA and alternateLBA values
   temp = hdr->backup_lba;
@@ -518,14 +518,14 @@ void CGpt::OnGPTFromBackup() {
   hdr->entry_offset = 2;
   hdr->crc32 = 0;
   hdr->crc32 = crc32(hdr, hdr->hdr_size); // calculate new CRC (since we swapped values)
-  dlg->WriteToFile(hdr, 1, 1, FALSE);
+  dlg->WriteToFile(hdr, 1, 1);
 
   // get the count of sectors used for the entries (from the newly read data)
   gpt_entries_size = ((hdr->entries * sizeof(struct S_GPT_ENTRY)) + (dlg->m_sect_size - 1)) / dlg->m_sect_size;
   temp = hdr->backup_lba;
   for (int i=0; i<gpt_entries_size; i++) {
-    dlg->ReadFromFile(m_buffer, temp - gpt_entries_size + i, 1, FALSE);
-    dlg->WriteToFile(m_buffer, (DWORD64) (2 + i), 1, FALSE);
+    dlg->ReadFromFile(m_buffer, temp - gpt_entries_size + i, 1);
+    dlg->WriteToFile(m_buffer, (DWORD64) (2 + i), 1);
   }
 
   // reload
@@ -541,7 +541,7 @@ BOOL CGpt::CheckGPT(DWORD64 LBA, BOOL CheckAlternate) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   struct S_GPT_HDR *hdr = (struct S_GPT_HDR *) m_buffer;
 
-  dlg->ReadFromFile(m_buffer, LBA, 1, FALSE);
+  dlg->ReadFromFile(m_buffer, LBA, 1);
 
   // ACPI, version 2.6, section 5.3.2, list of qualifications
   // check the signature
@@ -593,7 +593,7 @@ void CGpt::OnGPTTotalCheck() {
   modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
   
   // first check that we have a valid GPT at LBA 1
-  dlg->ReadFromFile(m_buffer, 1, 1, FALSE);
+  dlg->ReadFromFile(m_buffer, 1, 1);
 
   csInfo += "Checking for valid GPT at LBA 1: \r\n";
   if (memcmp(hdr->sig, "\x45\x46\x49\x20\x50\x41\x52\x54", 8) == 0)
@@ -792,7 +792,7 @@ void CGpt::OnGPTTotalCheck() {
   // to check the backup GPT, simply check that it equals this one
   //  with exception of the MyLBA, and AlternateLBA, CRC, and Entry Start Loc
   struct S_GPT_HDR *back = (struct S_GPT_HDR *) malloc(dlg->m_sect_size);
-  dlg->ReadFromFile(back, hdr->backup_lba, 1, FALSE);
+  dlg->ReadFromFile(back, hdr->backup_lba, 1);
   // save and check the crc of the backup GPT
   org_crc = back->crc32;
   back->crc32 = 0;
@@ -823,7 +823,7 @@ void CGpt::OnGPTTotalCheck() {
   modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
   
   // restore the backup hdr
-  dlg->ReadFromFile(back, hdr->backup_lba, 1, FALSE);
+  dlg->ReadFromFile(back, hdr->backup_lba, 1);
 
   // to check the backup entries, simply read in each sector and compare
   //  with the sector of the primary entries.
@@ -834,7 +834,7 @@ void CGpt::OnGPTTotalCheck() {
   modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
   
   void *back_entries = malloc((dword1 * entry_size) + dlg->m_sect_size);
-  dlg->ReadFromFile(back_entries, back->entry_offset, ((dword1 * entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size, FALSE);
+  dlg->ReadFromFile(back_entries, back->entry_offset, ((dword1 * entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
   BYTE *b = (BYTE *) back_entries;
   BYTE *p = (BYTE *) m_entry_buffer;
   j = 0;
@@ -865,7 +865,7 @@ void CGpt::OnGPTTotalCheck() {
   // check the PMBR to see if it only has one (the first) entry as 0xEE
   //  and that it encompasses all sectors correctly, etc.
   BYTE *pmbr = (BYTE *) malloc(dlg->m_sect_size);
-  dlg->ReadFromFile(pmbr, 0, 1, FALSE);
+  dlg->ReadFromFile(pmbr, 0, 1);
   struct MBR_PART_ENTRY *entry = (struct MBR_PART_ENTRY *) (pmbr + 0x1BE);
   // find the 0xEE entry
   j = 0; // count of 'other' used entries

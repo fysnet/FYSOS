@@ -286,12 +286,12 @@ void CFat::OnFatApply() {
   ReceiveFromDialog(m_bpb_buffer); // bring from Dialog
   
   // update the BPB
-  dlg->ReadFromFile(buffer, m_lba, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_lba, 1);
   if (m_fat_size == FS_FAT32)
     memcpy(buffer, m_bpb_buffer, sizeof(struct S_FAT32_BPB));
   else
     memcpy(buffer, m_bpb_buffer, sizeof(struct S_FAT1216_BPB));
-  dlg->WriteToFile(buffer, m_lba, 1, FALSE);
+  dlg->WriteToFile(buffer, m_lba, 1);
   
   // need to write the FAT back to the image file
   if (AfxMessageBox("Update the FAT(s)?", MB_YESNO, NULL) == IDYES)
@@ -345,7 +345,7 @@ bool CFat::FatFormat(const BOOL AskForBoot) {
   // first, clear out the volume
   buffer = (BYTE *) calloc(MAX_SECT_SIZE, 1);
   for (l=0; l<m_size; l++)
-    dlg->WriteToFile(buffer, m_lba + l, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + l, 1);
   
   // did we request a boot sector?
   if (AskForBoot) {
@@ -370,7 +370,7 @@ bool CFat::FatFormat(const BOOL AskForBoot) {
           if (filesize > MAX_SECT_SIZE) // must check manually so we don't "shrink" the buffer with realloc()
             buffer = (BYTE *) realloc(buffer, filesize);
           bsfile.Read(buffer, (UINT) filesize);
-          dlg->WriteToFile(buffer, m_lba, (UINT) reserved, FALSE);
+          dlg->WriteToFile(buffer, m_lba, (UINT) reserved);
           has_boot_sector = TRUE;
         } else
           AfxMessageBox("Boot sector must be <= 8192 bytes");
@@ -501,7 +501,7 @@ bool CFat::FatFormat(const BOOL AskForBoot) {
   // if a bootsector was loaded, the first 512 bytes will still contain that code
   // however, lets update the bpb. 
   //   (skipping the jump incase the new code jumps differently than normal ???)
-  dlg->WriteToFile(buffer, m_lba, 1, FALSE);
+  dlg->WriteToFile(buffer, m_lba, 1);
   
   // now the fat(s)
   for (j=0; j<format.m_num_fats; j++) {
@@ -522,10 +522,10 @@ bool CFat::FatFormat(const BOOL AskForBoot) {
         dword[2+i-1] = 0x0FFFFFFF;
         break;
     }
-    dlg->WriteToFile(buffer, m_lba + reserved, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + reserved, 1);
     memset(buffer, 0, MAX_SECT_SIZE);
     for (i=1; i<sect_per_fat; i++)
-      dlg->WriteToFile(buffer, m_lba + reserved + i, 1, FALSE);
+      dlg->WriteToFile(buffer, m_lba + reserved + i, 1);
   }
 
   // Now the root.  It is written to just after the last fat
@@ -533,7 +533,7 @@ bool CFat::FatFormat(const BOOL AskForBoot) {
   l = reserved + (format.m_num_fats * sect_per_fat);
   memset(buffer, 0, MAX_SECT_SIZE);
   for (i=0; i<format.m_root_entries; i++)  // format.m_root_entries is in sectors
-    dlg->WriteToFile(buffer, m_lba + l, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + l, 1);
 
   // if a FAT32, we need an info sector and a backup sector
   if (m_fat_size == FS_FAT32) {
@@ -544,7 +544,7 @@ bool CFat::FatFormat(const BOOL AskForBoot) {
     info->free_clust_cnt = -1;
     info->next_free_clust = (format.m_root_entries / format.m_sect_cluster) + 1;
     info->trail_sig = 0xAA550000;
-    dlg->WriteToFile(buffer, m_lba + info_sect, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + info_sect, 1);
     
     // backup_sect = convert16(m_backup_sector);
   }
@@ -576,7 +576,7 @@ void CFat::OnUpdateCode() {
   backup_sect = convert16(m_backup_sector);
 
   // first, read in what we already have
-  dlg->ReadFromFile(existing, m_lba, reserved, FALSE);
+  dlg->ReadFromFile(existing, m_lba, reserved);
   
   // save the FYSOS signature block incase we restore it below
   memcpy(&s_sig, existing + S_FYSOSSIG_OFFSET, sizeof(struct S_FYSOSSIG));
@@ -635,11 +635,11 @@ void CFat::OnUpdateCode() {
     }
 
     // write it back
-    dlg->WriteToFile(existing, m_lba, reserved, FALSE);
+    dlg->WriteToFile(existing, m_lba, reserved);
 
     // was there any extra?
     if (extra > 0)
-      dlg->WriteToFile(buffer + (reserved * dlg->m_sect_size), m_lba + reserved, extra - reserved, FALSE);
+      dlg->WriteToFile(buffer + (reserved * dlg->m_sect_size), m_lba + reserved, extra - reserved);
   }
   
   free(buffer);
@@ -667,15 +667,9 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   m_hard_format = FALSE;
   
   m_bpb_buffer = malloc(MAX_SECT_SIZE);
-  dlg->ReadFromFile(m_bpb_buffer, lba, 1, FALSE);
+  dlg->ReadFromFile(m_bpb_buffer, lba, 1);
   struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) m_bpb_buffer;
   struct S_FAT1216_BPB *bpb12 = (struct S_FAT1216_BPB *) m_bpb_buffer;
-  
-  if (dlg->m_sect_size != bpb12->bytes_per_sect) {
-    AfxMessageBox("FAT:\r\n"
-                  "BPB Bytes per Sector doesn't equal specified bytes per sector.\r\n"
-                  "Using BPB Bytes per Sector for this volume.");
-  }
   
   m_fat_size = fs_type;
   if (fs_type == FS_FAT12)
@@ -714,7 +708,13 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   GetDlgItem(ID_DELETE)->EnableWindow(FALSE);
   GetDlgItem(ID_SEARCH)->EnableWindow(FALSE);
   
-  // load the fat
+  // don't parse the folders if the sector size doesn't match
+  if (dlg->m_sect_size != bpb12->bytes_per_sect) {
+    AfxMessageBox("FAT:\r\nBPB Bytes per Sector doesn't equal specified bytes per sector.\r\n");
+    return;
+  }
+  
+  // load the fat and folders
   if (m_isvalid) {
     m_fat_buffer = FatLoadFAT(m_fat_buffer);
     GetDlgItem(IDC_DIR_TREE)->EnableWindow(TRUE);
@@ -848,7 +848,7 @@ void *CFat::ReadFile(DWORD cluster, DWORD *size, BOOL IsRoot) {
   if (IsRoot && (m_fat_size != FS_FAT32)) {
     ptr = calloc(*size + (MAX_SECT_SIZE - 1), 1);
     if (ptr)
-      dlg->ReadFromFile(ptr, m_lba + m_rootstart, (*size + (bpb->bytes_per_sect - 1)) / bpb->bytes_per_sect, FALSE);
+      dlg->ReadFromFile(ptr, m_lba + m_rootstart, (*size + (bpb->bytes_per_sect - 1)) / bpb->bytes_per_sect);
   } else {
     struct S_FAT_ENTRIES ClusterList;
     FatFillClusterList(&ClusterList, cluster);
@@ -857,7 +857,7 @@ void *CFat::ReadFile(DWORD cluster, DWORD *size, BOOL IsRoot) {
         mem_size += (bpb->bytes_per_sect * bpb->sect_per_clust);
         ptr = realloc(ptr, mem_size);
       }
-      dlg->ReadFromFile((BYTE *) ptr + pos, m_lba + m_datastart + ((ClusterList.entries[i] - 2) * bpb->sect_per_clust), bpb->sect_per_clust, FALSE);
+      dlg->ReadFromFile((BYTE *) ptr + pos, m_lba + m_datastart + ((ClusterList.entries[i] - 2) * bpb->sect_per_clust), bpb->sect_per_clust);
       pos += (bpb->bytes_per_sect * bpb->sect_per_clust);
     }
     free(ClusterList.entries);
@@ -881,10 +881,10 @@ void CFat::WriteFile(void *buffer, struct S_FAT_ENTRIES *ClusterList, DWORD size
   unsigned pos = 0;
   
   if (IsRoot && (m_fat_size != FS_FAT32)) {
-    dlg->WriteToFile(buffer, m_lba + m_rootstart, (size + (bpb->bytes_per_sect - 1)) / bpb->bytes_per_sect, FALSE);
+    dlg->WriteToFile(buffer, m_lba + m_rootstart, (size + (bpb->bytes_per_sect - 1)) / bpb->bytes_per_sect);
   } else {
     for (int i=0; i<ClusterList->entry_count; i++) {
-      dlg->WriteToFile((BYTE *) buffer + pos, m_lba + m_datastart + ((ClusterList->entries[i] - 2) * bpb->sect_per_clust), bpb->sect_per_clust, FALSE);
+      dlg->WriteToFile((BYTE *) buffer + pos, m_lba + m_datastart + ((ClusterList->entries[i] - 2) * bpb->sect_per_clust), bpb->sect_per_clust);
       pos += (bpb->bytes_per_sect * bpb->sect_per_clust);
     }
   }
@@ -896,7 +896,7 @@ void CFat::ZeroCluster(DWORD Cluster) {
   struct S_FAT1216_BPB *bpb = (struct S_FAT1216_BPB *) m_bpb_buffer;
   void *zero = (void *) calloc((size_t) bpb->sect_per_clust * (size_t) bpb->bytes_per_sect, 1);
 
-  dlg->WriteToFile((BYTE *) zero, m_lba + m_datastart + ((Cluster - 2) * (size_t) bpb->sect_per_clust), bpb->sect_per_clust, FALSE);
+  dlg->WriteToFile((BYTE *) zero, m_lba + m_datastart + ((Cluster - 2) * (size_t) bpb->sect_per_clust), bpb->sect_per_clust);
   
   free(zero);
 }
@@ -1095,10 +1095,10 @@ void *CFat::FatLoadFAT(void *fat_buffer) {
   if (fat_buffer) free(fat_buffer);
   if (m_fat_size == FS_FAT32) {
     fat_buffer = malloc(bpb32->sect_per_fat32 * bpb32->bytes_per_sect);
-    dlg->ReadFromFile(fat_buffer, m_lba + bpb32->sect_reserved, bpb32->sect_per_fat32, FALSE);
+    dlg->ReadFromFile(fat_buffer, m_lba + bpb32->sect_reserved, bpb32->sect_per_fat32);
   } else {
     fat_buffer = malloc(bpb12->sect_per_fat * bpb12->bytes_per_sect);
-    dlg->ReadFromFile(fat_buffer, m_lba + bpb12->sect_reserved, bpb12->sect_per_fat, FALSE);
+    dlg->ReadFromFile(fat_buffer, m_lba + bpb12->sect_reserved, bpb12->sect_per_fat);
   }
   return fat_buffer;
 }
@@ -1265,13 +1265,13 @@ void CFat::UpdateTheFATs(void) {
   if (m_fat_size == FS_FAT32) {
     struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) m_bpb_buffer;
     for (int i=0; i<bpb32->fats; i++) {
-      dlg->WriteToFile(m_fat_buffer, m_lba + bpb32->sect_reserved + l, bpb32->sect_per_fat32, FALSE);
+      dlg->WriteToFile(m_fat_buffer, m_lba + bpb32->sect_reserved + l, bpb32->sect_per_fat32);
       l += bpb32->sect_per_fat32;
     }
   } else {
     struct S_FAT1216_BPB *bpb = (struct S_FAT1216_BPB *) m_bpb_buffer;
     for (int i=0; i<bpb->fats; i++) {
-      dlg->WriteToFile(m_fat_buffer, m_lba + bpb->sect_reserved + l, bpb->sect_per_fat, FALSE);
+      dlg->WriteToFile(m_fat_buffer, m_lba + bpb->sect_reserved + l, bpb->sect_per_fat);
       l += bpb->sect_per_fat;
     }
   }
@@ -2208,7 +2208,7 @@ void CFat::OnFat32Info() {
   
   GetDlgItemText(IDC_FAT_INFO_SECTOR, cs);
   unsigned info_sector = convert16(cs);
-  dlg->ReadFromFile(buffer, m_lba + info_sector, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_lba + info_sector, 1);
   
   Info.m_sig0.Format("0x%08X", info->sig);
   Info.m_sig1.Format("0x%08X", info->struct_sig);
@@ -2229,7 +2229,7 @@ void CFat::OnFat32Info() {
       memset(info->resv, 0, 480);
       memset(info->resv0, 0, 12);
     }
-    dlg->WriteToFile(buffer, m_lba + info_sector, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + info_sector, 1);
   }
 }
 
@@ -2328,7 +2328,7 @@ void CFat::OnErase() {
   if (AfxMessageBox("This will erase the whole partition!  Continue?", MB_YESNO, 0) == IDYES) {
     memset(buffer, 0, MAX_SECT_SIZE);
     for (DWORD64 lba=0; lba<m_size; lba++)
-      dlg->WriteToFile(buffer, m_lba + lba, 1, FALSE);
+      dlg->WriteToFile(buffer, m_lba + lba, 1);
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
 }

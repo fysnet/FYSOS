@@ -178,7 +178,7 @@ bool CEmbr::Exists(DWORD64 LBA) {
   BYTE buffer[MAX_SECT_SIZE];
   struct S_EMBR_SIG *sig = (struct S_EMBR_SIG *) &buffer[0x1F2];
   
-  dlg->ReadFromFile(buffer, LBA + 1, 1, FALSE);
+  dlg->ReadFromFile(buffer, LBA + 1, 1);
   
   // save the LBA
   m_lba = LBA;
@@ -195,7 +195,7 @@ bool CEmbr::Exists(DWORD64 LBA) {
     
     // allocate the memory for the entries
     m_entry_buffer = malloc((sig->remaining - sig->offset - 1) * dlg->m_sect_size);
-    dlg->ReadFromFile(m_entry_buffer, m_lba + sig->offset, sig->remaining - sig->offset - 1, FALSE);
+    dlg->ReadFromFile(m_entry_buffer, m_lba + sig->offset, sig->remaining - sig->offset - 1);
     struct S_EMBR_HDR *hdr = (struct S_EMBR_HDR *) m_entry_buffer;
     
     // check the CRC of the entries
@@ -345,10 +345,10 @@ void CEmbr::OnEmbrApply() {
   
   // update the Signature in LBA 1 (LSN 0)
   struct S_EMBR_SIG *sig = (struct S_EMBR_SIG *) &buffer[0x1F2];
-  dlg->ReadFromFile(buffer, m_lba + 1, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_lba + 1, 1);
   sig->offset = convert16(m_entry_offset);
   sig->remaining = convert16(m_remaining);
-  dlg->WriteToFile(buffer, m_lba + 1, 1, FALSE);
+  dlg->WriteToFile(buffer, m_lba + 1, 1);
   
   struct S_EMBR_HDR *hdr = (struct S_EMBR_HDR *) m_entry_buffer;
   hdr->boot_delay = m_boot_delay;
@@ -373,7 +373,7 @@ void CEmbr::OnEmbrApply() {
     if (m_Pages[i].m_dirty)
       m_Pages[i].OnEmbreApply();
   }
-  dlg->WriteToFile(m_entry_buffer, m_lba + sig->offset, sig->remaining - sig->offset - 1, FALSE);
+  dlg->WriteToFile(m_entry_buffer, m_lba + sig->offset, sig->remaining - sig->offset - 1);
 }
 
 void CEmbr::OnSignatureSet() {
@@ -462,7 +462,7 @@ void CEmbr::OnUpdateCode() {
   UINT file_sectors = (UINT) ((file.GetLength() + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
   
   // read in the Signature in LBA 1 (LSN 0)
-  dlg->ReadFromFile(buffer, m_lba + 1, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_lba + 1, 1);
   struct S_EMBR_SIG *sig = (struct S_EMBR_SIG *) &buffer[0x1F2];
   if (file_sectors > (unsigned) (sig->offset - 1)) {
     AfxMessageBox("Code file is larger than space allocated prior to partition entries.\r\n"
@@ -480,7 +480,7 @@ void CEmbr::OnUpdateCode() {
   memcpy(&code[0x1F2], sig, sizeof(struct S_EMBR_SIG));
   
   // write the new code
-  dlg->WriteToFile(code, m_lba + 1, file_sectors, FALSE);
+  dlg->WriteToFile(code, m_lba + 1, file_sectors);
   
   // update the dump display box
   DumpIt(m_embr_dump, code, 0, 512, FALSE);

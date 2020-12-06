@@ -267,7 +267,7 @@ void CGptEntry::OnPlusMinus() {
   
   // read in the GPT backup sector
   size_t backup = dlg->Gpt.GetDlgItemInt(IDC_GPT_BACKUP_LBA);
-  dlg->ReadFromFile(buffer, backup, 1, FALSE);
+  dlg->ReadFromFile(buffer, backup, 1);
   
   if ((differ > 0) || (AfxMessageBox("Remove sectors from image?", MB_YESNO, 0) == IDYES)) {
     if (differ > 0)
@@ -298,7 +298,7 @@ void CGptEntry::OnPlusMinus() {
 
   // write the backup to the new location
   dlg->Gpt.SetDlgItemInt(IDC_GPT_BACKUP_LBA, (UINT) backup);
-  dlg->WriteToFile(buffer, backup, 1, FALSE);
+  dlg->WriteToFile(buffer, backup, 1);
 
   // update the GPT's CRC's and Last Usable Sector Entry
   dlg->Gpt.OnEcrcButton();

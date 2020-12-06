@@ -112,7 +112,7 @@ bool CISOImage::Start(void) {
   BOOL    cont = TRUE;
   
   while (cont) {
-    dlg->ReadFromFile(buffer, lba, 1, TRUE);
+    dlg->ReadFromFile(buffer, lba, 1);
     if (memcmp(buffer + 1, "CD001", 5) == 0) {
       switch (buffer[0]) {
         case VD_TYPE_BOOT:

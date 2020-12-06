@@ -167,7 +167,7 @@ void CUnknown::OnClean() {
     CWaitCursor wait; // display a wait cursor
     memset(buffer, 0, dlg->m_sect_size);
     for (sect=m_lba; sect<m_lba + m_size - 1; sect++)
-      dlg->WriteToFile(buffer, sect, 1, FALSE);
+      dlg->WriteToFile(buffer, sect, 1);
     Start(m_lba, m_size, m_color, m_index, FALSE);
     OnDumpPrev();
   }
@@ -222,7 +222,7 @@ void CUnknown::OnFormat() {
         FormatFat(FS_FAT32);
         break;
     }
-    dlg->ReadFromFile(buffer, m_lba, 1, FALSE);
+    dlg->ReadFromFile(buffer, m_lba, 1);
     DumpIt(m_dump, buffer, 0, dlg->m_sect_size, FALSE);
     UpdateData(FALSE); // send to dialog
   }
@@ -375,7 +375,7 @@ void CUnknown::OnInsert() {
         s_sig->sig = (rand() << 16) | rand();
         s_sig->boot_sig =0xAA55;
       }
-      dlg->WriteToFile(buffer, m_lba + sect, 1, FALSE);
+      dlg->WriteToFile(buffer, m_lba + sect, 1);
       AfxGetApp()->OnIdle(lIdle++);  // avoid "Not Responding" notice
     }
     reload = TRUE;
@@ -400,7 +400,7 @@ void CUnknown::OnDumpPrev() {
   cs.Format("LSN %I64i of %I64i", m_current, m_size - 1);
   SetDlgItemText(IDC_DUMP_STR, cs);
   
-  dlg->ReadFromFile(buffer, m_lba + m_current, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_lba + m_current, 1);
   DumpIt(m_dump, buffer, (DWORD) (m_current * dlg->m_sect_size), dlg->m_sect_size, FALSE);
   SetDlgItemText(IDC_DUMP, m_dump);
 }
@@ -418,7 +418,7 @@ void CUnknown::OnDumpNext() {
   cs.Format("LSN %I64i of %I64i", m_current, m_size - 1);
   SetDlgItemText(IDC_DUMP_STR, cs);
   
-  dlg->ReadFromFile(buffer, m_lba + m_current, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_lba + m_current, 1);
   DumpIt(m_dump, buffer, (DWORD) (m_current * dlg->m_sect_size), dlg->m_sect_size, FALSE);
   SetDlgItemText(IDC_DUMP, m_dump);
 }

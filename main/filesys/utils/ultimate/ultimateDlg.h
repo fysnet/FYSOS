@@ -191,8 +191,8 @@ public:
   LARGE_INTEGER GetFileLength(HANDLE hFile);
   DWORD64 GetFileSectCount(void);
   BOOL SetFileLength(HANDLE hFile, const DWORD64 Size);
-  long ReadFromFile(void *buffer, DWORD64 lba, long count, const bool is_cdrom);
-  void WriteToFile(void *buffer, DWORD64 lba, long count, const bool is_cdrom);
+  long ReadFromFile(void *buffer, DWORD64 lba, long count);
+  void WriteToFile(void *buffer, DWORD64 lba, long count);
   void InsertSectors(const DWORD64 lba, const long count);
   void RemoveSectors(const DWORD64 lba, const long count);
   

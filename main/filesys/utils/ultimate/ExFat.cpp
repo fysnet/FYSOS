@@ -261,7 +261,7 @@ void CExFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, con
   
   // read 12 sectors so we get all of the Primary VBR
   m_vbr_buffer = malloc(MAX_SECT_SIZE * 12);
-  dlg->ReadFromFile(m_vbr_buffer, lba, 12, FALSE);
+  dlg->ReadFromFile(m_vbr_buffer, lba, 12);
   struct S_EXFAT_VBR *vbr = (struct S_EXFAT_VBR *) m_vbr_buffer;
   
   dlg->m_ExFatNames[index] = "ExFAT";
@@ -476,7 +476,7 @@ void *CExFat::ReadFile(DWORD cluster, DWORD64 *size, BYTE flags) {
   if (flags & EXFAT_FLAGS_NO_FAT) {
     buffer = malloc((size_t) (*size + (bytes_per_sect - 1)));
     root_size = (DWORD) ((*size + (bytes_per_sect - 1)) / bytes_per_sect);
-    dlg->ReadFromFile(buffer, m_lba + ((cluster-2) * sect_per_clust) + vbr->data_region_lba, root_size, FALSE);
+    dlg->ReadFromFile(buffer, m_lba + ((cluster-2) * sect_per_clust) + vbr->data_region_lba, root_size);
   } else {
     // find size of file
     do {
@@ -488,7 +488,7 @@ void *CExFat::ReadFile(DWORD cluster, DWORD64 *size, BYTE flags) {
     BYTE *ptr = (BYTE *) buffer;
     clust = cluster;
     do {
-      dlg->ReadFromFile(ptr, m_lba + ((clust-2) * sect_per_clust) + vbr->data_region_lba, sect_per_clust, FALSE);
+      dlg->ReadFromFile(ptr, m_lba + ((clust-2) * sect_per_clust) + vbr->data_region_lba, sect_per_clust);
       ptr += (sect_per_clust * bytes_per_sect);
       clust = ExfatGetNextSect(clust);
     } while (clust < EXFAT_FAT_BAD);
@@ -505,7 +505,7 @@ void CExFat::ZeroCluster(DWORD Cluster) {
   const unsigned bytes_per_sect = (1 << vbr->log_bytes_per_sect);
   void *zero = calloc(sect_per_clust * bytes_per_sect, 1);
   
-  dlg->WriteToFile(zero, m_lba + ((Cluster-2) * sect_per_clust) + vbr->data_region_lba, sect_per_clust, FALSE);
+  dlg->WriteToFile(zero, m_lba + ((Cluster-2) * sect_per_clust) + vbr->data_region_lba, sect_per_clust);
 
   free(zero);
 }
@@ -519,11 +519,11 @@ void CExFat::WriteFile(void *buffer, DWORD cluster, DWORD64 size, BYTE flags) {
   // if no fat, it starts at 'cluster' and then is consecutive on the media
   if (flags & EXFAT_FLAGS_NO_FAT) {
     DWORD count = (DWORD) ((size + (bytes_per_sect - 1)) / bytes_per_sect);
-    dlg->WriteToFile(buffer, m_lba + ((cluster-2) * sect_per_clust) + vbr->data_region_lba, count, FALSE);
+    dlg->WriteToFile(buffer, m_lba + ((cluster-2) * sect_per_clust) + vbr->data_region_lba, count);
   } else {
     BYTE *ptr = (BYTE *) buffer;
     do {
-      dlg->WriteToFile(ptr, m_lba + ((cluster-2) * sect_per_clust) + vbr->data_region_lba, sect_per_clust, FALSE);
+      dlg->WriteToFile(ptr, m_lba + ((cluster-2) * sect_per_clust) + vbr->data_region_lba, sect_per_clust);
       ptr += (sect_per_clust * bytes_per_sect);
       cluster = ExfatGetNextSect(cluster);
     } while (cluster < EXFAT_FAT_BAD);
@@ -873,7 +873,7 @@ void *CExFat::ExFatLoadFAT(void *fat_buffer) {
   struct S_EXFAT_VBR *vbr = (struct S_EXFAT_VBR *) m_vbr_buffer;
   if (fat_buffer) free(fat_buffer);
   fat_buffer = malloc(vbr->sect_per_fat * (1 << vbr->log_bytes_per_sect));
-  dlg->ReadFromFile(fat_buffer, m_lba + vbr->first_fat, vbr->sect_per_fat, FALSE);
+  dlg->ReadFromFile(fat_buffer, m_lba + vbr->first_fat, vbr->sect_per_fat);
   return fat_buffer;
 }
 
@@ -923,7 +923,7 @@ void CExFat::ExFatWriteBP(void *bp_buffer) {
 void CExFat::ExFatWriteFAT(void *fat_buffer) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   struct S_EXFAT_VBR *vbr = (struct S_EXFAT_VBR *) m_vbr_buffer;
-  dlg->WriteToFile(fat_buffer, m_lba + vbr->first_fat, vbr->sect_per_fat, FALSE);
+  dlg->WriteToFile(fat_buffer, m_lba + vbr->first_fat, vbr->sect_per_fat);
 }
 
 void CExFat::SaveItemInfo(HTREEITEM hItem, HTREEITEM hParent, DWORD Cluster, DWORD64 FileSize, BYTE Flags, DWORD EntryOffset, DWORD ErrorCode, BOOL CanCopy) {
@@ -981,7 +981,7 @@ void CExFat::OnFysosSig() {
   
   // we have to update m_vbr_buffer or the Apply button will destroy the updates
   BYTE buffer[MAX_SECT_SIZE];
-  dlg->ReadFromFile(buffer, m_lba, 1, FALSE);
+  dlg->ReadFromFile(buffer, m_lba, 1);
   memcpy((BYTE *) m_vbr_buffer + S_FYSOSSIG_OFFSET, buffer + S_FYSOSSIG_OFFSET, sizeof(struct S_FYSOSSIG));
   OnExFatApply();
 }
@@ -999,14 +999,14 @@ void CExFat::OnExFatApply() {
     p[i] = crc;
   
   // write 12 sectors
-  dlg->WriteToFile(m_vbr_buffer, m_lba, 12, FALSE);
+  dlg->WriteToFile(m_vbr_buffer, m_lba, 12);
 }
 
 void CExFat::OnExfatRestoreBackup() {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   
   // read 12 sectors
-  dlg->ReadFromFile(m_vbr_buffer, m_lba + 12, 12, FALSE);  // backup starts at 12
+  dlg->ReadFromFile(m_vbr_buffer, m_lba + 12, 12);  // backup starts at 12
   Start(m_lba, m_size, m_color, m_index, FALSE);
 }
 
@@ -1023,7 +1023,7 @@ void CExFat::OnExfatUpdateBackup() {
     p[i] = crc;
   
   // write 12 sectors
-  dlg->WriteToFile(m_vbr_buffer, m_lba + 12, 12, FALSE);  // backup starts at 12
+  dlg->WriteToFile(m_vbr_buffer, m_lba + 12, 12);  // backup starts at 12
 }
 
 void CExFat::OnExFatClean() {
@@ -1067,7 +1067,7 @@ bool CExFat::ExFatFormat(const BOOL AskForBoot) {
   // first, clear out the volume
   buffer = (BYTE *) calloc(12 * dlg->m_sect_size, 1);
   for (l=0; l<m_size; l++)
-    dlg->WriteToFile(buffer, m_lba + l, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + l, 1);
   
   // did we request a boot sector?
   if (AskForBoot) {
@@ -1177,8 +1177,8 @@ bool CExFat::ExFatFormat(const BOOL AskForBoot) {
   vbr->percent_heap = (BYTE) (int) ((double) used / (double) vbr->data_region_size);
   
   // write the VBR and backup VBR
-  dlg->WriteToFile(buffer, m_lba, 12, FALSE);
-  dlg->WriteToFile(buffer, m_lba + 12, 12, FALSE);
+  dlg->WriteToFile(buffer, m_lba, 12);
+  dlg->WriteToFile(buffer, m_lba + 12, 12);
   
   // create and write fat(s)
   BYTE *sect_buff = (BYTE *) malloc(dlg->m_sect_size);
@@ -1203,7 +1203,7 @@ bool CExFat::ExFatFormat(const BOOL AskForBoot) {
       p[j] = j+1;
     p[j] = EXFAT_FAT_LAST;
     for (j=0; j<vbr->sect_per_fat; j++) {
-      dlg->WriteToFile(sect_buff, m_lba + vbr->first_fat + (i * vbr->sect_per_fat) + j, 1, FALSE);
+      dlg->WriteToFile(sect_buff, m_lba + vbr->first_fat + (i * vbr->sect_per_fat) + j, 1);
       if (j == 0)
         memset(sect_buff, 0, dlg->m_sect_size);
     }
@@ -1216,7 +1216,7 @@ bool CExFat::ExFatFormat(const BOOL AskForBoot) {
   for (i=0; i<bitmap_size + root_size; i++)
     sect_buff[i/8] |= 1 << (i % 8);
   for (i=0; i<bitmap_size * (1 << vbr->log_sects_per_clust); i++) {
-    dlg->WriteToFile(sect_buff, m_lba + vbr->data_region_lba + i, 1, FALSE);
+    dlg->WriteToFile(sect_buff, m_lba + vbr->data_region_lba + i, 1);
     if (i == 0)
       memset(sect_buff, 0, dlg->m_sect_size);
   }
@@ -1243,13 +1243,13 @@ bool CExFat::ExFatFormat(const BOOL AskForBoot) {
   root[2].type.up_case_table.data_len = ucase_bsize;
   root[2].type.up_case_table.crc = ucase_crc;
   for (i=0; i<root_size * (1 << vbr->log_sects_per_clust); i++) {
-    dlg->WriteToFile(sect_buff, m_lba + vbr->data_region_lba + ((vbr->root_dir_cluster - 2) * (1 << vbr->log_sects_per_clust)) + i, 1, FALSE);
+    dlg->WriteToFile(sect_buff, m_lba + vbr->data_region_lba + ((vbr->root_dir_cluster - 2) * (1 << vbr->log_sects_per_clust)) + i, 1);
     if (i == 0)
       memset(sect_buff, 0, dlg->m_sect_size);
   }
   
   // write the UCase data
-  dlg->WriteToFile(ucase_table, m_lba + vbr->data_region_lba + ((ucase_cluster - 2) * (1 << vbr->log_sects_per_clust)), ucase_size, FALSE);
+  dlg->WriteToFile(ucase_table, m_lba + vbr->data_region_lba + ((ucase_cluster - 2) * (1 << vbr->log_sects_per_clust)), ucase_size);
   
   if (!m_hard_format) {
     memcpy(m_vbr_buffer, vbr, sizeof(struct S_EXFAT_VBR));
@@ -1279,7 +1279,7 @@ void CExFat::OnUpdateCode() {
   BYTE *buffer = (BYTE *) calloc(9 * dlg->m_sect_size, 1);
   
   // first, read in what we already have
-  dlg->ReadFromFile(existing, m_lba, 12, FALSE);
+  dlg->ReadFromFile(existing, m_lba, 12);
   
   // save the FYSOS signature block incase we restore it below
   memcpy(&s_sig, existing + S_FYSOSSIG_OFFSET, sizeof(struct S_FYSOSSIG));
@@ -1337,7 +1337,7 @@ void CExFat::OnUpdateCode() {
       p[i] = crc;
     
     // write it back
-    dlg->WriteToFile(existing, m_lba, 12, FALSE);
+    dlg->WriteToFile(existing, m_lba, 12);
     
     // need to update the m_vbr_buffer buffer as well
     memcpy(m_vbr_buffer, existing, 3);  // the jump instruction
@@ -1844,7 +1844,7 @@ void CExFat::OnErase() {
   if (AfxMessageBox("This will erase the whole partition!  Continue?", MB_YESNO, 0) == IDYES) {
     memset(buffer, 0, MAX_SECT_SIZE);
     for (DWORD64 lba=0; lba<m_size; lba++)
-      dlg->WriteToFile(buffer, m_lba + lba, 1, FALSE);
+      dlg->WriteToFile(buffer, m_lba + lba, 1);
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
 }

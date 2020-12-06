@@ -264,7 +264,7 @@ void CExt2::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
   m_inode_dirty = FALSE;
   
   // read in the superblock (1024 bytes)
-  dlg->ReadFromFile(buffer, m_lba + 2, 2, FALSE);
+  dlg->ReadFromFile(buffer, m_lba + 2, 2);
   memcpy(&m_super, buffer, sizeof(struct S_EXT2_SUPER));
   
   // detect if Ext2, 3, or 4
@@ -465,7 +465,7 @@ void CExt2::GetGroupDescTable(void) {
   m_desc_table = (struct S_EXT2_GROUP_DESC *) realloc(m_desc_table, ((m_groups * group_desc_size) + (m_block_size - 1)) & ~(m_block_size - 1));
   m_sectors_per_block = (m_block_size / dlg->m_sect_size);
   int sectors_per_group_desc = (int) ((((m_groups * group_desc_size) + (m_block_size - 1)) / m_block_size) * m_sectors_per_block);
-  dlg->ReadFromFile(m_desc_table, m_lba + (group_desc_block * m_sectors_per_block), sectors_per_group_desc, FALSE);
+  dlg->ReadFromFile(m_desc_table, m_lba + (group_desc_block * m_sectors_per_block), sectors_per_group_desc);
 }
 
 // Write the group descriptor table
@@ -475,7 +475,7 @@ void CExt2::WriteGroupDescTable(void) {
   int group_desc_size = (m_ext2_size == 4) ? 64 : 32;
   DWORD group_desc_block = (m_block_size == 1024) ? 2 : 1;
   int sectors_per_group_desc = (int) ((((m_groups * group_desc_size) + (m_block_size - 1)) / m_block_size) * m_sectors_per_block);
-  dlg->WriteToFile(m_desc_table, m_lba + (group_desc_block * m_sectors_per_block), sectors_per_group_desc, FALSE);
+  dlg->WriteToFile(m_desc_table, m_lba + (group_desc_block * m_sectors_per_block), sectors_per_group_desc);
 }
 
 void CExt2::GetGroupInodeTable(const int group) {
@@ -498,7 +498,7 @@ void CExt2::GetGroupInodeTable(const int group) {
   if (m_cur_inode_table)
     free(m_cur_inode_table);
   m_cur_inode_table = malloc(m_inode_table_size);
-  dlg->ReadFromFile(m_cur_inode_table, m_lba + (desc->inode_table * m_sectors_per_block), m_inode_table_size / dlg->m_sect_size, FALSE);
+  dlg->ReadFromFile(m_cur_inode_table, m_lba + (desc->inode_table * m_sectors_per_block), m_inode_table_size / dlg->m_sect_size);
 }
 
 void CExt2::WriteGroupInodeTable(const int group) {
@@ -506,7 +506,7 @@ void CExt2::WriteGroupInodeTable(const int group) {
   const int size = (m_super.feature_incompat & EXT4_FEATURE_INCOMPAT_64BIT) ? 64 : 32;
   struct S_EXT2_GROUP_DESC *desc = (struct S_EXT2_GROUP_DESC *) ((BYTE *) m_desc_table + (group * size));
   
-  dlg->WriteToFile(m_cur_inode_table, m_lba + (desc->inode_table * m_sectors_per_block), m_inode_table_size / dlg->m_sect_size, FALSE);
+  dlg->WriteToFile(m_cur_inode_table, m_lba + (desc->inode_table * m_sectors_per_block), m_inode_table_size / dlg->m_sect_size);
   m_inode_dirty = FALSE;
 }
 
@@ -568,7 +568,7 @@ void CExt2::GetInodeBlocks(unsigned InodeNum, struct S_EXT2_INODE *inode) {
     // if block_count > 0, we need to read in the indirect blocks
     DWORD *indirect = (DWORD *) malloc(entries_per_block * 4);
     if (block_count) {
-      dlg->ReadFromFile(indirect, m_lba + (inode->block_array.indirect_block * m_sectors_per_block), m_sectors_per_block, FALSE);
+      dlg->ReadFromFile(indirect, m_lba + (inode->block_array.indirect_block * m_sectors_per_block), m_sectors_per_block);
       for (i=0; i<entries_per_block && block_count; i++) {
         *p++ = indirect[i];
         block_count--;
@@ -578,10 +578,10 @@ void CExt2::GetInodeBlocks(unsigned InodeNum, struct S_EXT2_INODE *inode) {
     // if block_count > 0, we need to read in the dbl indirect blocks
     if (block_count) {
       DWORD *dbl = (DWORD *) malloc(entries_per_block * 4);
-      dlg->ReadFromFile(dbl, m_lba + (inode->block_array.dbl_indirect_block * m_sectors_per_block), m_sectors_per_block, FALSE);
+      dlg->ReadFromFile(dbl, m_lba + (inode->block_array.dbl_indirect_block * m_sectors_per_block), m_sectors_per_block);
       i = 0;
       while (block_count && (i<entries_per_block)) {
-        dlg->ReadFromFile(indirect, m_lba + (dbl[i] * m_sectors_per_block), m_sectors_per_block, FALSE);
+        dlg->ReadFromFile(indirect, m_lba + (dbl[i] * m_sectors_per_block), m_sectors_per_block);
         for (unsigned j=0; j<entries_per_block && block_count; j++) {
           *p++ = indirect[j];
           block_count--;
@@ -616,7 +616,7 @@ void *CExt2::Ext2ReadFile(struct S_EXT2_INODE *inode, const unsigned InodeNum, c
   BYTE *p = (BYTE *) buffer;
   for (unsigned i=0; i<block_count; i++) {
     DWORD64 block = Ext2GetBlockNum(InodeNum, inode, i);
-    dlg->ReadFromFile(p, m_lba + (block * m_sectors_per_block), m_sectors_per_block, FALSE);
+    dlg->ReadFromFile(p, m_lba + (block * m_sectors_per_block), m_sectors_per_block);
     p += m_block_size;
   }
   return buffer;
@@ -1182,7 +1182,7 @@ void CExt2::OnErase() {
   if (AfxMessageBox("This will erase the whole partition!  Continue?", MB_YESNO, 0) == IDYES) {
     memset(buffer, 0, MAX_SECT_SIZE);
     for (DWORD64 lba=0; lba<m_size; lba++)
-      dlg->WriteToFile(buffer, m_lba + lba, 1, FALSE);
+      dlg->WriteToFile(buffer, m_lba + lba, 1);
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
 }
@@ -1249,7 +1249,7 @@ bool CExt2::Ext2Format(const BOOL AskForBoot) {
   // first, clear out the volume
   memset(buffer, 0, MAX_SECT_SIZE * 2);
   for (l=0; l<m_size; l++)
-    dlg->WriteToFile(buffer, m_lba + l, 1, FALSE);
+    dlg->WriteToFile(buffer, m_lba + l, 1);
   
   /*
   // did we request a boot sector?
@@ -1272,7 +1272,7 @@ bool CExt2::Ext2Format(const BOOL AskForBoot) {
         DWORD filesize = bsfile.GetLength();
         if (filesize <= (2 * dlg->m_sect_size)) {
           bsfile.Read(buffer, filesize);
-          dlg->WriteToFile(buffer, m_lba, 2, FALSE);  // buffer will still be zeros except where we read the boot code, so okay to just write 2 sectors
+          dlg->WriteToFile(buffer, m_lba, 2);  // buffer will still be zeros except where we read the boot code, so okay to just write 2 sectors
         } else
           AfxMessageBox("Boot sector must be <= 2 sectors");
         bsfile.Close();
@@ -1380,7 +1380,7 @@ bool CExt2::Ext2Format(const BOOL AskForBoot) {
   }
   
   // write the super
-  dlg->WriteToFile(buffer, m_lba + 2, 2, FALSE);
+  dlg->WriteToFile(buffer, m_lba + 2, 2);
   
   // create group descriptor table
   int group_desc_size = 32; //(m_ext2_size == 4) ? 64 : 32;
@@ -1434,7 +1434,7 @@ bool CExt2::Ext2Format(const BOOL AskForBoot) {
     total_inodes -= super->inodes_per_group;
     cur_block_num += super->blocks_per_group;
   }
-  dlg->WriteToFile(desc_table_buffer, m_lba + (group_desc_block * sectors_per_block), sectors_per_group_desc, FALSE);
+  dlg->WriteToFile(desc_table_buffer, m_lba + (group_desc_block * sectors_per_block), sectors_per_group_desc);
   
   // mark the blocks used for each group's block_bitmap, inode_bitmap, and inode_table
   // cannot use MarkBitmap() because we haven't "enumerated" the partition yet
@@ -1443,7 +1443,7 @@ bool CExt2::Ext2Format(const BOOL AskForBoot) {
     sect_buffer[i/8] |= (0x80 >> (i % 8));
   for (i=0; i<groups; i++) {
     struct S_EXT2_GROUP_DESC *desc = (struct S_EXT2_GROUP_DESC *) ((BYTE *) desc_table_buffer + (i * group_desc_size));
-    dlg->WriteToFile(sect_buffer, m_lba + ((((DWORD64) desc->block_bitmap_hi << 32) | (DWORD64) desc->block_bitmap) * sectors_per_block), block_bitmap_size * sectors_per_block, FALSE);
+    dlg->WriteToFile(sect_buffer, m_lba + ((((DWORD64) desc->block_bitmap_hi << 32) | (DWORD64) desc->block_bitmap) * sectors_per_block), block_bitmap_size * sectors_per_block);
   }
   free(sect_buffer);
   free(desc_table_buffer);

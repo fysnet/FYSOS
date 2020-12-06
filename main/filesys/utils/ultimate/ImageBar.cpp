@@ -162,7 +162,7 @@ void CImageBar::ImageParse(CFile *file) {
   dlg->SetDlgItemText(IDC_END_DISP, cs);
   cs.Format("%i", TotalBlocks / 2);
   dlg->SetDlgItemText(IDC_MID_DISP, cs);
-  
+
   // check to see if a MBR exists
   CheckForMBRRecusive(0, TotalBlocks);
 
@@ -534,7 +534,7 @@ int CImageBar::DetectFileSystem(const DWORD64 lba, const DWORD64 size) {
   int fs_type = -1;
   
   buffer = malloc(65 * MAX_SECT_SIZE);
-  dlg->ReadFromFile(buffer, lba, 65, FALSE);
+  dlg->ReadFromFile(buffer, lba, 65);
   
   // detect a FAT file system
   fs_type = DetectFat((struct S_FAT1216_BPB *) buffer, dlg->m_sect_size);

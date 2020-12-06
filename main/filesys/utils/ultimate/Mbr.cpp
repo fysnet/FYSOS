@@ -152,7 +152,7 @@ bool CMbr::Exists(DWORD64 LBA) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   int i;
   
-  dlg->ReadFromFile(m_buffer, LBA, 1, FALSE);
+  dlg->ReadFromFile(m_buffer, LBA, 1);
   
   // save the LBA
   m_lba = LBA;
@@ -210,7 +210,7 @@ bool CMbr::Exists(DWORD64 LBA) {
   // if we didn't find it, *but* the sector is zero'd, let's return true anyway, so we can create one
   if (IsBufferEmpty(m_buffer, 512))
     return TRUE;
-  
+
   return m_exists;
 }
 
@@ -273,7 +273,7 @@ void CMbr::OnMbrApply() {
   * (DWORD *) &m_buffer[512 - 2 - (4 * 16) - 2 - 4] = convert32(m_id_sig);
   * (WORD *) &m_buffer[512 - 2 - (4 * 16) - 2] = convert16(m_id_zero);
   
-  dlg->WriteToFile(m_buffer, m_lba, 1, FALSE);
+  dlg->WriteToFile(m_buffer, m_lba, 1);
   
   // update the dump
   DumpIt(m_MbrDump, m_buffer, 0, 512, FALSE);
@@ -301,7 +301,7 @@ void CMbr::OnExtractMbr() {
   POSITION pos = odlg.GetStartPosition();
   if (file.Open(odlg.GetNextPathName(pos), CFile::modeCreate | CFile::modeWrite | CFile::typeBinary | CFile::shareExclusive, NULL) != 0) {
     buffer = calloc(1, MAX_SECT_SIZE);
-    dlg->ReadFromFile(buffer, m_lba, 1, FALSE);
+    dlg->ReadFromFile(buffer, m_lba, 1);
     file.Write(buffer, dlg->m_sect_size);
     file.Close();
     free(buffer);
@@ -372,13 +372,13 @@ void CMbr::OnUpdateMbr() {
   }
   
   // now write it to the image file
-  dlg->WriteToFile(m_buffer, m_lba, 1, FALSE);
+  dlg->WriteToFile(m_buffer, m_lba, 1);
   // the length of the file was more than one sector, let's write those too
   if (sectors > 1) {
     // if the is_legacy_gpt code box is checked, we need to read in the sector,
     //   update our buffer with the GPT header, then write it back
     if (dlg->Gpt.m_exists && IsDlgButtonChecked(IDC_MBR_LEGACY_GPT)) {
-      dlg->ReadFromFile(buffer, m_lba + 1, 1, FALSE);  // we can use the first sector of the buffer since we already wrote it
+      dlg->ReadFromFile(buffer, m_lba + 1, 1);  // we can use the first sector of the buffer since we already wrote it
       memcpy(buffer + dlg->m_sect_size, buffer, 92);  // 92 is a standard GPT Header length (shouldn't be anything else)
     }
     // warn if the code will pass up the entry offset in the GPT
@@ -386,7 +386,7 @@ void CMbr::OnUpdateMbr() {
     if (dlg->Gpt.m_exists && (sectors > offset)) {
       if (AfxMessageBox("New MBR code will overwrite GPT Entries!  Continue?", MB_YESNO, 0) == IDYES) {
         for (unsigned i=1; i<sectors; i++)
-          dlg->WriteToFile(buffer + (i * dlg->m_sect_size), m_lba + i, 1, FALSE);
+          dlg->WriteToFile(buffer + (i * dlg->m_sect_size), m_lba + i, 1);
       }
     }
   }
@@ -452,14 +452,14 @@ void CMbr::OnPrependMBR() {
   m_buffer[511] = 0xAA;
 
   // and write it to the file
-  dlg->WriteToFile(m_buffer, 0, 1, FALSE);
+  dlg->WriteToFile(m_buffer, 0, 1);
 
   // clear the inserted sectors
   if (--count > 0) {
     memset(m_buffer, 0, MAX_SECT_SIZE);
     lba = 1;
     while (count--)
-      dlg->WriteToFile(m_buffer, lba++, 1, FALSE);
+      dlg->WriteToFile(m_buffer, lba++, 1);
   }
 
   // reload the image

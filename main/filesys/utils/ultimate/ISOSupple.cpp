@@ -355,7 +355,7 @@ void *CISOSupple::ReadFile(DWORD extent, DWORD size, BYTE Flags, BOOL IsRoot) {
   
   void *ptr = calloc(size + (MAX_SECT_SIZE - 1), 1);
   if (ptr)
-    dlg->ReadFromFile(ptr, extent, (size + (2048 - 1)) / 2048, TRUE);
+    dlg->ReadFromFile(ptr, extent, (size + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
   
   return ptr;
 }
