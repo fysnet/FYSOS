@@ -188,9 +188,6 @@ void CImageBar::ImageParse(CFile *file) {
   if (dlg->m_MBRCount == 0)
     dlg->m_TabControl.AddPage(&dlg->Mbr[0]);
 
-  cs.Format(" %i  %i", dlg->Gpt.m_exists, dlg->Mbr[0].IsPMBR());
-  AfxMessageBox(cs);
-
   // if the MBR is a PMBR, change the tab's title
   CPropertyPage *p = dlg->m_TabControl.GetPage(dlg->m_TabControl.GetPageIndex(&dlg->Mbr[0]));
   if (dlg->Gpt.m_exists && dlg->Mbr[0].IsPMBR())
