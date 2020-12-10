@@ -565,7 +565,7 @@ void CFat::OnUpdateCode() {
   CFile bsfile;
   CString cs;
   unsigned extra = 0;
-  unsigned reserved = (bpb12->resv > 0) ? bpb12->sect_reserved : 1;
+  unsigned reserved = (bpb12->sect_reserved > 0) ? bpb12->sect_reserved : 1;
   unsigned i, info_sect, backup_sect;
 
   BYTE *existing = (BYTE *) malloc(reserved * dlg->m_sect_size);
@@ -1497,8 +1497,8 @@ void CFat::CreateSFN(CString csLFN, int seq, BYTE name[8], BYTE ext[3]) {
 }
 
 // 15-9 Year (0 = 1980, 119 = 2099 supported under DOS/Windows, theoretically up to 127 = 2107)
-// 8-5  Month (1–12)
-// 4-0  Day (1–31) 
+// 8-5  Month (1Â–12)
+// 4-0  Day (1Â–31) 
 WORD CFat::CreateDate(void) {
   CTime time = CTime::GetCurrentTime();
   WORD word;
