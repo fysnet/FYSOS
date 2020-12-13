@@ -30,7 +30,7 @@ This uses up space in the executable as well as limiting the count of partitions
 allow.  I would like to change this to allocate memory instead.  This will free up .EXE
 size, as well as remove the limit of partitions it will allow.
 - [ ] There are items within each partition "type" that I need to fix or add to.
-- [ ] The current code release is for 64-bit Windows.  I few (slight) modifications must be
+- [ ] The current code release is for 64-bit Windows.  A few (slight) modifications must be
 made if you wish to compile for 32-bit Windows.
 
 ## To Build
