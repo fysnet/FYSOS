@@ -40,3 +40,10 @@ made if you wish to compile for 32-bit Windows.
 
 ## Your contribution
 If you wish to contribute to this project--and I hope you do--or wish to point out a bug, please contact me at: fys [at] fysnet [dot] net.
+
+## Other notes
+I will update the executables more frequently than the source code.  Therefore, the source will lag behind.  The release folder will hold the most recent executables, as I fix bugs and add new features.  The source code will be updated only on major releases.  However, if you need the latest source, contact me and I will see about updating it.
+
+There are known bugs and other issues.  I will see if I can figure these out and fix them.  However, I do this as a hobby, and interest specifies when I work on it.
+
+Thank you all for your support.
