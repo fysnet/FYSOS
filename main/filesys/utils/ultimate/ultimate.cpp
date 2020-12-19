@@ -202,7 +202,7 @@ BOOL IsBufferEmpty(const void *buffer, const int count) {
   BYTE *p = (BYTE *) buffer;
   BYTE byte = 0;
 
-  for (int i=0; i<count; i++)
+  for (int i=0; i<count && !byte; i++)
     byte |= p[i];
 
   return (byte == 0);

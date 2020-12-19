@@ -302,11 +302,14 @@ void CImageBar::ImageParse(CFile *file) {
   }
   
   // if this is an .VHD file, load that as well.
-  if (dlg->VHD.Exists(TotalBlocks - 1)) {
-    dlg->VHD.m_draw_index = DrawBox(dlg->VHD.m_lba, dlg->VHD.m_lba + 1, TotalBlocks, dlg->VHD.m_color, TRUE, "VHD", &dlg->VHD);
-    dlg->m_TabControl.AddPage(&dlg->VHD);
-    dlg->VHD.Begin();
-    dlg->m_hasVHD = TRUE;
+  // (don't try if we already detected a VDI file)
+  if (dlg->m_file_type != DLG_FILE_TYPE_VB_VDI) {
+    if (dlg->VHD.Exists(TotalBlocks - 1)) {
+      dlg->VHD.m_draw_index = DrawBox(dlg->VHD.m_lba, dlg->VHD.m_lba + 1, TotalBlocks, dlg->VHD.m_color, TRUE, "VHD", &dlg->VHD);
+      dlg->m_TabControl.AddPage(&dlg->VHD);
+      dlg->VHD.Begin();
+      dlg->m_hasVHD = TRUE;
+    }
   }
   
   dlg->m_TabControl.Invalidate(FALSE);

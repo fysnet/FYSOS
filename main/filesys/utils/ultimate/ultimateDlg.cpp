@@ -70,6 +70,7 @@
 
 #include "FYSOSSig.h"
 #include "Settings.h"
+#include "VDI.h"
 
 #include "NewImage.h"
 #include "GetImage.h"
@@ -152,6 +153,8 @@ CUltimateDlg::CUltimateDlg(CWnd* pParent /*=NULL*/)
   m_FYSCount = 0;
   m_UCount = 0;
   m_overwrite_okay = FALSE;
+
+  m_vdi_blocks = NULL;
 }
 
 void CUltimateDlg::DoDataExchange(CDataExchange* pDX) {
@@ -181,6 +184,7 @@ BEGIN_MESSAGE_MAP(CUltimateDlg, CDialog)
   ON_COMMAND(ID_GET_DISK_IMAGE, OnToolsGetDisk)
   ON_COMMAND(ID_APPEND_VHD, OnToolsAppendVHD)
   ON_COMMAND(ID_TOOLS_ADDHYBRIDCDROM, OnToolsHybridCDROM)
+  ON_COMMAND(ID_TOOLS_VIEWVDIHEADER, OnViewVDIHeader)
   ON_COMMAND(ID_FILE_RELOAD, OnFileReload)
   ON_COMMAND(ID_FILE_EXIT, OnFileExit)
   ON_COMMAND(ID_HELP_INDEX, OnHelpHelp)
@@ -299,7 +303,8 @@ void CUltimateDlg::OnFileNew() {
   if (m_bIsOpen) {
     
     // do the save/close of existing
-    
+
+    vdi_close_file();
     m_file.Close();
     m_ImageBar.Clear();
     m_bIsOpen = FALSE;
@@ -312,6 +317,7 @@ void CUltimateDlg::OnFileNew() {
     OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY | OFN_EXPLORER, // flags
     _T(".img files (.img)|*.img|")    // Filter string
     _T(".bin files (.bin)|*.bin|")    // Filter string
+    _T(".vdi files (.vdi)|*.vdi|")    // Filter string
     _T(".vhd files (.vhd)|*.vhd|")    // Filter string
     _T(".iso files (.iso)|*.iso|")    // Filter string
     _T("All Files (*.*)|*.*|")        // Filter string
@@ -339,14 +345,23 @@ void CUltimateDlg::OnFileNew() {
 //   Flat = sector for sector
 //   Growing = 
 //    etc.
+//
+// VMDK images:
+//   https://en.wikipedia.org/wiki/VMDK
+//   https://www.vmware.com/support/developer/vddk/vmdk_50_technote.pdf
+//
+//  VDI images:
+//   https://forums.virtualbox.org/viewtopic.php?t=8046
+//
+// 
 int CUltimateDlg::DetFileType(void) {
   BYTE buffer[MAX_SECT_SIZE];
   int type = DLG_FILE_TYPE_FLAT;
-  CString cs;
+  struct VDI_HEADER *vdi_header = (struct VDI_HEADER *) buffer;
   
   // set to sect for sect so we can read from the file
   // also, (temporaritly) set the length so the check won't fail
-  m_file_length.QuadPart = 4096;  // need to be at least 4096 incase we are using 4096 sized sectors
+  m_file_length.QuadPart = MAX_SECT_SIZE;  // need to be at least MAX_SECT_SIZE incase we are using MAX_SECT_SIZE sized sectors
   m_file_type = DLG_FILE_TYPE_FLAT;
   ReadFromFile(buffer, 0, 1);
   
@@ -391,26 +406,84 @@ int CUltimateDlg::DetFileType(void) {
     }
     
   // try a VirtualBox Virtual disk image
-  // https://forums.virtualbox.org/viewtopic.php?f=1&t=47732
-  // "<<< Sun VirtualBox Disk Image >>>\n"
-  // "<<< Sun xVM VirtualBox Disk Image >>>\n"
-  // "<<< innotek VirtualBox Disk Image >>>\n"
-  // "<<< CloneVDI VirtualBox Disk Image >>>\n"
-  // "<<< QEMU VM Virtual Disk Image >>>\n"
-  // "<<< Oracle VM VirtualBox Disk Image >>>\n"
-  } else if (memcmp(&buffer[0], "<<<", 3) == 0) {
-    memcpy(cs.GetBuffer(60), buffer, 55);
-    cs = cs.Left(50);  // make sure it is (null) terminated
-    if (cs.Find("VirtualBox Disk Image >>>", 0)) {
-      AfxMessageBox("Found VirtualBox HD Image: file...\r\n"
-                    "I currently don't support this type of file...");
-      
-      return DLG_FILE_TYPE_UNKWN; ///////////////////
-    }
+  } else if ((memcmp(vdi_header, "<<<", 3) == 0) && 
+             (vdi_header->signature == 0xBEDA107F) &&
+             (vdi_header->version == 0x00010001)) {
+    return vdi_open_file(vdi_header);
   }
   
   // default to sector for sector (flat)
   return DLG_FILE_TYPE_FLAT;
+}
+
+// found a VirtualBox VDI image.
+int CUltimateDlg::vdi_open_file(struct VDI_HEADER *vdi_header) {
+  LARGE_INTEGER large_int;
+  
+  // change to the sector size given
+  if (vdi_header->sector_size == 1024) {
+    m_sect_size = m_dflt_sect_size = 1024;
+    CheckRadioButton(IDC_SECT_SIZE_512, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_1024); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
+  } else if (vdi_header->sector_size == 2048) {
+    m_sect_size = m_dflt_sect_size = 2048;
+    CheckRadioButton(IDC_SECT_SIZE_512, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_2048); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
+  } else if (vdi_header->sector_size == 4096) {
+    m_sect_size = m_dflt_sect_size = 4096;
+    CheckRadioButton(IDC_SECT_SIZE_512, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_4096); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
+  } else {
+    m_sect_size = m_dflt_sect_size = 512;
+    CheckRadioButton(IDC_SECT_SIZE_512, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_512); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
+  }
+
+  // we need to set a few items
+  m_vdi_image_type = vdi_header->image_type;        // either flat or dynamic
+  m_vdi_image_flags = vdi_header->image_flags;      // flags
+  m_vdi_offset_blocks = vdi_header->offset_blocks;  // byte offset in file where the block table starts
+  m_vdi_offset_data = (DWORD64) vdi_header->offset_data; // byte offset in file where the data blocks start
+  m_vdi_disk_size = vdi_header->disk_size;          // size of image file in bytes (if all blocks were used)
+  m_vdi_block_size = vdi_header->block_size;        // block size (should be 1Meg blocks)
+  m_vdi_block_count = vdi_header->block_count;      // count of blocks used
+  m_vdi_blocks_allocated = vdi_header->blocks_allocated;  // current allocated blocks
+  m_vdi_table_dirty = FALSE;
+      
+  // allocate and read in the block table
+  m_vdi_blocks = (DWORD *) calloc(m_vdi_block_count * sizeof(DWORD), 1);
+
+  large_int.QuadPart = m_vdi_offset_blocks;
+  ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+  m_file.Read(m_vdi_blocks, m_vdi_block_count * sizeof(DWORD));
+    
+  return DLG_FILE_TYPE_VB_VDI;
+}
+
+// we need to close the VDI file
+void CUltimateDlg::vdi_close_file() {
+  LARGE_INTEGER large_int;
+  BYTE buffer[MAX_SECT_SIZE];
+  struct VDI_HEADER *vdi_header = (struct VDI_HEADER *) buffer;
+  
+  if (m_file_type == DLG_FILE_TYPE_VB_VDI) {
+    // if we changed the block table, we need to write it back
+    if (m_vdi_table_dirty) {
+      large_int.QuadPart = m_vdi_offset_blocks;
+      ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+      m_file.Write(m_vdi_blocks, m_vdi_block_count * sizeof(DWORD));
+      m_vdi_table_dirty = FALSE;
+      
+      // now update the allocated count, etc.
+      large_int.QuadPart = 0;
+      ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+      m_file.Read(buffer, 512);
+      vdi_header->blocks_allocated = m_vdi_blocks_allocated;
+      ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+      m_file.Write(buffer, 512);
+    }
+    
+    if (m_vdi_blocks)
+      free(m_vdi_blocks);
+
+    m_vdi_blocks = NULL;
+  }
 }
 
 void CUltimateDlg::FileOpen(CString csPath) {
@@ -422,13 +495,13 @@ void CUltimateDlg::FileOpen(CString csPath) {
     
     // do the save/close of existing
     
+    vdi_close_file();
     m_file.Close();
     m_ImageBar.Clear();
     m_bIsOpen = FALSE;
   }
   
   m_sect_size = m_dflt_sect_size;
-  //SetDlgItemInt(IDC_SECT_SIZE, m_sect_size);
   m_isISOImage = FALSE;
   m_hasVHD = FALSE;
   m_MBRCount = 0;
@@ -465,6 +538,7 @@ void CUltimateDlg::FileOpen(CString csPath) {
   //   if this file is default 4k sectors or not.
   if (!FileOpenInfo(csPath)) {
     m_file.Close();
+    vdi_close_file();
     return;
   }
 
@@ -637,6 +711,7 @@ void CUltimateDlg::OnFileOpen() {
     OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_EXPLORER, // flags
     _T(".img files (.img)|*.img|")    // Filter string
     _T(".bin files (.bin)|*.bin|")    // Filter string
+    _T(".vdi files (.vdi)|*.vdi|")    // Filter string
     _T(".vhd files (.vhd)|*.vhd|")    // Filter string
     _T(".iso files (.iso)|*.iso|")    // Filter string
     _T("All Files (*.*)|*.*|")        // Filter string
@@ -652,6 +727,8 @@ void CUltimateDlg::OnFileOpen() {
 void CUltimateDlg::OnFileClose() {
   // first see if we already have a file open (should have
   if (m_bIsOpen) {
+    vdi_close_file();
+    
     m_file.Close();
     m_ImageBar.Clear();
     m_bIsOpen = FALSE;
@@ -697,6 +774,7 @@ void CUltimateDlg::OnFileExit() {
     
     // do the save/close of existing
     
+    vdi_close_file();
     m_file.Close();
     m_ImageBar.Clear();
     m_bIsOpen = FALSE;
@@ -846,6 +924,37 @@ void CUltimateDlg::OnToolsErase() {
     
     SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
+}
+
+// View/Edit a VDI header
+void CUltimateDlg::OnViewVDIHeader() {
+  CFile vdi_file;
+  CVDI vdi;
+
+  CFileDialog dlg (
+    TRUE,             // Create an open file dialog
+    _T(".vdi"),       // Default file extension
+    NULL,             // Default Filename
+    OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_EXPLORER, // flags
+    _T(".vdi files (.vdi)|*.vdi|")    // Filter string
+    _T("All Files (*.*)|*.*|")        // Filter string
+    _T("|")
+  );
+  if (dlg.DoModal() != IDOK)
+    return;
+  
+  POSITION pos = dlg.GetStartPosition();
+  if (vdi_file.Open(dlg.GetNextPathName(pos), CFile::modeReadWrite | CFile::typeBinary | CFile::shareDenyWrite, NULL) == 0) {
+    AfxMessageBox("Error Opening Image File...");
+    return;
+  }
+
+  vdi_file.Read(vdi.m_buffer, 512);
+  if (vdi.DoModal() == IDOK) {
+    vdi_file.SeekToBegin();
+    vdi_file.Write(vdi.m_buffer, 512);
+  }
+  vdi_file.Close();  
 }
 
 // this will place a CDROM El Torito "image" at LBA 64 (CDROM LBA 16).
@@ -1146,6 +1255,7 @@ void CUltimateDlg::OnInitMenuPopup(CMenu *pMenu, UINT nIndex, BOOL bSysMenu) {
   pMenu->EnableMenuItem(ID_GET_DISK_IMAGE, !m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_APPEND_VHD, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_TOOLS_ADDHYBRIDCDROM, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
+  pMenu->EnableMenuItem(ID_TOOLS_VIEWVDIHEADER, !m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   
   if (!bSysMenu) {
     // get the first string in the list
@@ -1175,9 +1285,12 @@ LARGE_INTEGER CUltimateDlg::GetFileLength(HANDLE hFile) {
   
   large.QuadPart = 0;
   switch (m_file_type) {
-    case DLG_FILE_TYPE_FLAT: {
+    case DLG_FILE_TYPE_FLAT:
       ::GetFileSizeEx(hFile, &large);
-    } break;
+      break;
+    case DLG_FILE_TYPE_VB_VDI:
+      large.QuadPart = m_vdi_disk_size;
+      break;
     
     default:
       AfxMessageBox("Error: Unknown DLF_FILE_TYPE...");
@@ -1204,7 +1317,9 @@ BOOL CUltimateDlg::SetFileLength(HANDLE hFile, const DWORD64 Size) {
       if (ret != 0)
         ret = ::SetEndOfFile(hFile);
       break;
-    
+    case DLG_FILE_TYPE_VB_VDI:
+      AfxMessageBox("VDI images are not resizable...");
+      break;
     default:
       AfxMessageBox("Error: Unknown DLF_FILE_TYPE...");
   }
@@ -1213,11 +1328,13 @@ BOOL CUltimateDlg::SetFileLength(HANDLE hFile, const DWORD64 Size) {
 }
 
 long CUltimateDlg::ReadFromFile(void *buffer, DWORD64 lba, long count) {
+  LARGE_INTEGER large_int;
   CString cs;
+  long cnt;
+  BYTE *ptr = (BYTE *) buffer;
   
   switch (m_file_type) {
     case DLG_FILE_TYPE_FLAT: {
-      LARGE_INTEGER large_int;
       large_int.QuadPart = (lba * m_sect_size);
       
       // if we will be reading from past end of file, give an error
@@ -1235,6 +1352,53 @@ long CUltimateDlg::ReadFromFile(void *buffer, DWORD64 lba, long count) {
       }
     } break;
     
+    case DLG_FILE_TYPE_VB_VDI: {
+      //  ?? reading from a flat type image should be identical to reading from a dynamic,
+      //  ??  only all blocks will already be allocated
+      BOOL display_error = TRUE;
+      DWORD64 ByteOffset = lba * m_sect_size;
+      for (cnt=0; cnt<count; cnt++) {
+        // check to see if we are out of bounds
+        if ((ByteOffset + m_sect_size) > m_vdi_disk_size) {
+          cs.Format("Error reading %i sectors from LBA %I64i (out of bounds)", count, lba);
+          AfxMessageBox(cs);
+          return 0;
+        }
+        
+        // get the block value to use
+        DWORD block = m_vdi_blocks[ByteOffset / m_vdi_block_size];
+        if (block == VDI_BLOCK_ID_UNALLOCATED) { // unallocated block
+          // we give an error on the first sector try only
+          if (display_error) {
+            cs.Format("VDI File: Trying to read from an unallocated block (%I64i  %i)", lba, count);
+            AfxMessageBox(cs);
+            display_error = FALSE;
+          }
+          // so that there is no confusion or so that we don't get errornous values,
+          //  we return all zeros for the sector(s) read
+          memset(ptr, 0, m_sect_size);
+        } else if (block == VDI_BLOCK_ID_ZERO_BLOCK) { // zero block
+          memset(ptr, 0, m_sect_size);
+        } else if (block < m_vdi_blocks_allocated) {
+          // get the block and extract the sector
+          large_int.QuadPart = m_vdi_offset_data + (block * m_vdi_block_size) + (ByteOffset % m_vdi_block_size);
+          ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+          if (m_file.Read(ptr, m_sect_size) != m_sect_size) {
+            cs.Format("Error reading %i sectors from LBA %I64i", count, lba);
+            AfxMessageBox(cs);
+            return 0;
+          }
+        } else {
+          // if the block number is more than the currently allocated blocks, we have an error
+          cs.Format("Trying to read from an unallocated block (%I64i  %i)", lba, count);
+          AfxMessageBox(cs);
+          return 0;
+        }
+        ptr += m_sect_size;
+        ByteOffset += m_sect_size;
+      }
+    } break;
+      
     default:
       AfxMessageBox("Error: Unknown DLF_FILE_TYPE...");
   }
@@ -1245,7 +1409,10 @@ long CUltimateDlg::ReadFromFile(void *buffer, DWORD64 lba, long count) {
 // GUI Throws and exception if in error
 void CUltimateDlg::WriteToFile(void *buffer, DWORD64 lba, long count) {
   if (!IsDlgButtonChecked(IDC_FORCE_READONLY)) {
+    LARGE_INTEGER large_int;
     CString cs;
+    long cnt;
+    BYTE *ptr = (BYTE *) buffer;
     
     switch (m_file_type) {
       case DLG_FILE_TYPE_FLAT: {
@@ -1264,6 +1431,65 @@ void CUltimateDlg::WriteToFile(void *buffer, DWORD64 lba, long count) {
         m_file.Write(buffer, count * m_sect_size);
       } break;
         
+      case DLG_FILE_TYPE_VB_VDI: {
+        // Flat files will always be allocated...
+        //   m_vdi_image_type = VDI_IMAGE_TYPE_DYNAMIC or VDI_IMAGE_TYPE_FLAT
+        DWORD64 ByteOffset = lba * m_sect_size;
+        for (cnt=0; cnt<count; cnt++) {
+          // check to see if we are out of bounds
+          if ((ByteOffset + m_sect_size) > m_vdi_disk_size) {
+            cs.Format("Error trying to write %i sectors to LBA %I64i (out of bounds)", count, lba);
+            AfxMessageBox(cs);
+            return;
+          }
+          
+          // get the block value to use
+          DWORD block = m_vdi_blocks[ByteOffset / m_vdi_block_size];
+          // if the sector data is not zeros, and
+          //        block is unallocated or block is zeros, 
+          //        then allocate a new block
+          if ((block == VDI_BLOCK_ID_UNALLOCATED) || (block == VDI_BLOCK_ID_ZERO_BLOCK)) {
+            // calculate if the sector is all zeros
+            // This will slow down the writes considerably. (but only when the block has yet to be allocated)
+            if (!IsBufferEmpty(ptr, m_sect_size)) {
+              // get next available block to use
+              block = m_vdi_blocks_allocated++;
+              
+              // move to that block area and write a full block of zeros (plus this sector's data)
+              large_int.QuadPart = m_vdi_offset_data + (block * m_vdi_block_size);
+              ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+              BYTE *zeros = (BYTE *) calloc(m_vdi_block_size, 1);
+              memcpy(zeros + (ByteOffset % m_vdi_block_size), ptr, m_sect_size);
+              m_file.Write(zeros, m_vdi_block_size);
+              free(zeros);
+              
+              // mark the table
+              m_vdi_blocks[ByteOffset / m_vdi_block_size] = block;
+              m_vdi_table_dirty = TRUE;
+            } else {
+              // if sector data is zeros but block was unallocated, mark it as a zero block
+              if (block == VDI_BLOCK_ID_UNALLOCATED) {
+                // mark the table
+                m_vdi_blocks[ByteOffset / m_vdi_block_size] = VDI_BLOCK_ID_ZERO_BLOCK;
+                m_vdi_table_dirty = TRUE;
+              }
+            }
+          } else if (block < m_vdi_blocks_allocated) {
+            // get the block and extract the sector
+            large_int.QuadPart = m_vdi_offset_data + (block * m_vdi_block_size) + (ByteOffset % m_vdi_block_size);
+            ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+            m_file.Write(ptr, m_sect_size);
+          } else {
+            // if the block number is more than the currently allocated blocks, we have an error
+            cs.Format("Trying to write to an unallocated block (%I64i  %i)", lba, count);
+            AfxMessageBox(cs);
+            return;
+          }
+          ptr += m_sect_size;
+          ByteOffset += m_sect_size;
+        }
+      } break;
+      
       default:
         AfxMessageBox("Error: Unknown DLF_FILE_TYPE...");
     }

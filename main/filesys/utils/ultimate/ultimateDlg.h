@@ -112,6 +112,7 @@
 #define  DLG_FILE_TYPE_UNDOABLE  1   // Bochs Virtual HD : REDOLOG : Undoable
 #define  DLG_FILE_TYPE_VOLATILE  2   // Bochs Virtual HD : REDOLOG : Volatile
 #define  DLG_FILE_TYPE_GROWING   3   // Bochs Virtual HD : REDOLOG : Growing
+#define  DLG_FILE_TYPE_VB_VDI    4   // VirtualBox VDI file (Dynamic)
 
 
 class CUltimateDlg : public CDialog {
@@ -200,12 +201,12 @@ public:
 
   // ClassWizard generated virtual function overrides
   //{{AFX_VIRTUAL(CUltimateDlg)
-  protected:
+protected:
   virtual void DoDataExchange(CDataExchange* pDX);  // DDX/DDV support
   //}}AFX_VIRTUAL
   
 // Implementation
-protected:
+public:  // protected:
   HICON m_hIcon;
   
   CImageBar m_ImageBar;
@@ -215,6 +216,21 @@ protected:
   CFile   m_file;
   LARGE_INTEGER m_file_length;
   bool    m_overwrite_okay;
+
+  // VDI stuff
+  int     vdi_open_file(struct VDI_HEADER *vdi_header);
+  void    vdi_close_file();
+  DWORD   m_vdi_image_type;
+  DWORD   m_vdi_image_flags;
+  DWORD   m_vdi_offset_blocks;
+  DWORD64 m_vdi_offset_data;
+  DWORD64 m_vdi_disk_size;
+  DWORD   m_vdi_block_size;
+  DWORD   m_vdi_block_count;   // fixed.  Count of total blocks in file that can be used/allocated
+  DWORD   m_vdi_blocks_allocated;
+  DWORD   *m_vdi_blocks;
+  BOOL    m_vdi_table_dirty;
+
   
   CRecentFileList *m_rfl;
   void UpdateMenu(CMenu *pMenu, UINT nIndex);
@@ -236,6 +252,7 @@ protected:
   afx_msg void OnToolsGetDisk();
   afx_msg void OnToolsAppendVHD();
   afx_msg void OnToolsErase();
+  afx_msg void OnViewVDIHeader();
   afx_msg void OnToolsHybridCDROM();
   afx_msg void OnHelpHelp();
   afx_msg void OnHelpAbout();

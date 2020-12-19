@@ -210,7 +210,7 @@ void CFat::OnFatCheck() {
     }
   } else {
     if ((dword[0] != (0x0FFFFF00 | bpb12->descriptor)) && (dword[1] != 0xFFFFFFFF)) {
-      cs.Format("First two cluster entries are not 0FFFFF%02X 0FFFFFFF. (0x%08X 0x%08X)", bpb12->descriptor, dword[0], dword[1]);
+      cs.Format("First two cluster entries are not 0FFF_FF%02X 0FFF_FFFF. (0x%08X 0x%08X)", bpb12->descriptor, dword[0], dword[1]);
       fcInfo += cs;
       fcErrorCount++;
       if (AfxMessageBox(cs + "\r\nFix?", MB_YESNO, 0) == IDYES) {

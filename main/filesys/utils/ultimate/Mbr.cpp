@@ -177,6 +177,8 @@ bool CMbr::Exists(DWORD64 LBA) {
   // 
   if (dlg->IsDlgButtonChecked(IDC_FORCE_NO_MBR))
     m_exists = FALSE;
+  if (dlg->IsDlgButtonChecked(IDC_FORCE_MBR))
+    m_exists = TRUE;
   
   if (m_exists) {
     for (i=0; i<4; i++) {

@@ -70,6 +70,7 @@
 
 #include "Mbr.h"
 #include "Embr.h"
+#include "VDI.h"
 #include "VHD.h"
 
 #include "ISOPrimary.h"
@@ -100,7 +101,7 @@ CNewImage::CNewImage(CWnd* pParent /*=NULL*/)
   m_cur_parts = 1;
   m_sect_size = 0;  // default to 512
   m_type = 0;
-  m_with_vhd = FALSE;
+  m_options = 0;
   m_new_name = _T("");
   m_status = _T("");
   m_gpt_entry_start = 2;
@@ -118,7 +119,7 @@ void CNewImage::DoDataExchange(CDataExchange* pDX) {
   DDX_Text(pDX, IDC_PART_COUNT, m_cur_parts);
   DDX_Radio(pDX, IDC_SECT_SIZE_512, m_sect_size);
   DDX_Radio(pDX, IDC_TYPE_PLAIN, m_type);
-  DDX_Check(pDX, IDC_WITH_VHD, m_with_vhd);
+  DDX_Radio(pDX, IDC_RAW_FLAT, m_options);
   DDX_Text(pDX, IDC_NEW_NAME, m_new_name);
   DDX_Text(pDX, IDC_STATUS, m_status);
   DDX_Text(pDX, IDC_GPT_ENTRY_START, m_gpt_entry_start);
@@ -360,6 +361,12 @@ void CNewImage::OnTypeChange() {
         "ISO 9660/UDF with no partitioning scheme used.\n"
         "If Bootable, this will ask for boot file at creation time.\n"
       );
+      // don't allow a CDROM as a VDI file
+      if (m_options != 0) {
+        AfxMessageBox("The app doesn't allow a CDROM image to be in the VDI format,\r\n"
+                      " or have a VHD footer.  Options have been changed to RAW.");
+        m_options = 0;
+      }
       break;
   }
   
@@ -370,21 +377,22 @@ void CNewImage::OnTypeChange() {
   
   // enable/disable other items compared to what was selected
   GetDlgItem(IDC_WITH_VHD)->EnableWindow(isharddrive);
+  GetDlgItem(IDC_VDI_DYNAMIC)->EnableWindow(isharddrive);
+  GetDlgItem(IDC_VDI_FLAT)->EnableWindow(isharddrive);
   GetDlgItem(IDC_PART_COUNT)->EnableWindow(isharddrive);
   GetDlgItem(IDC_BOUNDARY)->EnableWindow(isharddrive);
   GetDlgItem(IDC_SECT_SIZE_512)->EnableWindow(isharddrive);
   GetDlgItem(IDC_SECT_SIZE_1024)->EnableWindow(isharddrive);
   //GetDlgItem(IDC_SECT_SIZE_2048)->EnableWindow(!isharddrive);  // always available
   GetDlgItem(IDC_SECT_SIZE_4096)->EnableWindow(isharddrive);
-  GetDlgItem(IDC_WITH_VHD)->EnableWindow(isharddrive);
-  
+    
   GetDlgItem(IDC_GPT_ENTRY_START)->EnableWindow(m_type == 3);
   GetDlgItem(IDC_GPT_ENTRY_START_S)->EnableWindow(m_type == 3);
   GetDlgItem(IDC_BOUNDARY)->EnableWindow((m_type >= 1) && (m_type <= 3));
 
   // make sure the VHD checkbox is unchecked if ISO
-  if (!isharddrive)
-    m_with_vhd = FALSE;
+  //if (!isharddrive)
+  //  m_with_vhd = FALSE;
   
   int i = m_cur_parts;
   while (m_max_parts < i)
@@ -451,7 +459,7 @@ void CNewImage::UpdateStatus(CString csStatus) {
 // Create the image
 void CNewImage::OnCreateImage() {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  CFile targfile, srcfile;
+  CFile srcfile;
   DWORD64 cur_lba;
   BYTE *buffer = NULL;
   CNewPart *partition;
@@ -462,21 +470,38 @@ void CNewImage::OnCreateImage() {
   BOOL success = FALSE;
   BYTE head, sect;
   WORD cyl;
+  int i, j;
   
   CWaitCursor wait; // display a wait cursor
   
+  //  So that it makes it a lot easier to create a .VDI file,
+  //   we use the dlg->m_file handle, set up some parameters 
+  //   (VDI_members), and a few other things, then call dlg->WriteFile().
+  //   This way the dlg->WriteFile() code will do the VDI Dynamic stuff
+  //   for us.
+  
+  // set up some variables and default to a flat file type
+  dlg->m_file_type = DLG_FILE_TYPE_FLAT;
+  dlg->m_overwrite_okay = TRUE;
+  dlg->m_sect_size = m_sector_size;
+  
   // append ".vhd" to filename if VHD file and not already there
-  if (IsDlgButtonChecked(IDC_WITH_VHD))
+  if (m_options == 1)  // add VDH footer
     if (m_new_name.Right(4) != ".vhd")
       m_new_name += ".vhd";
   
-  if (targfile.Open(m_new_name, CFile::modeCreate | CFile::modeNoTruncate | CFile::modeWrite | CFile::typeBinary | CFile::shareExclusive, NULL) == 0) {
+  // append ".vdi" to filename if VDI file and not already there
+  if ((m_options == 2) || (m_options == 3))  // Dynamic or Flat VDI file
+    if (m_new_name.Right(4) != ".vdi")
+      m_new_name += ".vdi";
+  
+  if (dlg->m_file.Open(m_new_name, CFile::modeCreate | CFile::modeNoTruncate | CFile::modeReadWrite | CFile::typeBinary | CFile::shareExclusive, NULL) == 0) {
     AfxMessageBox("Error Creating Image File...");
     return;
   }
   
   // truncate the file
-  targfile.SetLength(0);
+  dlg->m_file.SetLength(0);
   
   UpdateData(TRUE);  // Bring from Dialog
   
@@ -486,10 +511,36 @@ void CNewImage::OnCreateImage() {
   UpdateStatus(csStatus);
   m_progress.SetRange(0, 110); // 110 so that we do 10 up to the writing of the partitions, then have 100% to work with
   m_progress.SetPos(0);
-  //m_progress.SetMarquee(TRUE, 1000);  // requires VS2015+ ???
-  
-  // if type is GPT, we need to calculate the size of the entry(s)
+  //m_progress.SetMarquee(TRUE, 1000);  // use this instead?  ->    LRESULT lResult = ::SendMessage(m_progress, PBM_SETMARQUEE, (WPARAM) TRUE, (LPARAM) 1);
+
+  // get the sector padding
+  DWORD64 padding = 0;
+  GetDlgItemText(IDC_BOUNDARY, cs);
+  if (cs != "None")
+    padding = convert64(cs);
+  if (padding > 4096) {
+    cs.Format("Partition Padding is > 4096: %i\r\nContinue?", padding);
+    if (AfxMessageBox(cs, MB_YESNO, 0) != IDYES) {
+      dlg->m_file.Close();
+      csStatus = "Aborting...\r\n";
+      UpdateStatus(csStatus);
+      free(buffer);
+      return;
+    }
+  }
+
+  // calculate last sector in image
   int part_count = m_Sheet.GetPageCount();
+  DWORD64 lba_count = padding;
+  for (i=0; i<part_count; i++) {
+    partition = (CNewPart *) m_Sheet.GetPage(i);
+    if (padding > 0)
+      lba_count = ((lba_count + padding - 1) / padding) * padding;  // pad sectors to next boundary
+    lba_count += partition->m_sectors;
+  }
+  
+  // if type is GPT, we need to calculate the size of the entry(s),
+  //  as well as add to the sector count
   int gpt_entries_size = 0;  // in sectors
   if (m_type == 3) {
     gpt_entries_size = ((((part_count > MAX_GPT_ENTRIES) ? MAX_GPT_ENTRIES : part_count) * sizeof(struct S_GPT_ENTRY)) + (m_sector_size - 1)) / m_sector_size;
@@ -498,33 +549,87 @@ void CNewImage::OnCreateImage() {
       gpt_entries_size = 32;
     if ((m_sector_size == 4096) && (gpt_entries_size < 4))
       gpt_entries_size = 4;
+    if (padding < 1 + m_gpt_entry_start + gpt_entries_size)
+      lba_count += ((1 + m_gpt_entry_start + gpt_entries_size) - padding);   // entries
+    lba_count += gpt_entries_size; // backup entries
+    lba_count++;                   // backup GPT header
   }
   
+  // allocate a minumal buffer
+  buffer = (BYTE *) malloc(MAX_SECT_SIZE);
+
+  // if we are creating a VDI file, we need to set up a few things first.
+  if ((m_options == 2) || (m_options == 3)) {  // Dynamic or Flat VDI file
+    dlg->m_vdi_block_size = 1048576;  // 1 meg
+    dlg->m_vdi_disk_size = ((lba_count + 1) * m_sector_size); 
+    dlg->m_vdi_block_count = (DWORD) ((dlg->m_vdi_disk_size + (dlg->m_vdi_block_size - 1)) / dlg->m_vdi_block_size);
+    dlg->m_vdi_image_type = VDI_IMAGE_TYPE_DYNAMIC;
+    dlg->m_vdi_image_flags = 0;
+    dlg->m_vdi_offset_blocks = m_sector_size;  // byte offset in file where the block table starts
+    dlg->m_vdi_offset_data = m_sector_size + (((dlg->m_vdi_block_count * 4) + (m_sector_size - 1)) & ~(m_sector_size - 1));
+    dlg->m_vdi_blocks_allocated = (m_options == 2) ? 0 : dlg->m_vdi_block_count;
+
+    // before we change the file_type, write a VDI header to the file
+    struct VDI_HEADER *header = (struct VDI_HEADER *) buffer;
+    memset(header, 0, m_sector_size);
+    strcpy((char *) header->cookie, "<<< Oracle VM VirtualBox Disk Image >>>\n");  // ? Unknown if it requres the \n at the end
+    header->signature = 0xBEDA107F;
+    header->version = 0x00010001;
+    header->size_header = m_sector_size - 112;
+    header->image_type = (m_options == 2) ? VDI_IMAGE_TYPE_DYNAMIC : VDI_IMAGE_TYPE_FLAT;
+    header->image_flags = 0;
+    //header->description
+    header->offset_blocks = dlg->m_vdi_offset_blocks;
+    header->offset_data = (DWORD) dlg->m_vdi_offset_data;
+    header->cylinders = 0;
+    header->heads = 0;
+    header->sectors = 0;
+    header->sector_size = m_sector_size;
+    header->unused = 0;
+    header->disk_size = dlg->m_vdi_disk_size;
+    header->block_size = dlg->m_vdi_block_size;
+    header->block_extra = 0;
+    header->block_count = dlg->m_vdi_block_count;
+    header->blocks_allocated = dlg->m_vdi_blocks_allocated;
+    
+    // write the header to the file
+    dlg->WriteToFile(buffer, 0, 1);
+
+    // allocate a block array
+    //  (no need to write it to the file now, since we mark it as
+    //   dirty, and the dlg->vdi_close_file() will write it for us)
+    dlg->m_vdi_blocks = (DWORD *) malloc(dlg->m_vdi_block_count * sizeof(DWORD));
+    if (header->image_type == VDI_IMAGE_TYPE_DYNAMIC) {
+      for (size_t u=0; u<dlg->m_vdi_block_count; u++)
+        dlg->m_vdi_blocks[u] = VDI_BLOCK_ID_UNALLOCATED;
+    } else {
+      void *zero_block = calloc(dlg->m_vdi_block_size, 1);
+      for (size_t u=0; u<dlg->m_vdi_block_count; u++) {
+        dlg->m_vdi_blocks[u] = (DWORD) u;
+        // need to write the block to the file
+        // we haven't changed to the DLG_FILE_TYPE_VB_VDI type yet,
+        //  so we must calculate it as a raw flat file
+        large_int.QuadPart = dlg->m_vdi_offset_data + (u * dlg->m_vdi_block_size);
+        ::SetFilePointerEx((HANDLE) dlg->m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+        dlg->m_file.Write(zero_block, dlg->m_vdi_block_size);
+      }
+      free(zero_block);
+    }
+    dlg->m_vdi_table_dirty = TRUE;
+
+    // make sure we change the file type last
+    dlg->m_file_type = DLG_FILE_TYPE_VB_VDI;
+  }
+
   // if type is Plain, MBR, EMBR, or GPT
   if (m_type <= 3) {
-    int i, j;
     BOOL hasMBR = (m_type > 0);
     BOOL hasEMBR = (m_type == 2);
     BOOL hasGPT = (m_type == 3);
-  
+    
     cur_lba = ((hasMBR)  ? 1 : 0) +
               ((hasEMBR) ? EMBR_RESVED_SECTS : 0) +
               ((hasGPT)  ? (m_gpt_entry_start + gpt_entries_size) : 0);
-  
-    // get the sector padding
-    DWORD64 padding = 0;
-    GetDlgItemText(IDC_BOUNDARY, cs);
-    if (cs != "None")
-      padding = convert64(cs);
-    if (padding > 4096) {
-      cs.Format("Partition Padding is > 4096: %i\r\nContinue?", padding);
-      if (AfxMessageBox(cs, MB_YESNO, 0) != IDYES) {
-        targfile.Close();
-        csStatus = "Aborting...\r\n";
-        UpdateStatus(csStatus);
-        return;
-      }
-    }
     
     // calculate the LBA's for each partition
     csStatus.Format("Calculating locations for %i partitions\r\n", part_count);
@@ -539,9 +644,6 @@ void CNewImage::OnCreateImage() {
       csStatus.Format("Partition #%i at: %I64i\r\n", i, partition->m_lba);
       UpdateStatus(csStatus);
     }
-    
-    // allocate a minumal buffer
-    buffer = (BYTE *) malloc(MAX_SECT_SIZE);
     
     // we are "5%" done
     m_progress.SetPos(5);
@@ -616,9 +718,7 @@ void CNewImage::OnCreateImage() {
       // write the MBR
       csStatus = "Writing MBR to LBA 0\r\n";
       UpdateStatus(csStatus);
-      large_int.QuadPart = (0 * m_sector_size);
-      ::SetFilePointerEx((HANDLE) targfile.m_hFile, large_int, NULL, FILE_BEGIN);
-      targfile.Write(buffer, m_sector_size);
+      dlg->WriteToFile(buffer, 0, 1);
     }
     
     if (hasEMBR) {
@@ -666,9 +766,7 @@ void CNewImage::OnCreateImage() {
       // write the eMBR
       csStatus.Format("Writing eMBR at LBA 1 with %i sectors\r\n", EMBR_RESVED_SECTS);
       UpdateStatus(csStatus);
-      large_int.QuadPart = (1 * m_sector_size);
-      ::SetFilePointerEx((HANDLE) targfile.m_hFile, large_int, NULL, FILE_BEGIN);
-      targfile.Write(buffer, EMBR_RESVED_SECTS * m_sector_size);
+      dlg->WriteToFile(buffer, 1, EMBR_RESVED_SECTS);
     }  
     
     if (hasGPT) {
@@ -716,12 +814,8 @@ void CNewImage::OnCreateImage() {
       // write the GPT
       csStatus.Format("Writing GPT at LBA 1 with %i sectors\r\n", gpt_entries_size + 1);
       UpdateStatus(csStatus);
-      large_int.QuadPart = (1 * m_sector_size);
-      ::SetFilePointerEx((HANDLE) targfile.m_hFile, large_int, NULL, FILE_BEGIN);
-      targfile.Write(buffer, (1 * m_sector_size));  // write GPT Header
-      large_int.QuadPart = (m_gpt_entry_start * m_sector_size);
-      ::SetFilePointerEx((HANDLE) targfile.m_hFile, large_int, NULL, FILE_BEGIN);
-      targfile.Write(buffer + m_sector_size, (gpt_entries_size * m_sector_size));  // write Entries
+      dlg->WriteToFile(buffer, 1, 1);  // write GPT header
+      dlg->WriteToFile(buffer + m_sector_size, m_gpt_entry_start, gpt_entries_size); // write Entries
       
       // write backup to hdr->backup_lba
       csStatus.Format("Writing Backup GPT at LBA %I64i\r\n", hdr->backup_lba);
@@ -733,12 +827,14 @@ void CNewImage::OnCreateImage() {
       hdr->entry_offset = temp - gpt_entries_size;  // entry offest points this (backup's) entries
       hdr->crc32 = 0;
       hdr->crc32 = crc32(hdr, hdr->hdr_size); // calculate new CRC (since we swapped values)
-      large_int.QuadPart = (temp * m_sector_size);
-      ::SetFilePointerEx((HANDLE) targfile.m_hFile, large_int, NULL, FILE_BEGIN);
-      targfile.Write(buffer, (1 * m_sector_size));  // write backup header
-      large_int.QuadPart = ((temp - gpt_entries_size) * m_sector_size);
-      ::SetFilePointerEx((HANDLE) targfile.m_hFile, large_int, NULL, FILE_BEGIN);
-      targfile.Write(buffer + m_sector_size, (gpt_entries_size * m_sector_size));
+      //large_int.QuadPart = (temp * m_sector_size);
+      //::SetFilePointerEx((HANDLE) dlg->m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+      //dlg->m_file.Write(buffer, (1 * m_sector_size));  // write backup header
+      dlg->WriteToFile(buffer, temp, 1); // write backup header
+      //large_int.QuadPart = ((temp - gpt_entries_size) * m_sector_size);
+      //::SetFilePointerEx((HANDLE) dlg->m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+      //dlg->m_file.Write(buffer + m_sector_size, (gpt_entries_size * m_sector_size));
+      dlg->WriteToFile(buffer + m_sector_size, (temp - gpt_entries_size), gpt_entries_size);
     }
     
     m_progress.SetPos(10);
@@ -754,19 +850,21 @@ void CNewImage::OnCreateImage() {
       UpdateStatus(csStatus);
       
       qword = 0;
-      large_int.QuadPart = (partition->m_lba * m_sector_size);
-      ::SetFilePointerEx((HANDLE) targfile.m_hFile, large_int, NULL, FILE_BEGIN);
+      //large_int.QuadPart = (partition->m_lba * m_sector_size);
+      //::SetFilePointerEx((HANDLE) dlg->m_file.m_hFile, large_int, NULL, FILE_BEGIN);
       if (!partition->m_filename.IsEmpty()) {
         if (srcfile.Open(partition->m_filename, CFile::modeRead | CFile::typeBinary | CFile::shareDenyWrite, NULL) != 0) {
           file_size = dlg->GetFileLength((HANDLE) srcfile.m_hFile);
-          //::GetFileSizeEx((HANDLE) srcfile.m_hFile, &file_size);
           if (((file_size.QuadPart + (m_sector_size - 1)) / m_sector_size) > partition->m_sectors)
             AfxMessageBox("Partition Image is larger than allotted space.  Truncating...");
           for (; qword<partition->m_sectors; qword++) {
             count = srcfile.Read(buffer, m_sector_size);
+            if (count == 0)
+              break;
             if (count < m_sector_size)
               memset(buffer + count, 0, m_sector_size - count);
-            targfile.Write(buffer, m_sector_size);
+            //dlg->m_file.Write(buffer, m_sector_size);
+            dlg->WriteToFile(buffer, partition->m_lba + qword, 1);
             if (count < m_sector_size)
               break;
           }
@@ -782,7 +880,8 @@ void CNewImage::OnCreateImage() {
       LONG lIdle = 0;
       int percent;
       for (; qword<partition->m_sectors; qword++) {
-        targfile.Write(buffer, m_sector_size);
+        //dlg->m_file.Write(buffer, m_sector_size);
+        dlg->WriteToFile(buffer, partition->m_lba + qword, 1);
         //AfxGetApp()->OnIdle(lIdle++);  // avoid "Not Responding" notice
         percent = (int) (((double) qword / (double) partition->m_sectors) * 100.0);
         m_progress.SetPos(10 + percent);
@@ -794,7 +893,7 @@ void CNewImage::OnCreateImage() {
     }
     
     // VHD (all is Big Endian)
-    if (IsDlgButtonChecked(IDC_WITH_VHD)) {
+    if (m_options == 1) { // add vhd
       cur_lba++;
       
       // seconds between 1/1/2000 and 1/1/1970  (365.2425 * 24 * 60 * 60) * 30
@@ -804,8 +903,8 @@ void CNewImage::OnCreateImage() {
 
       csStatus.Format("Writing VHD at LBA %I64i\r\n", cur_lba);
       UpdateStatus(csStatus);
-      large_int.QuadPart = (cur_lba * m_sector_size);
-      ::SetFilePointerEx((HANDLE) targfile.m_hFile, large_int, NULL, FILE_BEGIN);
+      //large_int.QuadPart = (cur_lba * m_sector_size);
+      //::SetFilePointerEx((HANDLE) dlg->m_file.m_hFile, large_int, NULL, FILE_BEGIN);
       
       memset(buffer, 0, m_sector_size);
       struct VHD_FOOTER *footer = (struct VHD_FOOTER *) buffer;
@@ -832,11 +931,13 @@ void CNewImage::OnCreateImage() {
         crc += buffer[i];
       footer->checksum = ENDIAN_32U(~crc);
 
-      targfile.Write(buffer, m_sector_size);
+      //dlg->m_file.Write(buffer, m_sector_size);
+      dlg->WriteToFile(buffer, cur_lba, 1);
     }
     success = TRUE;
     
   // Create ISO9660
+  // Note:  We do not call the dlg->Write function when creating an ISO
   } else if (m_type == 4) {
     unsigned u;
     size_t img_size = 0;
@@ -880,9 +981,9 @@ void CNewImage::OnCreateImage() {
       // allocate a minumal buffer
       buffer = (BYTE *) calloc(16 * MAX_SECT_SIZE, 1);
       // write all (blank) sectors
-      targfile.SeekToBegin();
+      dlg->m_file.SeekToBegin();
       for (u=0; u<partition->m_sectors; u++) {
-        targfile.Write(buffer, 2048);
+        dlg->m_file.Write(buffer, 2048);
         int percent = (int) (((double) u / (double) partition->m_sectors) * 100.0);
         m_progress.SetPos(percent);
       }
@@ -984,8 +1085,8 @@ void CNewImage::OnCreateImage() {
       pvd->struct_ver = 1;
       
       // write the PVD
-      targfile.Seek(PVD_SECT * 2048, CFile::begin);
-      targfile.Write(buffer, 1 * 2048);
+      dlg->m_file.Seek(PVD_SECT * 2048, CFile::begin);
+      dlg->m_file.Write(buffer, 1 * 2048);
       
       // we are "100% + 1" done
       m_progress.SetPos(101);  // total of 110 for completely 100% done
@@ -999,8 +1100,8 @@ void CNewImage::OnCreateImage() {
         bvd->ver = 1;
         memcpy(bvd->sys_ident, "EL TORITO SPECIFICATION", 23);
         bvd->boot_cat = BOOT_CAT_SECT;
-        targfile.Seek(BVD_SECT * 2048, CFile::begin);
-        targfile.Write(buffer, 1 * 2048);
+        dlg->m_file.Seek(BVD_SECT * 2048, CFile::begin);
+        dlg->m_file.Write(buffer, 1 * 2048);
         
         // advance to sector TVD_SECT and
         // write Term Volume Descriptor sector
@@ -1009,8 +1110,8 @@ void CNewImage::OnCreateImage() {
         term->id = 255;
         memcpy(term->ident, "CD001", 5);
         term->ver = 1;
-        targfile.Seek(TVD_SECT * 2048, CFile::begin);
-        targfile.Write(buffer, 1 * 2048);
+        dlg->m_file.Seek(TVD_SECT * 2048, CFile::begin);
+        dlg->m_file.Write(buffer, 1 * 2048);
         
         // advance to sector BOOT_CAT_SECT and
         // write Boot Catalog sector
@@ -1034,26 +1135,26 @@ void CNewImage::OnCreateImage() {
         boot_cat->init_entry.load_cnt = (WORD) img_size;  // load 'count' sectors for boot
         boot_cat->init_entry.load_rba = BOOT_IMG_SECT;
         boot_cat->end_entry.id = 0x91;  // no more entries follow
-        targfile.Seek(BOOT_CAT_SECT * 2048, CFile::begin);
-        targfile.Write(buffer, 1 * 2048);
+        dlg->m_file.Seek(BOOT_CAT_SECT * 2048, CFile::begin);
+        dlg->m_file.Write(buffer, 1 * 2048);
         
         // advance to sector BOOT_IMG_SECT
         // and copy boot image
         memset(buffer, 0, 512);
-        targfile.Seek(BOOT_IMG_SECT * 2048, CFile::begin);
+        dlg->m_file.Seek(BOOT_IMG_SECT * 2048, CFile::begin);
         for (u=0; u<img_size; u++) {
           if (!blank)
             srcfile.Read(buffer, 1 * 512);
-          targfile.Write(buffer, 1 * 512);
+          dlg->m_file.Write(buffer, 1 * 512);
         }
         if (!blank)
           srcfile.Close();
       } else {
         // no boot image file
         memset(buffer, 0, 2048);
-        targfile.Write(buffer, 1 * 2048);  // dummy boot descriptor
-        targfile.Write(buffer, 1 * 2048);  // dummy term descriptor ?
-        targfile.Write(buffer, 1 * 2048);  // dummy boot catalog
+        dlg->m_file.Write(buffer, 1 * 2048);  // dummy boot descriptor
+        dlg->m_file.Write(buffer, 1 * 2048);  // dummy term descriptor ?
+        dlg->m_file.Write(buffer, 1 * 2048);  // dummy boot catalog
       }
       
       // path table
@@ -1065,8 +1166,8 @@ void CNewImage::OnCreateImage() {
       path_tab->loc = (DWORD) (((img_size + 3) / 4) + BOOT_IMG_SECT + PATH_SECT_SIZE);
       path_tab->parent = 1;
       memset(path_tab->ident, 0, 2);
-      //targfile.Seek(TVD_SECT * 2048, CFile::begin);
-      targfile.Write(buffer, 1 * 2048);
+      //dlg->m_file.Seek(TVD_SECT * 2048, CFile::begin);
+      dlg->m_file.Write(buffer, 1 * 2048);
       
       // root table
       memset(buffer, 0, 2048);
@@ -1096,8 +1197,8 @@ void CNewImage::OnCreateImage() {
       memcpy(&root[1], &root[0], sizeof(struct S_ISO_ROOT));
       root[1].ident[0] = 1;
       
-      //targfile.Seek(TVD_SECT * 2048, CFile::begin);
-      targfile.Write(buffer, 1 * 2048);
+      //dlg->m_file.Seek(TVD_SECT * 2048, CFile::begin);
+      dlg->m_file.Write(buffer, 1 * 2048);
       
       m_progress.SetPos(110);  // total of 110 for completely 100% done
       success = TRUE;
@@ -1134,7 +1235,8 @@ void CNewImage::OnCreateImage() {
   UpdateStatus(csStatus);
   
   // close the file
-  targfile.Close();
+  dlg->vdi_close_file();
+  dlg->m_file.Close();
   
   // restore the orginal mouse cursor
   wait.Restore();

@@ -89,6 +89,7 @@
 #define IDD_UDF_TAG                     182
 #define IDD_VOLUME_NAME                 183
 #define IDD_GPT_GUID                    195
+#define IDD_VDI                         196
 #define IDC_IMAGE_BAR                   1002
 #define IDC_PAGES                       1005
 #define IDC_TABS                        1007
@@ -461,6 +462,7 @@
 #define IDC_CREATED_TZ                  1249
 #define IDC_FEATURES                    1250
 #define IDC_CREATED_DISP                1250
+#define IDC_DESCRIPTION                 1250
 #define IDC_DUMP                        1251
 #define IDC_MODIFIED_DISP               1251
 #define IDC_LAST_ACC_DISP               1252
@@ -473,7 +475,10 @@
 #define IDC_TYPE_MBR                    1261
 #define IDC_TYPE_EMBR                   1262
 #define IDC_TYPE_GPT                    1263
-#define IDC_WITH_VHD                    1264
+#define IDC_RAW_FLAT                    1264
+#define IDC_WITH_VHD                    1265
+#define IDC_VDI_DYNAMIC                 1266
+#define IDC_VDI_FLAT                    1267
 #define IDC_TYPE_ISO9660                1268
 #define IDC_PARTITIONS                  1269
 #define IDC_NEW_PART_NAME               1270
@@ -571,6 +576,7 @@
 #define IDC_INODE_COUNT                 1352
 #define IDC_BLOCK_COUNT                 1353
 #define IDC_R_BLOCK_COUNT               1354
+#define IDC_BLOCKS_ALLOC                1354
 #define IDC_FREE_BLOCK_COUNT            1355
 #define IDC_FREE_INODE_COUNT            1356
 #define IDC_FIRST_DATA_BLOCK            1357
@@ -885,6 +891,25 @@
 #define IDC_SECT_SIZE_1024              1567
 #define IDC_SECT_SIZE_2048              1568
 #define IDC_SECT_SIZE_4096              1569
+#define IDC_HEADER_SIZE                 1571
+#define IDC_IMAGE_TYPE                  1572
+#define IDC_OFFSET_BLOCKS               1573
+#define IDC_OFFSET_DATA                 1574
+#define IDC_UNUSED                      1575
+#define IDC_DISK_SIZE                   1576
+#define IDC_BLOCK_EXTRA                 1577
+#define IDC_UUID                        1578
+#define IDC_VDI_UUID_UPDATE             1579
+#define IDC_VDI_SIG_UPDATE              1580
+#define IDC_SNAP                        1581
+#define IDC_VDI_SNAP_UPDATE             1582
+#define IDC_LINK                        1583
+#define IDC_VDI_LINK_UPDATE             1584
+#define IDC_PARENT                      1585
+#define IDC_VDI_PARENT_UPDATE           1586
+#define IDC_DISK_SIZE_DISP              1587
+#define IDC_DISK_SIZE_DISP2             1588
+#define IDC_TYPE_DISP                   1588
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
@@ -896,14 +921,15 @@
 #define ID_TOOLS_ERASE_IMAGE            32781
 #define ID_APPEND_VHD                   32782
 #define ID_TOOLS_ADDHYBRIDCDROM         32783
+#define ID_TOOLS_VIEWVDIHEADER          32784
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        197
-#define _APS_NEXT_COMMAND_VALUE         32784
-#define _APS_NEXT_CONTROL_VALUE         1570
+#define _APS_NEXT_COMMAND_VALUE         32785
+#define _APS_NEXT_CONTROL_VALUE         1589
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

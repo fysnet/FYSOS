@@ -332,6 +332,7 @@ bool CFat::FatFormat(const BOOL AskForBoot) {
   DWORD64 l;
   bool has_boot_sector = FALSE;
   unsigned info_sect, backup_sect;
+  CString cs;
   
   // m_size must be at least 1024 sectors
   if (m_size < 1024) {
@@ -341,6 +342,13 @@ bool CFat::FatFormat(const BOOL AskForBoot) {
   
   if (!m_hard_format)
     ReceiveFromDialog(m_bpb_buffer); // bring from Dialog
+  
+  // if there are a lot of sectors, give a warning
+  if (m_size > 1000000) {
+    cs.Format("Found a count of %I64i sectors.  This may take a while!  Continue?", m_size);
+    if (AfxMessageBox(cs, MB_YESNO, 0) != IDYES)
+      return FALSE;
+  }
   
   // first, clear out the volume
   buffer = (BYTE *) calloc(MAX_SECT_SIZE, 1);
@@ -515,7 +523,7 @@ bool CFat::FatFormat(const BOOL AskForBoot) {
         dword[0] = 0xFFFFFFF8;
         break;
       case FS_FAT32:
-        dword[0] = 0x0FFFFFF8;
+        dword[0] = 0x0FFFFFF8;  // TODO: F8 should be the media descriptor value given above. (bpb->descriptor).  We currently assume it will be F8.
         dword[1] = 0x0FFFFFFF;
         for (i=0; i<(format.m_root_entries / format.m_sect_cluster); i++)
           dword[2+i] = 3 + i;
@@ -1497,8 +1505,8 @@ void CFat::CreateSFN(CString csLFN, int seq, BYTE name[8], BYTE ext[3]) {
 }
 
 // 15-9 Year (0 = 1980, 119 = 2099 supported under DOS/Windows, theoretically up to 127 = 2107)
-// 8-5  Month (1Â–12)
-// 4-0  Day (1Â–31) 
+// 8-5  Month (1–12)
+// 4-0  Day (1–31) 
 WORD CFat::CreateDate(void) {
   CTime time = CTime::GetCurrentTime();
   WORD word;
