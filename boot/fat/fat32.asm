@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: fat32.asm                                                          *
@@ -30,12 +30,16 @@ comment |*******************************************************************
 *               NBASM ver 00.26.74                                         *
 *          Command line: nbasm fat32<enter>                                *
 *                                                                          *
-* Last Updated: 28 Sept 2017                                               *
+* Last Updated: 24 Jan 2021                                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
 *                                                                          *
 *   *** Assumes this is for a hard drive ***                               *
+*                                                                          *
+*   *** This assumes that the FAT is less than 1,110 sectors. ***          *
+*   *** Any image with more than this will overwrite the BIOS area.        *
+*   *** This needs to be fixed.                                            *
 *                                                                          *
 * This bootsector is written for a FAT32 hard drive.                       *
 *                                                                          *
@@ -274,10 +278,7 @@ skip_info_block:
            movzx eax,word nSecRes  ; eax = logical sector of start of
            cdq                     ; edx = 0
            mov  cx,nSecPerFat      ; sectors per FAT (only need to load one fat)
-           cmp  cx,FATSEG_SIZE     ; if sectors > FATSEG_SIZE, error
-           jbe  short @f           ;
-           mov  cx,FATSEG_SIZE     ; only load FATSEG_SIZE sectors
-@@:        mov  ebx,(FATSEG << 4)
+           mov  ebx,(FATSEG << 4)
            call read_sectors_long  ; read in the first FAT
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -382,6 +383,7 @@ f_loader:  mov  si,offset os_load_str  ; loading message
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; es:di->found root entry block
            ; set up first read
+   xchg bx,bx  ; ben
            mov  ax,es:[di+14h]     ; starting cluster number (hi word)
            shl  eax,16             ; move to hi word of eax
            mov  ax,es:[di+1Ah]     ; starting cluster number (low word)
