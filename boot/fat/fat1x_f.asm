@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2021    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: fat_f.asm                                                          *
@@ -30,7 +30,7 @@ comment |*******************************************************************
 *               NBASM ver 00.26.74                                         *
 *          Command line: nbasm fat1x_f<enter>                              *
 *                                                                          *
-* Last Updated: 28 Sept 2017                                               *
+* Last Updated: 24 Jan 2021                                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -69,8 +69,8 @@ include ..\boot.inc                ;
 include fat.inc                    ;
 
 ; which fat size are we building for
-FAT12_CODE   equ  1
-FAT16_CODE   equ  0
+FAT12_CODE   equ  0
+FAT16_CODE   equ  1
 
 ; catch that we must have one or the other, not both, or none
 .if ((FAT12_CODE && FAT16_CODE) || (!FAT12_CODE && !FAT16_CODE))
@@ -279,18 +279,9 @@ base_lba   dq  ?
 
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  The next task is to load the root directory and the FAT into memory
+;  The next task is to load the root directory into memory
 ;
-           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-           ;  continue loading the FAT
-remaining: cmp  ecx,FATSEG_SIZE    ; if sectors > FATSEG_SIZE, error
-           jbe  short @f           ;
-           mov  si,offset fat_size_err ; loading message
-           jmp  BootErr            ;           
-@@:        mov  ebx,(FATSEG << 4)  ; physical address to read it to
-           call read_sectors       ; read in the first FAT
-           
-           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+remaining: ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ;  load the ROOT
            movzx eax,byte nFATs    ; number of FATs
            movzx ecx,word nSecPerFat  ; sectors per FAT
@@ -485,29 +476,7 @@ walk_fat:  push eax                ; save cluster number
            add  edx,eax
            
            pop  eax                ; restore cluster number
-           
-.if FAT12_CODE
-           push ds                 ; save data segment register
-           mov  esi,eax            ;
-           push FATSEG             ; es:si -> FATSEG
-           pop  ds                 ;
-           shr  esi,1              ; offset = n + (n \ 2)
-           add  esi,eax            ; 
-           test al,1               ; was it odd or even?
-           lodsw                   ;
-           jz   short is_even      ; 
-           shr  eax,4              ; if n is odd, get high 12 bits
-is_even:   and  ah,0Fh             ; if n is even, get low 12 bits
-.else
-           push ds                 ; save data segment register
-           mov  esi,eax            ;
-           push FATSEG             ; es:si -> FATSEG
-           pop  ds                 ;
-           add  esi,esi            ; words
-           lodsw                   ;
-.endif
-           
-done_fat:  pop  ds                 ; restore data segment register
+           call get_next_fat_entry ; get next cluster number
            
            cmp  eax,LAST_FAT_ENTRY ; if last one, then we are done.
            jb   short walk_fat     ; 
@@ -515,6 +484,63 @@ done_fat:  pop  ds                 ; restore data segment register
            mov  eax,edx
            ret
 load_file  endp
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; get the next FAT entry.
+; this will load a sector from the FAT if that sector is not already loaded
+; On entry:
+;    EAX = current FAT entry
+; On return:
+;    EAX = next FAT entry
+get_next_fat_entry proc near uses ebx ecx edx ebp
+
+           ; calculate which sector of the fat we need
+           xor  edx,edx
+           movzx ecx,word nBytesPerSec
+.if FAT12_CODE
+           ; LSN from starting of FAT = (((EAX * 3) / 2) / bpb->bytes_per_sector);
+           mov  ebp,eax
+           mov  ebx,3
+           mul  ebx
+           shr  eax,1
+.else
+           ; in a FAT16 FAT, we have 256 entries per 512-byte sector
+           ; LSN from starting of FAT = (EAX / (bpb->bytes_per_sector / sizeof(single_entry)));
+           shr  ecx,1              ; divide by 2
+.endif
+           div  ecx                ;
+           push edx                ; save the modulor for below
+           
+           movzx ecx,word nSecRes  ; ecx = logical sector of start of FAT
+           add  eax,ecx            ; 
+           cmp  eax,cur_fat_sect   ; do we already have this sector loaded?
+           je   short @f
+           
+           ; else, load the sector
+           cdq                     ; edx = 0
+           mov  cx,1               ; need just one sector
+           mov  ebx,(FATSEG << 4)
+           call read_sectors       ; read in the FAT sector
+           mov  cur_fat_sect,eax   ; save the current sector
+           
+@@:        pop  ebx                ; entry within this sector
+           push ds                 ;
+           push FATSEG             ;
+           pop  ds                 ;
+.if FAT12_CODE
+           movzx eax,word [ebx]    ;
+           test ebp,1              ; was it odd or even?
+           jz   short is_even
+           shr  eax,4
+is_even:   and  ah,0Fh             ; if n is even, get low 12 bits
+.else
+           shl  ebx,1              ; 
+           movzx eax,word [ebx]    ;
+.endif
+           pop  ds                 ; 
+
+           ret
+get_next_fat_entry endp
 
 include ..\services\address.inc    ; include the "choosing" of the loader.sys base address code
 
@@ -524,6 +550,7 @@ fat_size_err  db  13,10,'FAT is larger than FATSEG_SIZE sectors...',0
 
 root_lba      dd  0
 root_size     dd  0
+cur_fat_sect  dd  0   ; used to indicate which sector we currently have loaded
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; new interrupt vector for INT 21h

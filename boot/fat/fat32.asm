@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2021    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: fat32.asm                                                          *
@@ -36,10 +36,6 @@ comment |*******************************************************************
 * Notes:                                                                   *
 *                                                                          *
 *   *** Assumes this is for a hard drive ***                               *
-*                                                                          *
-*   *** This assumes that the FAT is less than 1,110 sectors. ***          *
-*   *** Any image with more than this will overwrite the BIOS area.        *
-*   *** This needs to be fixed.                                            *
 *                                                                          *
 * This bootsector is written for a FAT32 hard drive.                       *
 *                                                                          *
@@ -271,16 +267,8 @@ base_lba   dq  ?
 ;  Any code here must not be used until we load this sector to memory
 skip_info_block:
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-;  The next task is to load the root directory and the FAT into memory
+;  The next task is to load the root directory into memory
 ;
-           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-           ;  first, the FAT
-           movzx eax,word nSecRes  ; eax = logical sector of start of
-           cdq                     ; edx = 0
-           mov  cx,nSecPerFat      ; sectors per FAT (only need to load one fat)
-           mov  ebx,(FATSEG << 4)
-           call read_sectors_long  ; read in the first FAT
-           
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate the first sector of the data area
            movzx eax,byte nFats    ; 
@@ -294,7 +282,7 @@ skip_info_block:
            ;  the ROOT
            mov  ebx,(ROOTSEG << 4) ; segment to read to ROOT memory area
            mov  eax,nRootClust     ;
-           mov  cx,ROOTSEG_SIZE    ; we only allow ROOTSEG_SIZE sectors
+           mov  cx,ROOTSEG_SIZE    ; we only allow up to/assume ROOTSEG_SIZE sectors is enough
            call load_it            ; returns ax = sectors read from above
            shl  ax,4               ; shl ax,9 / shr ax,5
            mov  nRootEnts,ax       ;
@@ -383,7 +371,6 @@ f_loader:  mov  si,offset os_load_str  ; loading message
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; es:di->found root entry block
            ; set up first read
-   xchg bx,bx  ; ben
            mov  ax,es:[di+14h]     ; starting cluster number (hi word)
            shl  eax,16             ; move to hi word of eax
            mov  ax,es:[di+1Ah]     ; starting cluster number (low word)
@@ -484,14 +471,7 @@ load_next: cmp  cx,di              ;
            add  ebx,eax            ;
            
            pop  eax                ; restore cluster number
-
-           ; get next cluster number
-           push ds                 ;
-           push FATSEG             ;
-           pop  ds                 ;
-           shl  eax,2              ; 
-           mov  eax,[eax]          ; this assumes all cluster numbers are < 0x3F80
-           pop  ds                 ; 
+           call get_next_fat_entry ; get next cluster number
            
            cmp  di,0
            jle  short @f
@@ -502,6 +482,47 @@ load_next: cmp  cx,di              ;
 @@:        xchg bp,ax              ; return ax = sectors read
            ret
 load_it    endp
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; get the next FAT entry.
+; this will load a sector from the FAT if that sector is not already loaded
+; On entry:
+;    EAX = current FAT entry
+; On return:
+;    EAX = next FAT entry
+get_next_fat_entry proc near uses ebx ecx edx ebp
+
+           ; calculate which sector of the fat we need
+           ; in a FAT32 FAT, we have 128 entries per 512-byte sector
+           ; LSN from starting of FAT = (EAX / (bpb->bytes_per_sector / sizeof(bit32u)));
+           xor  edx,edx
+           movzx ecx,word nBytesPerSec
+           shr  ecx,2              ; divide by 4
+           div  ecx
+           push edx                ; save the modulor for below
+           
+           movzx ecx,word nSecRes  ; ecx = logical sector of start of FAT
+           add  eax,ecx            ; 
+           cmp  eax,cur_fat_sect   ; do we already have this sector loaded?
+           je   short @f
+           
+           ; else, load the sector
+           cdq                     ; edx = 0
+           mov  cx,1               ; need just one sector
+           mov  ebx,(FATSEG << 4)
+           call read_sectors_long  ; read in the FAT sector
+           mov  cur_fat_sect,eax   ; save the current sector
+           
+@@:        pop  ebx                ; entry within this sector
+           push ds                 ;
+           push FATSEG             ;
+           pop  ds                 ;
+           shl  ebx,2              ; 
+           mov  eax,[ebx]          ;
+           pop  ds                 ; 
+
+           ret
+get_next_fat_entry endp
            
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; search for name given
@@ -533,6 +554,7 @@ search_name endp
 
 data_start    dd  0
 nRootEnts     dw  0
+cur_fat_sect  dd  0   ; used to indicate which sector we currently have loaded
 
 os_load_str   db  13,10,'Starting FYSOS...',0
 exe_error     db  13,10,07,'Error with Loader.sys format.',0
