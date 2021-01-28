@@ -1505,8 +1505,8 @@ void CFat::CreateSFN(CString csLFN, int seq, BYTE name[8], BYTE ext[3]) {
 }
 
 // 15-9 Year (0 = 1980, 119 = 2099 supported under DOS/Windows, theoretically up to 127 = 2107)
-// 8-5  Month (1–12)
-// 4-0  Day (1–31) 
+// 8-5  Month (1Â–12)
+// 4-0  Day (1Â–31) 
 WORD CFat::CreateDate(void) {
   CTime time = CTime::GetCurrentTime();
   WORD word;
@@ -2069,6 +2069,8 @@ void CFat::DeleteFile(HTREEITEM hItem) {
     for (i=0; i<items->EntryCount; i++)
       root[items->Index + i].name[0] |= 0x80; // All LFN entries set the first bit in the first byte
     cluster = root[items->Index + i - 1].strtclst;
+    if (m_fat_size == FS_FAT32)
+      cluster |= (root[items->Index + i - 1].type.fat32.strtclst32 << 16);
     // save the first char for undelete (the first byte in the resv[] area is not used for both FAT12,16 and FAT32
     root[items->Index + i - 1].type.resv[0] = root[items->Index + i - 1].name[0];
     //root[items->Index + i - 1].strtclst = 0;
