@@ -23,7 +23,7 @@ Your kernel file must then have an origin of **0x00800400** and have the first i
  that location.
   
 These files are released as is:
-- [ ] Copyright (c) 1984-2018    Forever Young Software  Benjamin David Lunt
+- [ ] Copyright (c) 1984-2021    Forever Young Software  Benjamin David Lunt
 - [ ] This code is freeware, not public domain.  Please use respectfully.
 
 You may:
@@ -55,7 +55,7 @@ The C files are built with Alex's SmallerC
     
 You use these files at your own risk.
  
-If you have any questions, please contact me at the email address shown at the top of:
+If you have any questions, please contact me at the email address shown below or visit:
 
 #### http://www.fysnet.net/fysos.htm
  
