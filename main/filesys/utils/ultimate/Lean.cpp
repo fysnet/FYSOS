@@ -873,6 +873,11 @@ void *CLean::ReadFile(DWORD64 lba, DWORD64 *Size) {
   }
   
   if (Size) *Size = inode->file_size;
+  
+  // safety catch
+  if (inode->sector_count == 0)
+    return NULL;
+  
   buffer = (struct S_LEAN_DIRENTRY *) malloc((DWORD) inode->sector_count * dlg->m_sect_size);
   ptr = (BYTE *) buffer;
   
@@ -881,11 +886,21 @@ void *CLean::ReadFile(DWORD64 lba, DWORD64 *Size) {
     memcpy(ptr, (BYTE *) inode + sizeof(struct S_LEAN_INODE), (dlg->m_sect_size - sizeof(struct S_LEAN_INODE)));
     ptr += (dlg->m_sect_size - sizeof(struct S_LEAN_INODE));
   }
-  
+
+  // check that the starting extent value matches our inode value
+  if (lba != inode->extent_start[0]) {
+    free(buffer);
+    return NULL;
+  }
+
   struct S_LEAN_SECTORS extents;
-  ReadFileExtents(&extents, inode->extent_start[0]);
+  if (ReadFileExtents(&extents, inode->extent_start[0]) < 1) {
+    free(buffer);
+    return NULL;
+  }
+
   if (extents.extent_count > 0) {
-    // The first write needs to skip the inode
+    // The first read needs to skip the inode
     if (extents.extent_size[0] > 1) {
       dlg->ReadFromFile(ptr, m_lba + extents.extent_start[0] + 1, extents.extent_size[0] - 1);
       ptr += ((extents.extent_size[0] - 1) * dlg->m_sect_size);
@@ -1519,10 +1534,11 @@ void CLean::DeleteFile(HTREEITEM hItem) {
     return;
   
   if (m_del_clear) {
-    ReadFileExtents(&extents, items->Inode);
-    for (unsigned int i=0; i<extents.extent_count; i++)
-      ZeroExtent(extents.extent_start[i], extents.extent_size[i]);
-    FreeExtentBuffer(&extents);
+    if (ReadFileExtents(&extents, items->Inode) > 0) {
+      for (unsigned int i=0; i<extents.extent_count; i++)
+        ZeroExtent(extents.extent_start[i], extents.extent_size[i]);
+      FreeExtentBuffer(&extents);
+    }
   }
   DeleteInode(items->Inode);
   Offset = items->Offset;
@@ -1539,9 +1555,10 @@ void CLean::DeleteFile(HTREEITEM hItem) {
   if (root) {
     cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + Offset);
     cur->type = LEAN_FT_MT;
-    ReadFileExtents(&extents, items->Inode);
-    WriteFile(root, &extents, RootSize);
-    FreeExtentBuffer(&extents);
+    if (ReadFileExtents(&extents, items->Inode) > 0) {
+      WriteFile(root, &extents, RootSize);
+      FreeExtentBuffer(&extents);
+    }
     free(root);
   }
 }
@@ -1725,12 +1742,12 @@ int CLean::ReadFileExtents(struct S_LEAN_SECTORS *extents, DWORD64 Inode) {
   // initialize our pointers
   inode = (struct S_LEAN_INODE *) inode_buffer;
   indirect = (struct S_LEAN_INDIRECT *) indirect_buffer;
-  
+
   // read the inode
   dlg->ReadFromFile(inode, m_lba + Inode, 1);
   if (!ValidInode(inode))
     return -1;
-  
+
   // allocate at least LEAN_INODE_EXTENT_CNT extents to hold the direct extents
   AllocateExtentBuffer(extents, LEAN_INODE_EXTENT_CNT);
   
@@ -1898,7 +1915,8 @@ int CLean::AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attri
   root = (struct S_LEAN_DIRENTRY *) ReadFile(Inode, &root_size);
   if (root) {
     cur = root;
-    ReadFileExtents(&extents, Inode);
+    if (ReadFileExtents(&extents, Inode) < 1)
+      return -1;
     while ((unsigned char *) cur < ((unsigned char *) root + root_size)) {
       if (cur->rec_len == 0)
         break;
@@ -1963,7 +1981,8 @@ int CLean::AppendToDir(DWORD64 Inode, DWORD Size) {
   
   // get the file's extents
   struct S_LEAN_SECTORS extents;
-  ReadFileExtents(&extents, Inode);
+  if (ReadFileExtents(&extents, Inode) < 0)
+    return -1;
   
   // first see if we already have the sectors allocated for this amount
   // if not, we will have to allocate some.
@@ -2066,9 +2085,10 @@ void CLean::DeleteInode(DWORD64 Inode) {
       DeleteInode(inode->fork);
     
     // free the extents
-    ReadFileExtents(&extents, Inode);
-    FreeExtents(&extents);
-    FreeExtentBuffer(&extents);
+    if (ReadFileExtents(&extents, Inode) > 0) {
+      FreeExtents(&extents);
+      FreeExtentBuffer(&extents);
+    }
     
     // also clear the inode or parts of it???
     memset(inode, 0, sizeof(struct S_LEAN_INODE));

@@ -177,12 +177,28 @@ void CLean::OnLeanCheck() {
   if (super->sector_count != m_size) {
     cs.Format("Sector Count is %li, should be %li.\r\n", super->sector_count, m_size);
     lcInfo += cs;
+    lcErrorCount++;
   }
   
   // check the primarySuper field.  It should == m_super_lba
   if (super->primary_super != (DWORD64) m_super_lba) {
     cs.Format("Super Location is %li, should be %li.\r\n", super->primary_super, m_super_lba);
     lcInfo += cs;
+    lcErrorCount++;
+  }
+
+  // the bitmapStart field should be no less than 33
+  if (super->bitmap_start < 33) {
+    cs.Format("Bitmap Start Location is %li, should be at least 33.\r\n", super->bitmap_start);
+    lcInfo += cs;
+    lcErrorCount++;
+  }
+  
+  // the rootInode field should be no less than 34
+  if (super->bitmap_start < 34) {
+    cs.Format("Root Start Location is %li, should be at least 34.\r\n", super->root_start);
+    lcInfo += cs;
+    lcErrorCount++;
   }
   
   // check if the sect size is 0, 1, 2, 3, 4 (etc) up to ???
@@ -203,10 +219,6 @@ void CLean::OnLeanCheck() {
   const unsigned tot_bands = (unsigned) ((m_super.sector_count + (band_size - 1)) / band_size);
   buffer = (BYTE *) malloc(bitmap_size * dlg->m_sect_size);
   DWORD64 bitmap_lba, FreeCount = 0;
-
-  //CString css;
-  //css.Format(" %i %i %i %i", (DWORD) band_size, bitmap_size, bytes_bitmap, tot_bands);
-  //AfxMessageBox(css);
   
   for (i=0; i<tot_bands; i++) {
     // read in a bitmap

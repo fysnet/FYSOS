@@ -72,7 +72,7 @@
 
 #define FYSFS_ATTR_ARCHIVE   0x00000001
 #define FYSFS_ATTR_SUB_DIR   0x00000002
-//#define FYSFS_ATTR_          0x00000004
+#define FYSFS_ATTR_LABEL     0x00000004
 #define FYSFS_ATTR_SYSTEM    0x00000008
 #define FYSFS_ATTR_HIDDEN    0x00000010
 #define FYSFS_ATTR_READ_ONLY 0x00000020
@@ -186,7 +186,7 @@ struct S_FYSFS_SUB {
   WORD   resv2;         // reserved
   BYTE   namelen;       // length of name in this slot (always 0)
   BYTE   resv3[5];      // 
-  BYTE   name_fat[NAME_FAT_SPACE];
+  DWORD  fat[20];       // up to 20 32-bit FAT entries
 };
 
 #define CONT_NAME_FAT_SPACE 112
@@ -218,6 +218,15 @@ struct S_FYSFS_ITEMS {
 };
 
 #pragma pack(pop)
+
+// structure to hold all FAT entries (cluster numbers)
+struct S_FYSFAT_ENTRIES {
+  DWORD64 *entries;
+  int    entry_size;
+  int    entry_count;
+  BOOL   was_error;
+};
+
 
 /////////////////////////////////////////////////////////////////////////////
 // CFYSFS dialog
@@ -261,10 +270,11 @@ public:
   DWORD GetNewColor(int index);
   
   void ParseDir(struct S_FYSFS_ROOT *root, const unsigned entries, HTREEITEM parent, BOOL IsRoot);
-  void *ReadFile(DWORD64 lsn, DWORD64 *size, BOOL IsRoot);
-  void FysFSGetName(struct S_FYSFS_ROOT *root, unsigned index, CString &name, DWORD *attrb, DWORD64 *start, DWORD64 *filesize);
-  DWORD64 FysFSGetFATEntry(struct S_FYSFS_ROOT *root, unsigned root_index, unsigned index);
-  void SaveItemInfo(HTREEITEM hItem, DWORD64 Cluster, DWORD64 FileSize, struct S_FYSFS_ROOT *Entry, DWORD Sig, DWORD ErrorCode, BOOL CanCopy);
+  void *ReadFile(struct S_FYSFS_ROOT *root);
+  void FysFSGetName(struct S_FYSFS_ROOT *root, unsigned index, CString &name, DWORD *attrb, DWORD64 *filesize);
+  //DWORD64 FysFSGetFATEntry(struct S_FYSFS_ROOT *root, unsigned root_index, unsigned index);
+  bool FYSFSFormat(const BOOL AskForBoot, const BOOL clean);
+  void SaveItemInfo(HTREEITEM hItem, DWORD64 FileSize, struct S_FYSFS_ROOT *Entry, DWORD Sig, DWORD ErrorCode, BOOL CanCopy);
   
   void SendToDialog(struct S_FYSFS_SUPER *super);
   void ReceiveFromDialog(struct S_FYSFS_SUPER *super);
@@ -284,6 +294,7 @@ public:
   DWORD64 m_size;  // size of this partition in sectors
   DWORD   m_color; // color used in image bar
   int     m_draw_index;
+  BOOL    m_hard_format;
 
   BOOL    m_del_clear;
   
@@ -310,6 +321,7 @@ protected:
   afx_msg void OnFYSFSInsert();
   afx_msg void OnFysosSig();
   afx_msg void OnFlagsUpdate();
+  afx_msg void OnBitmapUpdate();
   afx_msg void OnChangeVersion();
   afx_msg void OnKillfocusGuid();
   afx_msg void OnDelClear();
@@ -320,6 +332,8 @@ protected:
   afx_msg void OnUpdateCode();
   //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
+
+  int FillClusterList(struct S_FYSFAT_ENTRIES *EntryList, struct S_FYSFS_ROOT *root);
 
 };
 

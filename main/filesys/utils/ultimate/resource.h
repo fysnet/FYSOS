@@ -90,6 +90,7 @@
 #define IDD_VOLUME_NAME                 183
 #define IDD_GPT_GUID                    195
 #define IDD_VDI                         196
+#define IDD_FYSFS_FORMAT                197
 #define IDC_IMAGE_BAR                   1002
 #define IDC_PAGES                       1005
 #define IDC_TABS                        1007
@@ -910,6 +911,12 @@
 #define IDC_DISK_SIZE_DISP              1587
 #define IDC_DISK_SIZE_DISP2             1588
 #define IDC_TYPE_DISP                   1588
+#define IDC_NUM_BITMAPS                 1589
+#define IDC_CASE_SENSITIVE              1590
+#define IDC_HAS_SUP_BACKUP              1591
+#define IDC_CREATED_CHANGE              1591
+#define IDC_CREATED_CHANGE2             1592
+#define IDC_LAST_CHANGE                 1592
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
@@ -927,9 +934,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        197
+#define _APS_NEXT_RESOURCE_VALUE        199
 #define _APS_NEXT_COMMAND_VALUE         32785
-#define _APS_NEXT_CONTROL_VALUE         1589
+#define _APS_NEXT_CONTROL_VALUE         1592
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

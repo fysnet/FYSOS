@@ -56,16 +56,14 @@
  *             http://www.fysnet.net/osdesign_book_series.htm
  */
 
-// FYSFSEntry.cpp : implementation file
+// FYSFSFormat.cpp : implementation file
 //
 
 #include "stdafx.h"
 #include "pch.h"
 
 #include "ultimate.h"
-#include "FYSFSEntry.h"
-
-#include "LeanTime.h"
+#include "FYSFSFormat.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -74,74 +72,67 @@ static char THIS_FILE[] = __FILE__;
 #endif
 
 /////////////////////////////////////////////////////////////////////////////
-// CFYSFSEntry dialog
-CFYSFSEntry::CFYSFSEntry(CWnd* pParent /*=NULL*/)
-  : CDialog(CFYSFSEntry::IDD, pParent) {
-  //{{AFX_DATA_INIT(CFYSFSEntry)
-  m_attribute = _T("");
-  m_crc = _T("");
-  m_created = _T("");
-  m_fat_cont = _T("");
-  m_fat_entries = _T("");
-  m_file_size = _T("");
-  m_flags = _T("");
-  m_last_access = _T("");
-  m_name_cont = _T("");
-  m_name_fat = _T("");
-  m_name_len = _T("");
-  m_scratch = _T("");
-  m_slot_type = _T("");
+// CFYSFSFormat dialog
+CFYSFSFormat::CFYSFSFormat(CWnd* pParent /*=NULL*/)
+  : CDialog(CFYSFSFormat::IDD, pParent) {
+  //{{AFX_DATA_INIT(CFYSFSFormat)
+  m_num_bitmaps = 0;
+  m_root_entries = 0;
+  m_sect_cluster = 0;
+  m_case_sensitive = TRUE;
+  m_has_super_backup = TRUE;
+  m_info = _T("");
   //}}AFX_DATA_INIT
 }
 
-void CFYSFSEntry::DoDataExchange(CDataExchange* pDX) {
+void CFYSFSFormat::DoDataExchange(CDataExchange* pDX) {
   CDialog::DoDataExchange(pDX);
-  //{{AFX_DATA_MAP(CFYSFSEntry)
-  DDX_Text(pDX, IDC_ATTRIBUTE, m_attribute);
-  DDX_Text(pDX, IDC_CRC, m_crc);
-  DDX_Text(pDX, IDC_CREATED, m_created);
-  DDX_Text(pDX, IDC_FAT_CONT, m_fat_cont);
-  DDX_Text(pDX, IDC_FAT_ENTRIES, m_fat_entries);
-  DDX_Text(pDX, IDC_FILE_SIZE, m_file_size);
-  DDX_Text(pDX, IDC_FLAGS, m_flags);
-  DDX_Text(pDX, IDC_LAST_ACC, m_last_access);
-  DDX_Text(pDX, IDC_NAME_CONT, m_name_cont);
-  DDX_Text(pDX, IDC_NAME_FAT, m_name_fat);
-  DDX_Text(pDX, IDC_NAME_LEN, m_name_len);
-  DDX_Text(pDX, IDC_SCRATCH, m_scratch);
-  DDX_Text(pDX, IDC_SLOT_TYPE, m_slot_type);
+  //{{AFX_DATA_MAP(CFYSFSFormat)
+  DDX_Text(pDX, IDC_NUM_BITMAPS, m_num_bitmaps);
+  //DDV_MinMaxInt(pDX, m_num_bitmaps, 1, 2);
+  DDX_Text(pDX, IDC_ROOT_ENTRIES, m_root_entries);
+  //DDV_MinMaxInt(pDX, m_root_entries, 128, 65536);
+  DDX_Text(pDX, IDC_SECT_CLUSTER, m_sect_cluster);
+  //DDV_MinMaxInt(pDX, m_sect_cluster, 1, 16);
+  DDX_Check(pDX, IDC_CASE_SENSITIVE, m_case_sensitive);
+  DDX_Check(pDX, IDC_HAS_SUP_BACKUP, m_has_super_backup);
+  DDX_Text(pDX, IDC_INFO, m_info);
   //}}AFX_DATA_MAP
 }
 
-BEGIN_MESSAGE_MAP(CFYSFSEntry, CDialog)
-  //{{AFX_MSG_MAP(CFYSFSEntry)
-  ON_BN_CLICKED(IDC_CREATED_CHANGE, OnCreated)
-  ON_BN_CLICKED(IDC_LAST_CHANGE, OnLastAccess)
+BEGIN_MESSAGE_MAP(CFYSFSFormat, CDialog)
+  //{{AFX_MSG_MAP(CFYSFSFormat)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
-// CFYSFSEntry message handlers
-
-// Secs since 01Jan1980
-void CFYSFSEntry::OnCreated() {
-  CLeanTime dlg;
+// CFYSFSFormat message handlers
+BOOL CFYSFSFormat::OnInitDialog() {
   
-  dlg.m_title = "Date Created";
-  dlg.m_adjustment = 315532800;  // count of seconds between 01Jan1980 and 01Jan1970
-  GetDlgItemText(IDC_CREATED, dlg.m_lean_time);
-  if (dlg.DoModal() == IDOK)
-    SetDlgItemText(IDC_CREATED, dlg.m_lean_time);
+  m_info.Format("Root Entries must be at least 128.\r\n");
+  
+  CDialog::OnInitDialog();
+  
+  return TRUE;
 }
 
-// Secs since 01Jan1980
-void CFYSFSEntry::OnLastAccess() {
-  CLeanTime dlg;
+void CFYSFSFormat::OnOK() {
+  CString cs;
   
-  dlg.m_title = "Last Accessed";
-  dlg.m_adjustment = 315532800;  // count of seconds between 01Jan1980 and 01Jan1970
-  GetDlgItemText(IDC_LAST_ACC, dlg.m_lean_time);
-  if (dlg.DoModal() == IDOK)
-    SetDlgItemText(IDC_LAST_ACC, dlg.m_lean_time);
+  UpdateData(TRUE);  // bring from dialog
+  
+  if (m_root_entries < 128) {
+    cs.Format("Root Entries must be at least 128.");
+    AfxMessageBox(cs);
+    SetDlgItemInt(IDC_ROOT_ENTRIES, 128, FALSE);
+    return;
+  }
+  if ((m_num_bitmaps < 1) || (m_num_bitmaps > 2)) {
+    cs.Format("Number of Bitmaps must be 1 or 2.");
+    AfxMessageBox(cs);
+    SetDlgItemInt(IDC_NUM_BITMAPS, 1, FALSE);
+    return;
+  }
+  
+  CDialog::OnOK();
 }
-

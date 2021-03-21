@@ -109,6 +109,7 @@ struct S_CGUID_Strings {
   { "RAID              ", "A19D880F-05FC-4D3B-A006-743F0F84911E" },
   { "Linux Root x86    ", "44479540-F297-41B2-9AF7-D131D5F0458A" },
   { "Linux Root x86-64 ", "4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709" },
+  { "Lean FS           ", "BB5A91B0-977E-11DB-B606-0800200C9A66" },
 
   { "", "" }
 };

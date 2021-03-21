@@ -184,7 +184,7 @@ const char *fdisk_ids[] = {
   "*unknown*",
   "*unknown*",                 // 32
   "*unknown*",
-  "*unknown*",
+  "FYSFS",
   "*unknown*",
   "NEC DOS",
   "*unknown*",

@@ -106,7 +106,8 @@ protected:
 
   // Generated message map functions
   //{{AFX_MSG(CFYSFSEntry)
-    // NOTE: the ClassWizard will add member functions here
+  afx_msg void OnCreated();
+  afx_msg void OnLastAccess();
   //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
 };

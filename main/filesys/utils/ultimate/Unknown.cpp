@@ -281,10 +281,13 @@ void CUnknown::FormatFYSFS(void) {
   // build a "bogus" Fat partition
   FYSFS.m_lba = m_lba;
   FYSFS.m_size = m_size;
+  FYSFS.m_hard_format = TRUE;
   
   // format it
-  AfxMessageBox("TODO: Format FYSFS");
-  //FYSFS.Format();
+  if (FYSFS.FYSFSFormat(TRUE, TRUE))
+    AfxMessageBox("Minimal format complete.  Close image file and re-open to parse correctly.");
+  else
+    AfxMessageBox("Format aborted.");
 }
 
 void CUnknown::FormatSFS(void) {
