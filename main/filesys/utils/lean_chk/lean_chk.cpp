@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -69,7 +69,7 @@
  *    I wrote it to simply check a leanfs image for use with this book.
  *    Please consider this if you add or modify to this utility.
  *
- *  Last updated: 15 July 2020
+ *  Last updated: 21 Mar 2021
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os lean_chk.c -o lean_chk.exe -s
@@ -157,8 +157,9 @@ int main(int argc, char *argv[]) {
       printf("\n Super found at LBA %i with a checksum of 0x%08X.", u, crc);
       // the fs_version should be at least 0.6 (0x0006)
       printf("\n Found version number %i.%i.", super.fs_version >> 8, super.fs_version & 0xFF);
-      if (super.fs_version != 0x0007) {
-        printf(" *Only version 0.7 is supported.");
+      // at the moment, only version 0.6 is supported
+      if (super.fs_version != 0x0006) {
+        printf(" *Only version 0.6 is supported.");
         errors++;
       }
       // pre_alloc_count, though can be anything from 0 to 255, should be 1 less than a multiple of 2
@@ -597,13 +598,9 @@ bool lean_check_inode(const bit64u inode_num, struct S_LEAN_INODE *inode, const 
         printf("\n*[%" LL64BIT "i]: Last indirect sector was not sector specified in last_indirect", inode_num);
     }
     
-    // if inode size is not (S_LEAN_INODE_SIZE / 4), give error
-    if (inode->inode_size != (S_LEAN_INODE_SIZE / 4))
-      printf("\n*[%" LL64BIT "i]: Inode->inode_size != (S_LEAN_INODE_SIZE / 4) (%i)", inode_num, inode->inode_size);
-    
     // if the reserved field in the inode is not zero, give error
-    if (inode->reserved)
-      printf("\n*[%" LL64BIT "i]: Inode->reserved non zero... (%04X)", inode_num, inode->reserved);
+    if (inode->reserved[0] || inode->reserved[1] || inode->reserved[2])
+      printf("\n*[%" LL64BIT "i]: Inode->reserved non zero... (%02X  %02X  %02X)", inode_num, inode->reserved[0], inode->reserved[1], inode->reserved[2]);
     
     // if the links_count is < 1, give error
     if (inode->links_count < 1)
@@ -729,18 +726,12 @@ bool lean_check_inode_attrib(const bit32u attrib, const bit32u flags) {
     if (attrib & LEAN_ATTR_PREALLOC) printf("Keep Preloc's ");
   
     if (attrib & LEAN_ATTR_INLINEXTATTR) printf("\n EA's are after inode.");
-    if (attrib & LEAN_ATTR_INLINEDATA)   printf("\n File starts after inode data.");
+    else                                 printf("\n File starts after inode data.");
   }  
   
-  // if both EA and INLINEDATA are set, give error
-  if ((attrib & LEAN_ATTR_INLINEXTATTR) && (attrib & LEAN_ATTR_INLINEDATA)) {
-    printf("\n*Both LEAN_ATTR_INLINEXTATTR and LEAN_ATTR_INLINEDATA are set...");
-    ret = FALSE;
-  }
-  
-  // if any of bits 28:21 are set, give error
-  if (attrib & ((1<<28) | (1<<27) | (1<<26) | (1<<25) | (1<<24) | (1<<23) | (1<<22) | (1<<21))) {
-    printf("\n*One or more of Bits 28:31 are set.");
+  // if any of bits 28:20 are set, give error
+  if (attrib & ((1<<28) | (1<<27) | (1<<26) | (1<<25) | (1<<24) | (1<<23) | (1<<22) | (1<<21) | (1<<20))) {
+    printf("\n*One or more of Bits 28:20 are set.");
     ret = FALSE;
   }
   

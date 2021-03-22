@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -57,7 +57,7 @@
  */
 
 /*
- *  Last updated: 15 July 2020
+ *  Last updated: 21 Mar 2021
  */
 
 // set it to 1 (align on byte)
@@ -65,7 +65,7 @@
 
 #define MAX_PATH 260
 
-char strtstr[] = "\nLEAN_CHK  v2.00.00    Forever Young Software 1984-2019";
+char strtstr[] = "\nLEAN_CHK  v2.00.02    Forever Young Software 1984-2021";
 
 #define REPAIR_FS_CHK_ONLY  0x00000001
 #define REPAIR_FS_REPAIR    0x00000002
@@ -120,8 +120,7 @@ struct S_LEAN_INODE {
   bit32u checksum;                // bit32u sum of all fields before this one.
   bit32u magic;                   // 0x45444F4E  ('NODE')
   bit8u  extent_count;            // count of extents in this inode struct.
-  bit8u  inode_size;              // Inode size in dwords (176 / 4)
-  bit16u reserved;                // reserved
+  bit8u  reserved[3];             // reserved
   bit32u indirect_count;          // number of indirect sectors owned by file
   bit32u links_count;             // The number of hard links (the count of directory entries) referring to this file, at least 1
   bit32u uid;                     // currently reserved, set to 0
@@ -161,7 +160,7 @@ struct S_LEAN_INODE {
 #define  LEAN_ATTR_IMMUTABLE_FL (1 << 17) // Don't move file sectors 
 #define  LEAN_ATTR_PREALLOC     (1 << 18) // Keep any preallocated sectors beyond fileSize when the file is closed
 #define  LEAN_ATTR_INLINEXTATTR (1 << 19) // Remaining bytes after the inode structure are reserved for inline extended attributes
-#define  LEAN_ATTR_INLINEDATA   (1 << 20) // Remaining bytes after the inode structure are the file's contents (must be <= to remaining room)
+//       LEAN_ATTR_             (1 << 20)  // reserved
 //       LEAN_ATTR_             (1 << 21)  // reserved
 //       LEAN_ATTR_             (1 << 22)  // reserved
 //       LEAN_ATTR_             (1 << 23)  // reserved
