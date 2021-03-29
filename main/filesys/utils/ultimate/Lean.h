@@ -73,30 +73,27 @@
 #define LEAN_INODE_MAGIC     0x45444F4E  // 'NODE'
 #define LEAN_INDIRECT_MAGIC  0x58444E49  // 'INDX'
 
-#define LEAN_ROOT_SIZE       32  // in sectors (including first sector for inode and ea's)
-
 #pragma pack(push, 1)
 
 struct S_LEAN_SUPER {
-  // all of this (except for reserved bits in STATE) is 0.6.1 compatible
   DWORD  checksum;                // DWORD sum of all fields.
   DWORD  magic;                   // 0x4E41454C ('LEAN')
-  WORD   fs_version;              // 0x0006 = 0.6 or 0x0007 = 0.7
-  BYTE   pre_alloc_count;         // count minus one of contiguous sectors that driver should try to preallocate
-  BYTE   log_sectors_per_band;    // 1 << log_sectors_per_band = sectors_per_band. Valid values are 12, 13, 14, ...
+  WORD   fs_version;              // 0x0007 = 0.7
+  BYTE   pre_alloc_count;         // count minus one of contiguous blocks that driver should try to preallocate
+  BYTE   log_blocks_per_band;     // 1 << log_blocks_per_band = blocks_per_band. Valid values are 12, 13, 14, ...
   DWORD  state;                   // bit 0 = unmounted?, bit 1 = error?
   struct S_GUID guid;             // Globally Unique IDentifier
   BYTE   volume_label[64];        // can be modified by the LABEL command
-  DWORD64 sector_count;           // The total number of sectors that form a file system volume
-  DWORD64 free_sector_count;      // The number of free sectors in the volume. A value of zero means disk full.
-  DWORD64 primary_super;          // sector number of primary super block
-  DWORD64 backup_super;           // sector number of backup super block
-  DWORD64 bitmap_start;           // This is the address of the sector where the first bands' bitmap starts
-  DWORD64 root_start;             // This is the address of the sector where the root directory of the volume starts, the inode number of the root directory.
-  DWORD64 bad_start;              // This is the address of the sector where the pseudo-file to track bad sectors starts.
+  DWORD64 block_count;            // The total number of blocks that form a file system volume
+  DWORD64 free_block_count;       // The number of free blocks in the volume. A value of zero means disk full.
+  DWORD64 primary_super;          // block number of primary super block
+  DWORD64 backup_super;           // block number of backup super block
+  DWORD64 bitmap_start;           // This is the address of the block where the first bands' bitmap starts
+  DWORD64 root_start;             // This is the address of the block where the root directory of the volume starts, the inode number of the root directory.
+  DWORD64 bad_start;              // This is the address of the block where the pseudo-file to track bad blocks starts.
   DWORD64 journal;                // if not zero, inode number of journal file (version 0.7+ only)
-  BYTE   log_sector_size;         // 1 << (log_sector_size+9) = sector size (0 = 512, 1 = 1024, etc)
-  BYTE   reserved[351];           // zeros
+  BYTE   log_block_size;          // (1 << log_block_size) = block size (9 = 512, 10 = 1024, etc)
+  //BYTE   reserved[];            // zeros
 };
 
 #define LEAN_FS_TIME_ADJUST  ((DWORD64) 0x00011EF9B4758000) // additional uS from 01-01-1970 to 01-01-1980
@@ -110,19 +107,19 @@ struct S_LEAN_INODE {
   DWORD  magic;                   // 0x45444F4E  ('NODE')
   BYTE   extent_count;            // count of extents in this inode struct.
   BYTE   reserved[3];             // reserved
-  DWORD  indirect_count;          // number of indirect sectors owned by file
+  DWORD  indirect_count;          // number of indirect blocks owned by file
   DWORD  links_count;             // The number of hard links (the count of directory entries) referring to this file, at least 1
   DWORD  uid;                     // currently reserved, set to 0
   DWORD  gid;                     // currently reserved, set to 0
   DWORD  attributes;              // see table below
   DWORD64 file_size;              // file size
-  DWORD64 sector_count;           // count of sectors used
+  DWORD64 block_count;            // count of blocks used
   INT64  acc_time;                // last accessed: number of uS elapsed since midnight of 1970-01-01
   INT64  sch_time;                // status change: number of uS elapsed since midnight of 1970-01-01
   INT64  mod_time;                // last modified: number of uS elapsed since midnight of 1970-01-01
   INT64  cre_time;                //       created: number of uS elapsed since midnight of 1970-01-01
-  DWORD64 first_indirect;         // address of the first indirect sector of the file.
-  DWORD64 last_indirect;          // address of the last indirect sector of the file.
+  DWORD64 first_indirect;         // address of the first indirect block of the file.
+  DWORD64 last_indirect;          // address of the last indirect block of the file.
   DWORD64 fork;                   // if non-zero, contains an Inode number for a file holding extended attributes
   DWORD64 extent_start[LEAN_INODE_EXTENT_CNT]; // The array of extents
   DWORD  extent_size[LEAN_INODE_EXTENT_CNT]; 
@@ -146,8 +143,8 @@ struct S_LEAN_INODE {
 #define  LEAN_ATTR_ARCHIVE      (1 << 14) // File changed since last backup 
 #define  LEAN_ATTR_SYNC_FL      (1 << 15) // Synchronous updates 
 #define  LEAN_ATTR_NOATIME_FL   (1 << 16) // Don't update last access time 
-#define  LEAN_ATTR_IMMUTABLE_FL (1 << 17) // Don't move file sectors 
-#define  LEAN_ATTR_PREALLOC     (1 << 18) // Keep any preallocated sectors beyond fileSize when the file is closed
+#define  LEAN_ATTR_IMMUTABLE_FL (1 << 17) // Don't move file blocks 
+#define  LEAN_ATTR_PREALLOC     (1 << 18) // Keep any preallocated blocks beyond fileSize when the file is closed
 #define  LEAN_ATTR_EAS_IN_INODE (1 << 19) // Remaining bytes after the inode structure are reserved for inline extended attributes
 //       LEAN_ATTR_             (1 << 20)  // reserved
 //       LEAN_ATTR_             (1 << 21)  // reserved
@@ -164,23 +161,20 @@ struct S_LEAN_INODE {
 #define  LEAN_ATTR_IFLNK        (3 << 29) // File type: symbolic link 
 #define  LEAN_ATTR_IFFRK        (4 << 29) // File type: fork 
 
-#define LEAN_INDIRECT_EXTENT_CNT_512   38
-#define LEAN_INDIRECT_EXTENT_CNT_1024  80
-#define LEAN_INDIRECT_EXTENT_CNT_2048  166
-#define LEAN_INDIRECT_EXTENT_CNT_4096  336
+#define LEAN_INDIRECT_SIZE   56
 struct S_LEAN_INDIRECT {
   DWORD  checksum;                // DWORD  sum of all fields before this one.
   DWORD  magic;                   // 0x58444E49 ('INDX')
-  DWORD64 sector_count;           // total number of sectors addressable using this indirect sector.
-  DWORD64 inode;                  // the inode number of this file this indirect sector belongs to.
-  DWORD64 this_sector;            // The address of the sector storing this indirect sector.
-  DWORD64 prev_indirect;          // the address of the previous indirect sector.
-  DWORD64 next_indirect;          // the address of the next indirect sector.
+  DWORD64 block_count;            // total number of blocks addressable using this indirect block.
+  DWORD64 inode;                  // the inode number of this file this indirect block belongs to.
+  DWORD64 this_block;             // The address of the block storing this indirect block.
+  DWORD64 prev_indirect;          // the address of the previous indirect block.
+  DWORD64 next_indirect;          // the address of the next indirect block.
   WORD   extent_count;            // The number of valid extent specifications storing in the indirect struct.
   BYTE   reserved0[2];            // reserved
   DWORD  reserved1;               // reserved
-  DWORD64 extent_start[LEAN_INDIRECT_EXTENT_CNT_512]; // The array of extents
-  DWORD  extent_size[LEAN_INDIRECT_EXTENT_CNT_512];
+  //DWORD64 extent_start[]; // The array of extents
+  //DWORD  extent_size[];
 };
 
 #define LEAN_NAME_LEN_MAX  4068   // 255 is largest value allowed in rec_len * 16 bytes per record - 12 bytes for header
@@ -203,7 +197,7 @@ struct S_LEAN_DIRENTRY {
 ///////////////////////////////////////////////////////////////////////////////////
 // Journals
 #define JOURNAL_MAGIC   0x4C4E524A
-#define JOURNAL_SIZE             2  // in sectors (should not be more than 6 for this formatter)
+#define JOURNAL_SIZE             2  // in blocks (should not be more than 6 for this formatter)
 
 #define JOURNAL_ENTRY_INVALID  (0<<0)
 #define JOURNAL_ENTRY_VALID    (1<<0)
@@ -249,12 +243,13 @@ struct S_EA_STRUCT {
   BYTE  Data[MAX_EA_STRUCT_DATA_SIZE];
 };
 
-// structure to hold all LEAN sectors
+// structure to hold all LEAN blocks
 #define LEAN_DEFAULT_COUNT   64
-struct S_LEAN_SECTORS {
+struct S_LEAN_BLOCKS {
   BOOL   was_error;
   unsigned extent_count;
   unsigned allocated_count;
+  DWORD64 block_count;
   DWORD64 *extent_start; // The array of extents
   DWORD  *extent_size; 
 };
@@ -278,29 +273,32 @@ public:
   CString	m_bitmap_lba;
   CString	m_crc;
   CString	m_cur_state;
-  CString	m_free_sectors;
+  CString	m_free_blocks;
   CString	m_guid;
   CString	m_label;
   CString	m_magic;
   CString	m_pre_alloc;
   CString	m_primary_lba;
   CString	m_root_lba;
-  CString	m_sect_band;
-  CString	m_sect_count;
+  CString	m_blocks_band;
+  CString	m_block_count;
   CString	m_version;
   CString	m_journal_lba;
-  CString	m_sect_size;
+  CString	m_log_block_size;
   //}}AFX_DATA
   
-  BYTE lean_calc_log_band_size(const DWORD sect_size, const DWORD64 tot_sectors);
+  BYTE lean_calc_log_band_size(const DWORD sect_size, const DWORD64 tot_blocks);
+  void LeanReadBlocks(void *buffer, DWORD64 block, long count);
+  void LeanWriteBlocks(void *buffer, DWORD64 block, long count);
   
   void Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, BOOL IsNewTab);
   BOOL DetectLeanFS(void);
+  BOOL DetectLeanFSOld(void);
   DWORD GetNewColor(int index);
   
   void ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM parent);
-  void *ReadFile(DWORD64 lba, DWORD64 *Size);
-  void WriteFile(void *buffer, const struct S_LEAN_SECTORS *Extents, DWORD64 Size);
+  void *ReadFile(DWORD64 block, DWORD64 *Size);
+  void WriteFile(void *buffer, struct S_LEAN_BLOCKS *Extents, DWORD64 Size);
   void ZeroExtent(DWORD64 ExtentStart, DWORD ExtentSize);
   BOOL ValidInode(const struct S_LEAN_INODE *inode);
   BOOL ValidIndirect(const struct S_LEAN_INDIRECT *indirect);
@@ -318,36 +316,38 @@ public:
   void DeleteFile(HTREEITEM hItem);
   void DeleteFolder(HTREEITEM hItem);
   
-  DWORD64 GetFreeSector(DWORD64 Start, BOOL MarkIt);
-  void MarkSector(DWORD64 Sector, BOOL MarkIt);
-  int AppendToExtents(struct S_LEAN_SECTORS *Extents, DWORD64 Size, DWORD64 Start, BOOL MarkIt);
-  void FreeExtents(const struct S_LEAN_SECTORS *Extents);
-  int ReadFileExtents(struct S_LEAN_SECTORS *Extents, DWORD64 Inode);
-  int WriteFileExtents(const struct S_LEAN_SECTORS *Extents, struct S_LEAN_INODE *inode);
+  DWORD64 GetFreeBlock(DWORD64 Start, BOOL MarkIt);
+  void MarkBlock(DWORD64 Block, BOOL MarkIt);
+  int AppendToExtents(struct S_LEAN_BLOCKS *Extents, DWORD64 Size, DWORD64 Start, BOOL MarkIt);
+  void FreeExtents(const struct S_LEAN_BLOCKS *Extents);
+  int ReadFileExtents(struct S_LEAN_BLOCKS *Extents, DWORD64 Inode);
+  int WriteFileExtents(const struct S_LEAN_BLOCKS *Extents, struct S_LEAN_INODE *inode);
   int AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attrib);
-  int AppendToDir(DWORD64 Inode, DWORD Size);
-  void CreateEmptyDir(void *buffer, DWORD Size);
-  void BuildInode(struct S_LEAN_SECTORS *Extents, DWORD64 Size, DWORD Attrib);
+  void BuildInode(struct S_LEAN_BLOCKS *Extents, DWORD64 Size, DWORD Attrib);
+  void IncrementLinkCount(DWORD64 Inode);
+  void DecrementLinkCount(DWORD64 Inode);
   void DeleteInode(DWORD64 Inode);
 
-  void AllocateExtentBuffer(struct S_LEAN_SECTORS *extents, const unsigned count);
-  void ReAllocateExtentBuffer(struct S_LEAN_SECTORS *extents, const unsigned count);
-  void FreeExtentBuffer(struct S_LEAN_SECTORS *extents);
+  void AllocateExtentBuffer(struct S_LEAN_BLOCKS *extents, const unsigned count);
+  void ReAllocateExtentBuffer(struct S_LEAN_BLOCKS *extents, const unsigned count);
+  void FreeExtentBuffer(struct S_LEAN_BLOCKS *extents);
   
   CMyImageList m_TreeImages;
   HTREEITEM m_hRoot;
   BOOL      m_too_many;
   
   struct S_LEAN_SUPER m_super;
-  DWORD   m_super_lba;  // zero based lba of super block within this partition
+  DWORD   m_super_block_loc;  // zero based block of super block within this partition
   
   BOOL    m_isvalid;
   int     m_index; // index into dlg->Lean[]
   DWORD64 m_lba;   // starting lba of this partition
-  DWORD64 m_size;  // size of this partition in sectors
+  DWORD64 m_size;  // size of this partition *in sectors*
   DWORD   m_color; // color used in image bar
   int     m_draw_index;
   BOOL    m_hard_format;
+  DWORD   m_block_size;
+  DWORD64 m_tot_blocks;
 
   BOOL    m_show_del;
   BOOL    m_del_clear;
@@ -370,10 +370,11 @@ protected:
   afx_msg void OnLeanClean();
   afx_msg void OnLeanFormat();
   afx_msg void OnLeanCheck();
+  afx_msg void OnChangeLeanJournal();
   afx_msg void OnChangeLeanVersion();
   afx_msg void OnChangeLeanPreAlloc();
-  afx_msg void OnChangeLeanSectBand();
-  afx_msg void OnChangeLeanSectSize();
+  afx_msg void OnChangeLeanBlockBand();
+  afx_msg void OnChangeLeanBlockSize();
   afx_msg void OnLeanCopy();
   afx_msg void OnLeanInsert();
   afx_msg void OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult);

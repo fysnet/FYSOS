@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -81,12 +81,11 @@ DWORD *lcClusters;
 CString lcInfo;
 
 void CLean::OnLeanCheck() {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   int j;
   unsigned i, pos;
   CString cs;
   BYTE *buffer;
-  BYTE superblock[MAX_SECT_SIZE];
+  BYTE *superblock = (BYTE *) malloc(m_block_size);
   struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) superblock;
   BOOL super_dirty = FALSE;
   
@@ -115,16 +114,16 @@ void CLean::OnLeanCheck() {
   lcInfo += "Checking the SuperBlock\r\n";
 
   // read in the superblock (we have to have at least a minimum
-  //  compliant super block and m_super_lba value or we won't get
+  //  compliant super block and m_super_block_loc value or we won't get
   //  to the point where we can click on the "CHECK" button.
-  // therefore, we can rely on the fact that m_super_lba should be correct.
+  // therefore, we can rely on the fact that m_super_block_loc should be correct.
   // *** most of these checks are redundant.  We can't get to here ***
   // *** without these values being correct in the first place.    ***
-  dlg->ReadFromFile(super, m_lba + m_super_lba, 1);
+  LeanReadBlocks(super, m_super_block_loc, 1);
   
   // How about the check sum
   DWORD crc = 0, *p = (DWORD *) super;
-  for (i=1; i<dlg->m_sect_size / sizeof(DWORD); i++)
+  for (i=1; i<m_block_size / sizeof(DWORD); i++)
     crc = (crc << 31) + (crc >> 1) + p[i];
   if (crc != super->checksum) {
     cs.Format("CRC is not correct.  Should be 0x%08X, is 0x%08X\r\n", crc, super->checksum);
@@ -137,9 +136,9 @@ void CLean::OnLeanCheck() {
     lcInfo += cs;
   }
   
-  // must be at least version 0.6
-  if (super->fs_version < 0x0006) {
-    cs.Format("Version must be at least 0.6. (0x%08X)\r\n", super->fs_version);
+  // must be version 0.7
+  if (super->fs_version < 0x0007) {
+    cs.Format("Version must be version 0.7. (0x%08X)\r\n", super->fs_version);
     lcInfo += cs;
   }
   
@@ -150,8 +149,12 @@ void CLean::OnLeanCheck() {
   //}
   
   // the log2 entry should be at least 12 and not more than 31
-  if ((super->log_sectors_per_band < 12) || (super->log_sectors_per_band > 31)) {
-    cs.Format("Log Sectors Per Band must be at least 12 and no more than 31.  Is %i.\r\n", super->log_sectors_per_band);
+  if ((super->log_blocks_per_band < 12) || (super->log_blocks_per_band > 31)) {
+    cs.Format("Log Blocks Per Band must be at least 12 and no more than 31.  Is %i.\r\n", super->log_blocks_per_band);
+    lcInfo += cs;
+  }
+  if ((super->log_blocks_per_band - 3) < super->log_block_size) {
+    cs.Format("Log Blocks Per Band must be at least %i.  Is %i.\r\n", super->log_block_size + 3, super->log_blocks_per_band);
     lcInfo += cs;
   }
   
@@ -173,140 +176,105 @@ void CLean::OnLeanCheck() {
     lcErrorCount++;
   }
 
-  // is the total sectors count within range?
-  if (super->sector_count != m_size) {
-    cs.Format("Sector Count is %li, should be %li.\r\n", super->sector_count, m_size);
+  // is the total blocks count within range?
+  if (super->block_count != m_tot_blocks) {
+    cs.Format("Block Count is %li, should be %li.\r\n", super->block_count, m_tot_blocks);
     lcInfo += cs;
     lcErrorCount++;
   }
   
-  // check the primarySuper field.  It should == m_super_lba
-  if (super->primary_super != (DWORD64) m_super_lba) {
-    cs.Format("Super Location is %li, should be %li.\r\n", super->primary_super, m_super_lba);
+  // check the primarySuper field.  It should == m_super_block_loc
+  if (super->primary_super != (DWORD64) m_super_block_loc) {
+    cs.Format("Super Location is %li, should be %li.\r\n", super->primary_super, m_super_block_loc);
     lcInfo += cs;
     lcErrorCount++;
   }
 
-  // the bitmapStart field should be no less than 33
-  if (super->bitmap_start < 33) {
-    cs.Format("Bitmap Start Location is %li, should be at least 33.\r\n", super->bitmap_start);
+  // the bitmapStart field should be no less than m_super_block_loc 
+  if (super->bitmap_start <= m_super_block_loc) {
+    cs.Format("Bitmap Start Location is %li, should be at least %li.\r\n", super->bitmap_start, m_super_block_loc + 1);
     lcInfo += cs;
     lcErrorCount++;
   }
   
-  // the rootInode field should be no less than 34
-  if (super->bitmap_start < 34) {
-    cs.Format("Root Start Location is %li, should be at least 34.\r\n", super->root_start);
+  // the rootInode field should be no less than m_super_block_loc
+  if (super->bitmap_start <= m_super_block_loc) {
+    cs.Format("Root Start Location is %li, should be at least %li.\r\n", super->root_start, m_super_block_loc + 1);
     lcInfo += cs;
     lcErrorCount++;
   }
-  
-  // check if the sect size is 0, 1, 2, 3, 4 (etc) up to ???
-  // TODO:
   
   // check if reserved is not zeros???
-  if (!IsBufferEmpty(super->reserved, 351)) {
-    lcInfo += "Reserved field should be zeros...\r\n";
-    lcErrorCount++;
-  }
+  // the size depends on log_block_size
+  //if (!IsBufferEmpty(super->reserved, 351)) {
+  //  lcInfo += "Reserved field should be zeros...\r\n";
+  //  lcErrorCount++;
+  //}
   
   ////////////////////////////////////////////////////////////////////
-  // Check 2: get free sector count from band bitmaps.
+  // Check 2: get free block count from band bitmaps.
   lcInfo += "Checking the Bitmaps\r\n";
-  const DWORD64 band_size = ((DWORD64) 1 << m_super.log_sectors_per_band); // sectors per band
-  const unsigned bitmap_size = (unsigned) (band_size / dlg->m_sect_size / 8); // sectors per bitmap
-  const unsigned bytes_bitmap = bitmap_size * dlg->m_sect_size;
-  const unsigned tot_bands = (unsigned) ((m_super.sector_count + (band_size - 1)) / band_size);
-  buffer = (BYTE *) malloc(bitmap_size * dlg->m_sect_size);
-  DWORD64 bitmap_lba, FreeCount = 0;
-  
+  const DWORD64 band_size = ((DWORD64) 1 << m_super.log_blocks_per_band); // blocks per band
+  const unsigned bitmap_size = (unsigned) (band_size / m_block_size / 8); // blocks per bitmap
+  const unsigned bytes_bitmap = bitmap_size * m_block_size;
+  const unsigned tot_bands = (unsigned) ((m_super.block_count + (band_size - 1)) / band_size);
+  buffer = (BYTE *) malloc(bitmap_size * m_block_size);
+  DWORD64 bitmap_block, FreeCount = 0;
+  DWORD64 total_count = m_tot_blocks;  // only count up to total_blocks.  Don't count anything after that.
+
   for (i=0; i<tot_bands; i++) {
     // read in a bitmap
-    bitmap_lba = (i==0) ? m_super.bitmap_start : (band_size * i);
-    dlg->ReadFromFile(buffer, m_lba + bitmap_lba, bitmap_size);
+    bitmap_block = (i==0) ? m_super.bitmap_start : (band_size * i);
+    LeanReadBlocks(buffer, bitmap_block, bitmap_size);
     pos = 0;
     
-    while (pos < bytes_bitmap) {
-      if (buffer[pos] == 0)
+    while ((pos < bytes_bitmap) && (total_count > 0)) {
+      if ((total_count > 8) && (buffer[pos] == 0)) {
         FreeCount += 8;
-      else {
-        for (j=0; j<8; j++) {
+        total_count -= 8;
+      } else {
+        for (j=0; (j<8 && (total_count > 0)); j++) {
           if ((buffer[pos] & (1<<j)) == 0)
             FreeCount++;
+          total_count--;
         }
       }
       pos++;
     }
   }
   
-  if (FreeCount != super->free_sector_count) {
-    cs.Format("Found %li free sectors.  Super states %li.\r\n", FreeCount, super->free_sector_count);
+  if (FreeCount != super->free_block_count) {
+    cs.Format("Found %li free blocks.  Super states %li.\r\n", FreeCount, super->free_block_count);
     // ask to update super.  Remember to update m_super.free_sectors member
-    //if (AfxMessageBox("FreeSector Count doesn't match.\r\nUpdate Super->FreeSectorCount field?", MB_YESNO, 0) == IDYES) {
-    //  super->free_sector_count = FreeCount;
+    //if (AfxMessageBox("Freeblock Count doesn't match.\r\nUpdate Super->FreeblockCount field?", MB_YESNO, 0) == IDYES) {
+    //  super->free_block_count = FreeCount;
     //  super->CRC = 
     //  super_dirty = TRUE;
-    //  m_free_sectors.Format("%I64i", FreeCount);
+    //  m_free_blocks.Format("%I64i", FreeCount);
     //  UpdateData(FALSE); // send to Dialog
     //}
+    lcErrorCount++;
   } else
-    cs.Format("Found %li free sectors.\r\n", FreeCount);
+    cs.Format("Found %li free blocks.\r\n", FreeCount);
   lcInfo += cs;
   
   free(buffer);
   
   ////////////////////////////////////////////////////////////////////
   // Check 3: 
-  //fcInfo += "Checking the FAT(s)\r\n";
-  //modeless.SetDlgItemText(IDC_EDIT, fcInfo);
-  //modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
-
-  // Check 4: // check the directory entries
-  //lcInfo += "Checking Root/Sub directory(s)\r\n";
-  //modeless.SetDlgItemText(IDC_EDIT, lcInfo);
-  //modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
-
-  /*
-  struct S_FAT_ROOT *root = NULL;
-  DWORD rootsize, rootcluster, cluster_cnt = 0;
-  if (m_fat_size == FS_FAT32) {
-    rootcluster = bpb32->root_base_cluster;
-    if (rootcluster > 0)  // make sure there is actually a root to read
-      root = (struct S_FAT_ROOT *) ReadFile(rootcluster, &rootsize, TRUE);
-  } else {
-    rootcluster = 0;
-    rootsize = bpb12->root_entrys * sizeof(struct S_FAT_ROOT);
-    root = (struct S_FAT_ROOT *) ReadFile(rootcluster, &rootsize, TRUE);
-  }
-  if (root) {
-    // allocate a list of starting clusters, so that we can keep
-    //  track of all clusters we check.  This way we don't loop
-    //  indefinately if a root entry points to itself, or a parent.
-    // we need to limit this to 65536 simply because we chose this value...
-    fcClusters = (DWORD *) calloc(65536, sizeof(DWORD));
-    fcClusters[fcCluster_cnt++] = rootcluster;
-    fcDirCount = 1;
-    FatCheckRoot(modeless, root, rootsize / sizeof(struct S_FAT_ROOT), "\\");
-    free(fcClusters);
-    free(root);
-  }
-
-  // show results
-  cs.Format("Checked %u directory(s), %u file(s), %u deleted files, %u Volume Label(s).\r\n", fcDirCount, fcFileCount, fcDelFileCount, fcVolCount);
-  fcInfo += cs;
-  modeless.SetDlgItemText(IDC_EDIT, fcInfo);
-  modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
-  */
-
-  // Check 5: // ?????
+  //   TODO:
+  //
   
   
+  //  when transversing through the files, keep an array of Inodes and their link counts.
+  //  when an inode references an inode in this array, update the link count.
+  //  then transverse through the files again, checking against the inode->link_count field.
   
   
   
   // write back the super?
   if (super_dirty)
-    dlg->WriteToFile(super, m_lba + m_super_lba, 1);
+    LeanWriteBlocks(super, m_super_block_loc, 1);
   
   cs.Format("\r\n  Found %i errors\r\n", lcErrorCount);
   lcInfo += cs;
@@ -327,119 +295,3 @@ void CLean::OnLeanCheck() {
   // re-enable the button
   GetDlgItem(ID_CHECK)->EnableWindow(TRUE);
 }
-
-/*
-void CFat::FatCheckRoot(CModeless &modeless, struct S_FAT_ROOT *root, const unsigned entries, CString csPath) {
-  struct S_FAT_ROOT *sub;
-  unsigned cnt, i = 0;
-  DWORD start, filesize = 0, ErrorCode;
-  BOOL IsDot = FALSE;
-  CString cs, name;
-  BYTE attrb;
-
-  // print current path
-  fcInfo += csPath;
-  fcInfo += "\r\n";
-  
-  // if not the root, check that the first two entries are '.' and '..'
-  if (csPath != "\\") {
-    FatGetName(&root[0], name, &attrb, &start, &filesize, NULL);
-    if (name != ".") {
-      fcInfo += "First entry is not DOT entry\r\n";
-      fcErrorCount++;
-    }
-    FatGetName(&root[1], name, &attrb, &start, &filesize, NULL);
-    if (name != "..") {
-      fcInfo += "Second entry is not DOT DOT entry\r\n";
-      fcErrorCount++;
-    }
-  }
-  
-  // show the progress
-  modeless.SetDlgItemText(IDC_EDIT, fcInfo);
-  modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
-
-  // parse the entries
-  while (i<entries) {
-    cs.Empty();
-    if (root[i].name[0] == 0x00)
-      break;
-    ErrorCode = CheckRootEntry(&root[i]);
-    if (ErrorCode == FAT_BAD_LFN_DEL) {
-      cnt = FatGetName(&root[i], name, &attrb, &start, &filesize, NULL) - 1; // -1 so we display the deleted SFN
-      cs.Format("Found Deleted Long File Name entry: %s (index %i)\r\n", csPath + name, i);
-    } else if (ErrorCode != FAT_NO_ERROR) {
-      cnt = 1;
-      fcErrorCount++;
-      cs.Format("Found Bad entry with error code %u* (index %i)\r\n", ErrorCode, i);
-      if (!fc_entry_error) {
-        fcInfo += cs;
-        cs = "* Error Codes:\r\n"
-             "   1 = Bad Attribute Value\r\n"
-             "   2 = Invalid Char in SFN\r\n"
-             "   3 = SFN Reserved section is non-zero\r\n"
-             "   4 = bad sequence number found in LFN\r\n"
-             "   5 = Deleted Entry\r\n"
-             "   6 = Bad CRC of SFN found in LFN\r\n"
-             "   7 = Found Invalid char in LFN\r\n";
-        fc_entry_error = TRUE;
-      }
-    } else {
-      // retrieve the name.
-      cnt = FatGetName(&root[i], name, &attrb, &start, &filesize, &IsDot);
-      if (root[i].name[0] == FAT_DELETED_CHAR) {
-        fcDelFileCount++;
-        cs.Format("Found Deleted entry: %s%s (index %i)\r\n", csPath, name, i);
-      } else {
-        if (attrb & FAT_ATTR_SUB_DIR) {
-          if (!IsDot) {
-            // check to see if we already parsed this cluster's directory
-            if (CheckForRecursion(start)) {
-              // found that we already did this directory....
-              cs.Format("Directory with Cluster %u already checked.\r\n"
-                        "Directory points to infinate loop...\r\n", start);
-              fcErrorCount++;
-            } else {
-              sub = (struct S_FAT_ROOT *) ReadFile(start, &filesize, FALSE);
-              if (sub) {
-                FatCheckRoot(modeless, sub, (filesize + 31) / 32, csPath + name + "\\");
-                free(sub);
-                fcDirCount++;
-              }
-            }
-          }
-        } else if (attrb & FAT_ATTR_VOLUME) {
-          // TODO: Check that label has only allowed chars????
-          cs.Format("Volume Label: %s\r\n", name);
-          fcVolCount++;
-        } else {
-          // found regular file
-          fcFileCount++;
-          cs.Format("%s%s\r\n", csPath, name);
-        }
-      }
-    }
-    
-    // update display?
-    if (cs.GetLength() > 0) {
-      fcInfo += cs;
-      modeless.SetDlgItemText(IDC_EDIT, fcInfo);
-      modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
-    }
-
-    i += cnt;
-  }
-}
-
-// check to see if the passed cluster is in our list
-//  return TRUE if it is
-bool CFat::CheckForRecursion(DWORD cluster) {
-  unsigned i;
-
-  for (i=0; i < fcCluster_cnt; i++)
-    if (fcClusters[i] == cluster)
-      return TRUE;
-
-  return FALSE;
-}
-*/

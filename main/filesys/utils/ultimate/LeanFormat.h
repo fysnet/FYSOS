@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -68,8 +68,7 @@
 /////////////////////////////////////////////////////////////////////////////
 // CLeanFormat dialog
 
-class CLeanFormat : public CDialog
-{
+class CLeanFormat : public CDialog {
 // Construction
 public:
   CLeanFormat(CWnd* pParent = NULL);   // standard constructor
@@ -77,10 +76,10 @@ public:
 // Dialog Data
   //{{AFX_DATA(CLeanFormat)
   enum { IDD = IDD_LEAN_FORMAT };
-  BOOL	m_journal;
-  int		m_pre_alloc_count;
-  int		m_root_sectors;
+  DWORD m_block_size;
+  int   m_pre_alloc_count;
   BOOL	m_eas_after_inode;
+  BOOL	m_journal;
   //}}AFX_DATA
 
 
@@ -96,7 +95,7 @@ protected:
 
   // Generated message map functions
   //{{AFX_MSG(CLeanFormat)
-    // NOTE: the ClassWizard will add member functions here
+  afx_msg void OnOkay();
   //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
 };

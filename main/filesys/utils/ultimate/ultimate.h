@@ -190,8 +190,12 @@ BOOL fnmatch(const char *wild_text, const char *tame_text, const DWORD flags);
 /////////////////////////////////////////////////////////////////////////////
 void gLBAtoCHS(const DWORD lba, WORD *cyl, BYTE *head, BYTE *sect, const DWORD spt, const DWORD heads);
 
+/////////////////////////////////////////////////////////////////////////////
+BOOL power_of_two(DWORD val);
 
 /////////////////////////////////////////////////////////////////////////////
+
+
 
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.

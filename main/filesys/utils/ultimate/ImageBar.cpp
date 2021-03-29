@@ -562,7 +562,7 @@ int CImageBar::DetectFileSystem(const DWORD64 lba, const DWORD64 size) {
   }
   
   // detect a LeanFS file system
-  fs_type = DetectLean(buffer, dlg->m_sect_size);
+  fs_type = DetectLean(lba, dlg->m_sect_size);
   if (fs_type > -1) {
     free(buffer);
     return fs_type;
@@ -595,11 +595,6 @@ int CImageBar::DetectFileSystem(const DWORD64 lba, const DWORD64 size) {
 }
 
 const BYTE media[11] = { 0x00, 0x01, 0xF0, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF };
-
-// returns TRUE if val is a power of 2
-BOOL power_of_two(DWORD val) {
-  return ((val > 1) && ((val & (val - 1)) == 0));
-}
 
 int CImageBar::DetectFat(struct S_FAT1216_BPB *bpb, const unsigned sect_size) {
   //struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) bpb;
@@ -804,49 +799,29 @@ int CImageBar::DetectExt2(void *buffer, const DWORD64 Size, const unsigned sect_
   return FS_EXT2;
 }
 
-int CImageBar::DetectLean(void *buffer, const unsigned sect_size) {
-  struct S_LEAN_SUPER *super;
-  
-  // the lean specs say that the super can be in sector 1 - 32 (zero based)
-  // count is 32 when finding primary, and 1 when finding backup
-  for (unsigned sector=1; sector<=32; sector++) {
-    super = (struct S_LEAN_SUPER *) ((BYTE *) buffer + (sector * sect_size));
-    
-    // the first entry should be 'LEAN'
-    if (super->magic != LEAN_SUPER_MAGIC)
-      continue;
-    
-    // How about the check sum
-    DWORD crc = 0, *p = (DWORD *) super;
-    for (unsigned i=1; i<(sect_size / sizeof(DWORD)); i++)
-      crc = (crc << 31) + (crc >> 1) + p[i];
-    if (crc != super->checksum)
-      continue;
-    
-    // check the primarySuper field.  It should == sector
-    if (super->primary_super != (DWORD64) sector)
-      continue;
-    
-    // We make a few more checks along the way, here.
-    
-    // the log2 entry should be at least 12 and not more than 31
-    if ((super->log_sectors_per_band < 12) || (super->log_sectors_per_band > 31))
-      continue;
-    
-    // all but bits 1:0 of state should be zero
-    if (super->state & ~0x3)
-      continue;
-    
-    // must be at least version 0.6
-    if (super->fs_version < 0x0006)
-      continue;
-    
-    // else we have a valid LEAN FS super
-    return FS_LEAN;
+int CImageBar::DetectLean(DWORD64 lba, const unsigned sect_size) {
+  CLean Lean;
+  Lean.m_lba = lba;
+
+  // first check for an older version
+  // TODO: After a while, delete this check, along with the code in lean.cpp...
+  if (Lean.DetectLeanFSOld()) {
+    if (AfxMessageBox("Found Previous version of Lean. Update?\nWill assume 512-byte blocks!", MB_YESNO, 0) == IDYES) {
+      CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+      BYTE buffer[MAX_SECT_SIZE];
+      struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) buffer;
+      dlg->ReadFromFile(buffer, lba + Lean.m_super_block_loc, 1);
+      // In theory, only the version and the block size needs to be updated.
+      // everything else should be the same, as long as the old version used 512-byte sector sizes.
+      super->fs_version = 0x0007;
+      super->log_block_size = 9;
+      super->checksum = Lean.LeanCalcCRC(buffer, 512);
+      dlg->WriteToFile(buffer, lba + Lean.m_super_block_loc, 1);
+    } else
+      return -1;
   }
   
-  // if we checked lba 1 - 32 and didn't find anything, no lean fs found
-  return -1;
+  return (Lean.DetectLeanFS()) ? FS_LEAN : -1;
 }
 
 int CImageBar::DetectNTFS(void *buffer) {

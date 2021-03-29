@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -92,7 +92,7 @@ public:
   CString	m_magic;
   CString	m_mod_time;
   CString	m_sch_time;
-  CString	m_sect_count;
+  CString	m_block_count;
   CString	m_uid;
   CString	m_entry_crc;
   CString	m_name;

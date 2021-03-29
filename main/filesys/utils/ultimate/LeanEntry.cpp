@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -97,7 +97,7 @@ CLeanEntry::CLeanEntry(CWnd* pParent /*=NULL*/)
   m_magic = _T("");
   m_mod_time = _T("");
   m_sch_time = _T("");
-  m_sect_count = _T("");
+  m_block_count = _T("");
   m_uid = _T("");
   m_entry_crc = _T("");
   m_name = _T("");
@@ -123,7 +123,7 @@ void CLeanEntry::DoDataExchange(CDataExchange* pDX) {
   DDX_Text(pDX, IDC_ENTRY_MAGIC, m_magic);
   DDX_Text(pDX, IDC_ENTRY_MOD_TIME, m_mod_time);
   DDX_Text(pDX, IDC_ENTRY_SCH_TIME, m_sch_time);
-  DDX_Text(pDX, IDC_ENTRY_SECT_COUNT, m_sect_count);
+  DDX_Text(pDX, IDC_ENTRY_SECT_COUNT, m_block_count);
   DDX_Text(pDX, IDC_ENTRY_UID, m_uid);
   DDX_Text(pDX, IDC_ENTRY_CRC, m_entry_crc);
   DDX_Text(pDX, IDC_ENTRY_NAME, m_name);
@@ -149,7 +149,7 @@ END_MESSAGE_MAP()
 BOOL CLeanEntry::OnInitDialog() {
   CDialog::OnInitDialog();
 
-  struct S_LEAN_SECTORS extents;
+  struct S_LEAN_BLOCKS extents;
   CString cs;
   unsigned int i;
   
@@ -162,7 +162,7 @@ BOOL CLeanEntry::OnInitDialog() {
   m_gid.Format("0x%08X", m_inode.gid);
   m_attribs.Format("0x%08X", m_inode.attributes);
   m_filesize.Format("%I64i", m_inode.file_size);
-  m_sect_count.Format("%I64i", m_inode.sector_count);
+  m_block_count.Format("%I64i", m_inode.block_count);
   m_acc_time.Format("%I64i", m_inode.acc_time);
   m_sch_time.Format("%I64i", m_inode.sch_time);
   m_mod_time.Format("%I64i", m_inode.mod_time);
@@ -273,7 +273,7 @@ void CLeanEntry::OnCrcUpdate() {
   m_inode.gid = convert32(m_gid);
   m_inode.attributes = convert32(m_attribs);
   m_inode.file_size = convert64(m_filesize);
-  m_inode.sector_count = convert64(m_sect_count);
+  m_inode.block_count = convert64(m_block_count);
   m_inode.acc_time = convert64(m_acc_time);
   m_inode.sch_time = convert64(m_sch_time);
   m_inode.mod_time = convert64(m_mod_time);
@@ -329,8 +329,7 @@ void CLeanEntry::OnSchTimeNow() {
 
 // load and display the Inode's EAs
 void CLeanEntry::OnEas() {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE *buffer = (BYTE *) calloc(dlg->m_sect_size - LEAN_INODE_SIZE, 1);
+  BYTE *buffer = (BYTE *) calloc(m_parent->m_block_size, 1);
   DWORD64 Size = 0, More;
   BYTE *p;
   int pos, len, buff_len, i;
@@ -338,9 +337,9 @@ void CLeanEntry::OnEas() {
   // does the inode contain the EA's
   if (m_inode.attributes & LEAN_ATTR_EAS_IN_INODE) {
     // Read in the whole Inode Sector
-    void *inode_buf = malloc(MAX_SECT_SIZE);
-    dlg->ReadFromFile(inode_buf, m_parent->m_lba + m_inode.extent_start[0], 1);
-    Size = (dlg->m_sect_size - sizeof(struct S_LEAN_INODE));
+    void *inode_buf = malloc(m_parent->m_block_size);
+    m_parent->LeanReadBlocks(inode_buf, m_inode.extent_start[0], 1);
+    Size = (m_parent->m_block_size - sizeof(struct S_LEAN_INODE));
     memcpy(buffer, (BYTE *) inode_buf + sizeof(struct S_LEAN_INODE), (size_t) Size);
     free(inode_buf);
   }
@@ -398,7 +397,7 @@ void CLeanEntry::OnEas() {
   i = 0;
   if (LeanEAs.m_count > 0) {
     if (m_inode.attributes & LEAN_ATTR_EAS_IN_INODE) {
-      buff_len = dlg->m_sect_size - LEAN_INODE_SIZE;
+      buff_len = m_parent->m_block_size - LEAN_INODE_SIZE;
       if (LeanEAs.m_force_fork) {
         m_inode.attributes &= ~LEAN_ATTR_EAS_IN_INODE;
         m_attribs.Format("0x%08X", m_inode.attributes); // update the dialog member
@@ -420,17 +419,17 @@ void CLeanEntry::OnEas() {
       }
       if (buff_len > 0)
         * (DWORD *) p = buff_len - sizeof(DWORD);
-      void *inode_buf = malloc(MAX_SECT_SIZE);
-      dlg->ReadFromFile(inode_buf, m_parent->m_lba + m_inode.extent_start[0], 1);
-      memcpy((BYTE *) inode_buf + sizeof(struct S_LEAN_INODE), buffer, dlg->m_sect_size - LEAN_INODE_SIZE);
-      dlg->WriteToFile(inode_buf, m_parent->m_lba + m_inode.extent_start[0], 1);
+      void *inode_buf = malloc(m_parent->m_block_size);
+      m_parent->LeanReadBlocks(inode_buf, m_inode.extent_start[0], 1);
+      memcpy((BYTE *) inode_buf + sizeof(struct S_LEAN_INODE), buffer, m_parent->m_block_size - LEAN_INODE_SIZE);
+      m_parent->LeanWriteBlocks(inode_buf, m_inode.extent_start[0], 1);
       free(inode_buf);
       free(buffer);
     }
     
     if (i < LeanEAs.m_count) {
       pos = 0;
-      buff_len = MAX_SECT_SIZE;
+      buff_len = m_parent->m_block_size;
       buffer = (BYTE *) calloc(buff_len, 1);
       for (; i<LeanEAs.m_count; i++) {
         len = sizeof(DWORD) + (((ea_struct[i].NameLen + ea_struct[i].AttribLen) + 3) & ~3);
@@ -442,8 +441,8 @@ void CLeanEntry::OnEas() {
         pos += len;
       }
       
-      struct S_LEAN_SECTORS extents;
-      // allocate the extents for the fork, returning a "struct S_LEAN_SECTORS"
+      struct S_LEAN_BLOCKS extents;
+      // allocate the extents for the fork, returning a "struct S_LEAN_BLOCKS"
       m_parent->AllocateExtentBuffer(&extents, LEAN_DEFAULT_COUNT);
       if (m_inode.fork == 0) {
         if (m_parent->AppendToExtents(&extents, pos, 0, TRUE) == -1)
@@ -452,8 +451,8 @@ void CLeanEntry::OnEas() {
         m_inode.fork = extents.extent_start[0];
         m_fork.Format("%I64i", m_inode.fork); // update the Dialog member
       } else {
-        void *inode_buf = malloc(MAX_SECT_SIZE);
-        dlg->ReadFromFile(inode_buf, m_parent->m_lba + m_inode.fork, 1);
+        void *inode_buf = malloc(m_parent->m_block_size);
+        m_parent->LeanReadBlocks(inode_buf, m_inode.fork, 1);
         m_parent->ReadFileExtents(&extents, m_inode.fork);
         free(inode_buf);
       }
@@ -479,8 +478,7 @@ void CLeanEntry::OnEas() {
 
 // "Apply" button was pressed
 void CLeanEntry::OnOK() {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE buffer[MAX_SECT_SIZE];
+  BYTE *buffer = (BYTE *) malloc(m_parent->m_block_size);
   DWORD crc;
   
   UpdateData(TRUE);
@@ -494,7 +492,7 @@ void CLeanEntry::OnOK() {
   m_inode.gid = convert32(m_gid);
   m_inode.attributes = convert32(m_attribs);
   m_inode.file_size = convert64(m_filesize);
-  m_inode.sector_count = convert64(m_sect_count);
+  m_inode.block_count = convert64(m_block_count);
   m_inode.acc_time = convert64(m_acc_time);
   m_inode.sch_time = convert64(m_sch_time);
   m_inode.mod_time = convert64(m_mod_time);
@@ -520,7 +518,7 @@ void CLeanEntry::OnOK() {
       if (hParent != NULL) {
         items = (struct S_LEAN_ITEMS *) m_parent->m_dir_tree.GetDataStruct(hParent);
         if (items != NULL) {
-          struct S_LEAN_SECTORS extents;
+          struct S_LEAN_BLOCKS extents;
           m_parent->ReadFileExtents(&extents, items->Inode);
           root = (struct S_LEAN_DIRENTRY *) m_parent->ReadFile(items->Inode, &RootSize);
           if (root) {
@@ -544,9 +542,10 @@ void CLeanEntry::OnOK() {
   }
   
   // write the new inode data to the disk
-  dlg->ReadFromFile(buffer, m_parent->m_lba + m_inode_num, 1);
+  m_parent->LeanReadBlocks(buffer, m_inode_num, 1);
   memcpy(buffer, &m_inode, sizeof(struct S_LEAN_INODE));
-  dlg->WriteToFile(buffer, m_parent->m_lba + m_inode_num, 1);
-  
+  m_parent->LeanWriteBlocks(buffer, m_inode_num, 1);
+  free(buffer);
+
   CDialog::OnOK();
 }

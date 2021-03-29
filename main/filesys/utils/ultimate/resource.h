@@ -205,16 +205,16 @@
 #define IDC_ENTRY_COUNT                 1091
 #define IDC_LEAN_PRE_ALLOC              1092
 #define IDC_NEW_INODE                   1092
-#define IDC_LEAN_SECT_BAND              1093
+#define IDC_LEAN_BLOCKS_BAND            1093
 #define IDC_ENTRY_DISPLAY               1093
 #define IDC_LEAN_CUR_STATE              1094
 #define IDC_ORG_INODE                   1094
 #define ID_LEAN_INSERT                  1095
-#define IDC_LEAN_SECT_SIZE              1095
+#define IDC_LEAN_BLOCK_SIZE             1095
 #define IDC_LEAN_GUID                   1096
 #define IDC_LEAN_LABEL                  1097
-#define IDC_LEAN_SECT_COUNT             1098
-#define IDC_LEAN_FREE_SECTORS           1099
+#define IDC_LEAN_BLOCK_COUNT            1098
+#define IDC_LEAN_FREE_BLOCKS            1099
 #define IDC_LEAN_PRIMARY_LBA            1100
 #define IDC_LEAN_BACKUP_LBA             1101
 #define IDC_LEAN_BITMAP_LBA             1102
@@ -222,11 +222,11 @@
 #define IDC_LEAN_BAD_LBA                1104
 #define IDC_LEAN_VERSION_DISP           1105
 #define IDC_LEAN_PRE_ALLOC_DISP         1106
-#define IDC_LEAN_SECT_BAND_DISP         1107
+#define IDC_LEAN_BLOCKS_BAND_DISP       1107
 #define ID_LEAN_COPY                    1108
 #define IDC_JOURNAL_LBA                 1108
 #define IDC_ENTRY_NAME                  1109
-#define IDC_LEAN_SECT_SIZE_DISP         1109
+#define IDC_LEAN_BLOCK_SIZE_DISP        1109
 #define IDC_ENTRY_EXT                   1110
 #define ID_LEAN_DELETE                  1110
 #define IDC_LAST_MOUNT                  1110
@@ -817,6 +817,7 @@
 #define IDC_ROOT_SECTORS                1522
 #define IDC_EAS_IN_INODE                1523
 #define ID_CLEAR                        1524
+#define IDC_PRE_ALLOC_COUNT2            1524
 #define IDC_ISO9660_NO_EMU              1525
 #define IDC_ISO9660_144                 1526
 #define IDC_ISO9660_120                 1527
@@ -934,7 +935,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        199
+#define _APS_NEXT_RESOURCE_VALUE        200
 #define _APS_NEXT_COMMAND_VALUE         32785
 #define _APS_NEXT_CONTROL_VALUE         1592
 #define _APS_NEXT_SYMED_VALUE           101

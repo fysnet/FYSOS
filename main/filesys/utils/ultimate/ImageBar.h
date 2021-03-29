@@ -93,7 +93,7 @@ public:
   unsigned DetectFatSize(struct S_FAT1216_BPB *bpb);
   int  DetectExt2(void *buffer, const DWORD64 Size, const unsigned sect_size);
   int  DetectExFat(void *buffer);
-  int  DetectLean(void *buffer, const unsigned sect_size);
+  int  DetectLean(DWORD64 lba, const unsigned sect_size);
   int  DetectNTFS(void *buffer);
   int  DetectSFS(void *buffer, const unsigned sect_size);
   int  DetectFYSFS(void *buffer, const unsigned sect_size);

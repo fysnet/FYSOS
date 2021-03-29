@@ -603,3 +603,9 @@ void gLBAtoCHS(const DWORD lba, WORD *cyl, BYTE *head, BYTE *sect, const DWORD s
 }
 
 /////////////////////////////////////////////////////////////////////////////
+// returns TRUE if val is a power of 2
+BOOL power_of_two(DWORD val) {
+  return ((val > 1) && ((val & (val - 1)) == 0));
+}
+
+/////////////////////////////////////////////////////////////////////////////

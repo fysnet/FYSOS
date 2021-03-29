@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -84,11 +84,10 @@ static char THIS_FILE[] = __FILE__;
 
 //// TODO:
 ////   - Apply
-////   - Starting sector in AppendToExtents
+////   - Starting block in AppendToExtents
 ////   - 
 ////   - 
 ////   - 
-
 
 /////////////////////////////////////////////////////////////////////////////
 // CLean property page
@@ -102,18 +101,18 @@ CLean::CLean() : CPropertyPage(CLean::IDD) {
   m_bitmap_lba = _T("");
   m_crc = _T("");
   m_cur_state = _T("");
-  m_free_sectors = _T("");
+  m_free_blocks = _T("");
   m_guid = _T("");
   m_label = _T("");
   m_magic = _T("");
   m_pre_alloc = _T("");
   m_primary_lba = _T("");
   m_root_lba = _T("");
-  m_sect_band = _T("");
-  m_sect_count = _T("");
+  m_blocks_band = _T("");
+  m_block_count = _T("");
   m_version = _T("");
   m_journal_lba = _T("");
-  m_sect_size = _T("");
+  m_log_block_size = _T("");
   m_show_del = FALSE;
   m_del_clear = FALSE;
   m_ESs_in_Inode = FALSE;
@@ -138,8 +137,8 @@ void CLean::DoDataExchange(CDataExchange* pDX) {
   DDV_MaxChars(pDX, m_crc, 16);
   DDX_Text(pDX, IDC_LEAN_CUR_STATE, m_cur_state);
   DDV_MaxChars(pDX, m_cur_state, 16);
-  DDX_Text(pDX, IDC_LEAN_FREE_SECTORS, m_free_sectors);
-  DDV_MaxChars(pDX, m_free_sectors, 32);
+  DDX_Text(pDX, IDC_LEAN_FREE_BLOCKS, m_free_blocks);
+  DDV_MaxChars(pDX, m_free_blocks, 32);
   DDX_Text(pDX, IDC_LEAN_GUID, m_guid);
   DDV_MaxChars(pDX, m_guid, 64);
   DDX_Text(pDX, IDC_LEAN_LABEL, m_label);
@@ -152,12 +151,12 @@ void CLean::DoDataExchange(CDataExchange* pDX) {
   DDV_MaxChars(pDX, m_primary_lba, 32);
   DDX_Text(pDX, IDC_LEAN_ROOT_LBA, m_root_lba);
   DDV_MaxChars(pDX, m_root_lba, 32);
-  DDX_Text(pDX, IDC_LEAN_SECT_BAND, m_sect_band);
-  DDV_MaxChars(pDX, m_sect_band, 8);
-  DDX_Text(pDX, IDC_LEAN_SECT_SIZE, m_sect_size);
-  DDV_MaxChars(pDX, m_sect_size, 32);
-  DDX_Text(pDX, IDC_LEAN_SECT_COUNT, m_sect_count);
-  DDV_MaxChars(pDX, m_sect_count, 32);
+  DDX_Text(pDX, IDC_LEAN_BLOCKS_BAND, m_blocks_band);
+  DDV_MaxChars(pDX, m_blocks_band, 8);
+  DDX_Text(pDX, IDC_LEAN_BLOCK_SIZE, m_log_block_size);
+  DDV_MaxChars(pDX, m_log_block_size, 32);
+  DDX_Text(pDX, IDC_LEAN_BLOCK_COUNT, m_block_count);
+  DDV_MaxChars(pDX, m_block_count, 32);
   DDX_Text(pDX, IDC_LEAN_VERSION, m_version);
   DDV_MaxChars(pDX, m_version, 16);
   DDX_Text(pDX, IDC_JOURNAL_LBA, m_journal_lba);
@@ -174,11 +173,11 @@ BEGIN_MESSAGE_MAP(CLean, CPropertyPage)
   ON_BN_CLICKED(ID_CLEAN, OnLeanClean)
   ON_BN_CLICKED(ID_FORMAT, OnLeanFormat)
   ON_BN_CLICKED(ID_CHECK, OnLeanCheck)
-  ON_EN_CHANGE(IDC_JOURNAL_LBA, OnChangeLeanVersion)
+  ON_EN_CHANGE(IDC_JOURNAL_LBA, OnChangeLeanJournal)
   ON_EN_CHANGE(IDC_LEAN_VERSION, OnChangeLeanVersion)
   ON_EN_CHANGE(IDC_LEAN_PRE_ALLOC, OnChangeLeanPreAlloc)
-  ON_EN_CHANGE(IDC_LEAN_SECT_BAND, OnChangeLeanSectBand)
-  ON_EN_CHANGE(IDC_LEAN_SECT_SIZE, OnChangeLeanSectSize)
+  ON_EN_CHANGE(IDC_LEAN_BLOCKS_BAND, OnChangeLeanBlockBand)
+  ON_EN_CHANGE(IDC_LEAN_BLOCK_SIZE, OnChangeLeanBlockSize)
   ON_BN_CLICKED(ID_COPY, OnLeanCopy)
   ON_BN_CLICKED(ID_INSERT, OnLeanInsert)
   ON_NOTIFY(TVN_SELCHANGED, IDC_DIR_TREE, OnSelchangedDirTree)
@@ -249,18 +248,65 @@ void CLean::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
   *pResult = 0;
 }
 
-void CLean::OnLeanApply() {
+void CLean::LeanWriteBlocks(void *buffer, DWORD64 block, long count) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE buffer[MAX_SECT_SIZE];
+  
+  // we need to calculate the correct sector offset and count
+  // possibly reading in a sector since block size is less than sector size
+  if (m_block_size < dlg->m_sect_size) {
+    // This isn't very efficient, but how many times will the block size
+    //  be less than the sector size?
+    BYTE buff[MAX_SECT_SIZE];
+    BYTE *p = (BYTE *) buffer;
+    while (count--) {
+      DWORD64 sector = (block * m_block_size) / dlg->m_sect_size;
+      DWORD64 offset = (block * m_block_size) % dlg->m_sect_size;
+      dlg->ReadFromFile(buff, m_lba + sector, 1);
+      memcpy(buff + offset, p, m_block_size);
+      dlg->WriteToFile(buff, m_lba + sector, 1);
+      p += m_block_size;
+      block++;
+    }
+  } else if (m_block_size == dlg->m_sect_size)
+    dlg->WriteToFile(buffer, m_lba + block, count);
+  else  //if (m_block_size > dlg->m_sect_size)
+    dlg->WriteToFile(buffer, m_lba + (block * (m_block_size / dlg->m_sect_size)), (count * (m_block_size / dlg->m_sect_size)));
+}
+
+void CLean::LeanReadBlocks(void *buffer, DWORD64 block, long count) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  
+  // we need to calculate the correct sector offset and count
+  if (m_block_size < dlg->m_sect_size) {
+    // This isn't very efficient, but how many times will the block size
+    //  be less than the sector size?
+    BYTE buff[MAX_SECT_SIZE];
+    BYTE *p = (BYTE *) buffer;
+    while (count--) {
+      DWORD64 sector = (block * m_block_size) / dlg->m_sect_size;
+      DWORD64 offset = (block * m_block_size) % dlg->m_sect_size;
+      dlg->ReadFromFile(buff, m_lba + sector, 1);
+      memcpy(p, buff + offset, m_block_size);
+      p += m_block_size;
+      block++;
+    }
+  } else if (m_block_size == dlg->m_sect_size)
+    dlg->ReadFromFile(buffer, m_lba + block, count);
+  else  //if (m_block_size > dlg->m_sect_size)
+    dlg->ReadFromFile(buffer, m_lba + (block * (m_block_size / dlg->m_sect_size)), (count * (m_block_size / dlg->m_sect_size)));
+}
+
+void CLean::OnLeanApply() {
+  BYTE *buffer = (BYTE *) malloc(m_block_size);
   DWORD crc;
   int ret;
   
   ReceiveFromDialog(&m_super); // bring from Dialog
   
-  memset(buffer, 0, MAX_SECT_SIZE);
+  memset(buffer, 0, m_block_size);
   memcpy(buffer, &m_super, sizeof(struct S_LEAN_SUPER));
 
-  crc = LeanCalcCRC(buffer, dlg->m_sect_size);
+  crc = LeanCalcCRC(buffer, m_block_size);
   if (m_super.checksum != crc) {
     ret = AfxMessageBox("CRC is not correct!  Update before Write?", MB_YESNOCANCEL, NULL);
     if (ret == IDCANCEL)
@@ -276,7 +322,7 @@ void CLean::OnLeanApply() {
   memcpy(buffer, &m_super, sizeof(struct S_LEAN_SUPER));
 
   // write the buffer to the file
-  dlg->WriteToFile(buffer, m_lba + m_super_lba, 1);
+  LeanWriteBlocks(buffer, m_super_block_loc, 1);
 }
 
 void CLean::OnLeanClean() {
@@ -289,28 +335,27 @@ void CLean::OnLeanClean() {
   Start(m_lba, m_size, m_color, m_index, FALSE);
 }
 
-/* Calculate how many sectors each band will use
+/* Calculate how many blocks each band will use
  *   returns the log value.  i.e.: returns (x) of  2^x 
- * TODO: can't we just use LOG() ????
  */
-BYTE CLean::lean_calc_log_band_size(const DWORD sect_size, const DWORD64 tot_sectors) {
+BYTE CLean::lean_calc_log_band_size(const DWORD block_size, const DWORD64 tot_blocks) {
   BYTE ret = 12;
   int i;
 
   for (i=63; i>16; i--) {
-    if (tot_sectors & ((DWORD64) 1 << i)) {
+    if (tot_blocks & ((DWORD64) 1 << i)) {
       ret = (BYTE) (i - 4);
       break;
     }
   }
 
-  // A band must be large enough to occupy all bits in a bitmap sector.
-  //  therefore, 512-byte sectors must return at least a log2 of 12.
-  //             1024-byte sectors must return at least a log2 of 13.
-  //             2048-byte sectors must return at least a log2 of 14.
-  //             4096-byte sectors must return at least a log2 of 15, etc
-  if (ret < (LOG2(sect_size) + 3))
-    return (LOG2(sect_size) + 3);
+  // A band must be large enough to occupy all bits in a bitmap block.
+  //  therefore, 512-byte blocks must return at least a log2 of 12.
+  //             1024-byte blocks must return at least a log2 of 13.
+  //             2048-byte blocks must return at least a log2 of 14.
+  //             4096-byte blocks must return at least a log2 of 15, etc
+  if (ret < (LOG2(block_size) + 3))
+    return (LOG2(block_size) + 3);
   
   return ret;
 }
@@ -330,7 +375,7 @@ bool CLean::Format(const BOOL AskForBoot) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   CFile bsfile;
   CString cs;
-  unsigned u, k;
+  unsigned u;
   size_t reserved;
   DWORD64 lba;
   
@@ -340,11 +385,34 @@ bool CLean::Format(const BOOL AskForBoot) {
     return FALSE;
   }
   
-  // Up to the first 33 sectors are reserved for the boot code and the super block.
-  // The super block can be located in sectors 1 to 32 (zero based)
-  // We place the superblock just after the boot code, in this case LBA 31
-  BYTE *buffer = (BYTE *) calloc(dlg->m_sect_size * (32 + 1), 1);
+  // restore our SuperBlock info and get the specs to format the volume with
+  CLeanFormat format;
+  format.m_journal = FALSE;
+  format.m_eas_after_inode = FALSE;
+  format.m_pre_alloc_count = (8-1);
+  format.m_block_size = dlg->m_sect_size;
+  if (!m_hard_format) {
+    format.m_journal = TRUE;
+    format.m_pre_alloc_count = m_super.pre_alloc_count;
+  }
+  if (format.DoModal() != IDOK)
+    return FALSE;
   
+  m_block_size = format.m_block_size;
+  m_tot_blocks = (m_size * dlg->m_sect_size) / m_block_size;
+  
+  // Up to the first 33 blocks are reserved for the boot code and the super block.
+  // The super block can be located in blocks 1 to 32 (zero based)
+  // We place the superblock just after the boot code, in this case block 31
+  // (we leave a max of 16k for boot code)
+  if (m_block_size < 16384) {
+    m_super_block_loc = (16384 / m_block_size);
+    if (m_super_block_loc > 32)
+      m_super_block_loc = 32;
+  } else
+    m_super_block_loc = 1;
+  BYTE *buffer = (BYTE *) calloc(m_block_size * (m_super_block_loc + 1), 1);
+
   if (!m_hard_format)
     ReceiveFromDialog(&m_super); // bring from Dialog
   
@@ -370,93 +438,71 @@ bool CLean::Format(const BOOL AskForBoot) {
       POSITION pos = odlg.GetStartPosition();
       if (bsfile.Open(odlg.GetNextPathName(pos), CFile::modeRead | CFile::typeBinary | CFile::shareDenyWrite, NULL) != 0) {
         size_t filesize = (size_t) bsfile.GetLength();
-        if (filesize <= (31 * dlg->m_sect_size)) {
+        if (filesize <= 16384) {
           reserved = (filesize + (dlg->m_sect_size - 1)) / dlg->m_sect_size;
           bsfile.Read(buffer, (UINT) filesize);
           dlg->WriteToFile(buffer, m_lba, (UINT) reserved);
-        } else {
-          cs.Format("Boot sector must be <= %i bytes", (31 * dlg->m_sect_size));
-          AfxMessageBox(cs);
-        }
+        } else
+          AfxMessageBox("Boot sector must be <= 16384 bytes");
         bsfile.Close();
       }
     }
   } // TODO: else write a generic boot....
   
-  // restore our SuperBlock info and get the specs to format the volume with
-  CLeanFormat format;
-  format.m_journal = FALSE;
-  format.m_eas_after_inode = FALSE;
-  format.m_pre_alloc_count = (8-1);
-  format.m_root_sectors = 32;
-  if (!m_hard_format) {
-    format.m_journal = (m_super.fs_version == 0x0007);
-    format.m_pre_alloc_count = m_super.pre_alloc_count;
-  }
-  if (format.DoModal() != IDOK) {
-    free(buffer);
-    return FALSE;
-  }
-  
   // Calculate the bitmap size for a single band, which will also calculate the band size.
-  // A band can be 2^12 to 2^31 sectors.
-  // A band must be large enough to occupy all bits in a bitmap sector.
-  //  therefore, 512-byte sectors must return at least a log2 of 12.
-  //             1024-byte sectors must return at least a log2 of 13.
-  //             2048-byte sectors must return at least a log2 of 14.
-  //             4096-byte sectors must return at least a log2 of 15, etc
-  const BYTE log_band_size = lean_calc_log_band_size(dlg->m_sect_size, m_size);
+  // A band can be 2^12 to 2^31 blocks.
+  // A band must be large enough to occupy all bits in a bitmap block.
+  //  therefore, 512-byte blocks must return at least a log2 of 12.
+  //             1024-byte blocks must return at least a log2 of 13.
+  //             2048-byte blocks must return at least a log2 of 14.
+  //             4096-byte blocks must return at least a log2 of 15, etc
+  const BYTE log_band_size = lean_calc_log_band_size(m_block_size, m_tot_blocks);
   const DWORD band_size = (1 << log_band_size);
-  unsigned bitmap_size = (band_size / dlg->m_sect_size / 8);
-  const unsigned tot_bands = (unsigned) (m_size + (band_size - 1)) / band_size;
+  unsigned bitmap_size = (band_size / m_block_size / 8);
+  const unsigned tot_bands = (unsigned) (m_tot_blocks + (band_size - 1)) / band_size;
   
-  // now create a super block and place it at sector 31
-  struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) (buffer + (31 * dlg->m_sect_size));
-  memset(super->reserved, 0, dlg->m_sect_size);
+  // now create a super block
+  struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) (buffer + (m_super_block_loc * m_block_size));
+  memset(super, 0, m_block_size);
   super->magic = LEAN_SUPER_MAGIC;
-  if (format.m_journal || (dlg->m_sect_size > 512))
-    super->fs_version = 0x0007;  // 0.7
-  else
-    super->fs_version = 0x0006;  // 0.6
-  super->log_sectors_per_band = log_band_size;
+  super->fs_version = 0x0007;  // 0.7
+  super->log_blocks_per_band = log_band_size;
   super->pre_alloc_count = format.m_pre_alloc_count;
   super->state = (0<<1) | (1<<0);  // clean unmount
   GUID_Create(&super->guid, GUID_TYPE_RANDOM);
   strcpy((char *) super->volume_label, "A label goes here.");
-  super->sector_count = m_size;     // 32 = boot, 1 for super, bitmap(s), root size, 1 backup super
-  super->free_sector_count = (m_size - 32 - 1 - (tot_bands * bitmap_size) - LEAN_ROOT_SIZE - 1);
-  super->primary_super = 31;
-  super->backup_super = ((band_size - 1) < m_size) ? (band_size - 1) : (m_size - 1);   // last sector in first band
-  super->bitmap_start = 31 + 1;
+  super->block_count = m_tot_blocks;
+  super->free_block_count = (m_tot_blocks - m_super_block_loc - 1 - (tot_bands * bitmap_size) - (super->pre_alloc_count + 1) - 1) - ((format.m_journal) ? 3 : 0);
+  super->primary_super = m_super_block_loc;
+  super->backup_super = ((band_size - 1) < m_tot_blocks) ? (band_size - 1) : (m_tot_blocks - 1);   // last block in first band
+  super->bitmap_start = m_super_block_loc + 1;
   super->root_start = super->bitmap_start + bitmap_size;
-  super->bad_start = 0;  // no bad sectors (yet?)
-  super->journal = (format.m_journal) ? super->backup_super - JOURNAL_SIZE - 1: 0;   // -1 for the inode sector
-  super->log_sector_size = LOG2(dlg->m_sect_size) - 9;
-  super->checksum = LeanCalcCRC(super, dlg->m_sect_size);
+  super->bad_start = 0;  // no bad blocks (yet?)
+  super->journal = (format.m_journal) ? super->backup_super - JOURNAL_SIZE - 1: 0;   // -1 for the inode block
+  super->log_block_size = LOG2(m_block_size);
+  super->checksum = LeanCalcCRC(super, m_block_size);
   
   // create a buffer for the bitmap(s), and mark the first few bits as used.
-  BYTE *bitmap = (BYTE *) calloc(bitmap_size * dlg->m_sect_size, 1);
-  for (u=0; u<(((super->root_start + LEAN_ROOT_SIZE) - 1) / 8); u++)
+  BYTE *bitmap = (BYTE *) calloc(bitmap_size * m_block_size, 1);
+  for (u=0; u<(((super->root_start + (super->pre_alloc_count + 1)) - 1) / 8); u++)
     bitmap[u] = 0xFF;
-  bitmap[u] = (0xFF >> (8 - ((super->root_start + LEAN_ROOT_SIZE) % 8)));
-  bitmap[((band_size - 1) / 8)] = (BYTE) ((DWORD) 0xFF << (8 - (1 + 1 + JOURNAL_SIZE)));  // mark one for the backup, 1 for the inode, and JOURNAL_SIZE bits for the Journal
-  
+  bitmap[u] = (0xFF >> (8 - ((super->root_start + (super->pre_alloc_count + 1)) % 8)));
+  bitmap[((band_size - 1) / 8)] = (BYTE) ((DWORD) 0xFF << (8 - (1 + ((format.m_journal) ? (1 + JOURNAL_SIZE) : 0))));  // mark one for the backup, 1 for the inode, and JOURNAL_SIZE bits for the Journal
+
   // create a root directory
-  struct S_LEAN_INODE *root = (struct S_LEAN_INODE *) calloc(LEAN_ROOT_SIZE * dlg->m_sect_size, 1);
+  // (for an empty directory, at most two blocks)
+  struct S_LEAN_INODE *root = (struct S_LEAN_INODE *) calloc(2 * m_block_size, 1);
   root->magic = LEAN_INODE_MAGIC;
   root->extent_count = 1;
   memset(root->reserved, 0, 3);
   root->links_count = 2;  // the "." and ".." entries
   root->uid = 0;
   root->gid = 0;
-  if (format.m_eas_after_inode) {
-    root->attributes = LEAN_ATTR_IXUSR | LEAN_ATTR_IRUSR | LEAN_ATTR_IWUSR | LEAN_ATTR_ARCHIVE | LEAN_ATTR_IFDIR | LEAN_ATTR_PREALLOC | LEAN_ATTR_EAS_IN_INODE;
-    root->file_size = ((LEAN_ROOT_SIZE - 1) * dlg->m_sect_size);
-  } else {
-    root->attributes = LEAN_ATTR_IXUSR | LEAN_ATTR_IRUSR | LEAN_ATTR_IWUSR | LEAN_ATTR_ARCHIVE | LEAN_ATTR_IFDIR | LEAN_ATTR_PREALLOC;
-    root->file_size = ((LEAN_ROOT_SIZE - 1) * dlg->m_sect_size) + (dlg->m_sect_size - LEAN_INODE_SIZE);
-  }
-  root->sector_count = LEAN_ROOT_SIZE;
+  root->attributes = LEAN_ATTR_IXUSR | LEAN_ATTR_IRUSR | LEAN_ATTR_IWUSR | LEAN_ATTR_ARCHIVE | LEAN_ATTR_IFDIR | LEAN_ATTR_PREALLOC;
+  if (format.m_eas_after_inode)
+    root->attributes |= LEAN_ATTR_EAS_IN_INODE;
+  root->file_size = 32;  // two entries
+  root->block_count = (super->pre_alloc_count + 1);
   CTime now = CTime::GetCurrentTime();
   root->acc_time = 
   root->cre_time =
@@ -466,14 +512,15 @@ bool CLean::Format(const BOOL AskForBoot) {
   root->last_indirect = 0;
   root->fork = 0;
   root->extent_start[0] = super->root_start;
-  root->extent_size[0] = LEAN_ROOT_SIZE;
+  root->extent_size[0] = (super->pre_alloc_count + 1);
   root->checksum = LeanCalcCRC(root, LEAN_INODE_SIZE);
   
   // the directory entry's
+  // (for now, just the dot and dotdot entries)
   struct S_LEAN_DIRENTRY *entry;
   if (format.m_eas_after_inode) {
-    *(DWORD *) ((BYTE *) root + LEAN_INODE_SIZE) = (dlg->m_sect_size - LEAN_INODE_SIZE - sizeof(DWORD));  // padding extended attribute
-    entry = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + dlg->m_sect_size);
+    *(DWORD *) ((BYTE *) root + LEAN_INODE_SIZE) = (m_block_size - LEAN_INODE_SIZE - sizeof(DWORD));  // padding extended attribute
+    entry = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + m_block_size);
   } else
     entry = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + LEAN_INODE_SIZE);
   // The "." entry
@@ -489,30 +536,13 @@ bool CLean::Format(const BOOL AskForBoot) {
   entry[1].name_len = 2;
   entry[1].name[0] = '.';
   entry[1].name[1] = '.';
-  // The emtpy entry for this sector
-  entry[2].inode = 0;
-  entry[2].type = LEAN_FT_MT;
-  if (format.m_eas_after_inode) {
-    entry[2].rec_len = (dlg->m_sect_size - 16 - 16) >> 4;
-    u = 2; // next start at 2: 1 for the Inode, 1 for these entries
-  } else {
-    entry[2].rec_len = (dlg->m_sect_size - LEAN_INODE_SIZE - 16 - 16) >> 4;
-    u = 1; // next start at 1: 1 for the Inode
-  }
-  // fill the remaining sectors of the root with MT's
-  for (; u<LEAN_ROOT_SIZE; u++) {
-    entry = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + (u * dlg->m_sect_size));
-    entry->inode = 0;
-    entry->type = LEAN_FT_MT;
-    entry->rec_len = dlg->m_sect_size >> 4;
-  }
   
   // create an empty Journal?
   if (format.m_journal) {
     // Make an INODE, then write inode and journal to the image
-    unsigned Size = dlg->m_sect_size * JOURNAL_SIZE;
+    unsigned Size = m_block_size * JOURNAL_SIZE;
     
-    struct S_LEAN_SECTORS extents;
+    struct S_LEAN_BLOCKS extents;
     AllocateExtentBuffer(&extents, LEAN_INODE_EXTENT_CNT);
     extents.extent_count = 1;
     extents.extent_size[0] = 1 + JOURNAL_SIZE;
@@ -533,15 +563,15 @@ bool CLean::Format(const BOOL AskForBoot) {
   }
   
   // now write the first band to the disk
-  dlg->WriteToFile(buffer, m_lba + 0, 31 + 1); // + 1 to include the super
-  dlg->WriteToFile(bitmap, m_lba + super->bitmap_start, bitmap_size);
-  dlg->WriteToFile(root, m_lba + super->root_start, LEAN_ROOT_SIZE);
-  dlg->WriteToFile(super, m_lba + super->backup_super, 1);
+  LeanWriteBlocks(buffer, 0, (long) (m_super_block_loc + 1)); // + 1 to include the super
+  LeanWriteBlocks(bitmap, super->bitmap_start, bitmap_size);
+  LeanWriteBlocks(root, super->root_start, (super->pre_alloc_count + 1));
+  LeanWriteBlocks(super, super->backup_super, 1);
   
   // now create and write each remaining band (just the bitmap)
   if (tot_bands > 1) {
-    memset(bitmap, 0, bitmap_size * dlg->m_sect_size);
-    // mark the bitmap sector(s) as used
+    memset(bitmap, 0, bitmap_size * m_block_size);
+    // mark the bitmap block(s) as used
     for (u=0; u<(bitmap_size / 8); u++)
       bitmap[u] = 0xFF;
     bitmap[u] = (0xFF >> (8 - (bitmap_size % 8)));
@@ -551,21 +581,23 @@ bool CLean::Format(const BOOL AskForBoot) {
   for (u=1; u<tot_bands; u++) {
     lba += band_size;
     // don't write past end of disk (volume)
-    if (((band_size * u) + bitmap_size) > m_size)
-      bitmap_size = (unsigned) (m_size - (band_size * u));
+    if (((band_size * u) + bitmap_size) > m_tot_blocks)
+      bitmap_size = (unsigned) (m_tot_blocks - (band_size * u));
     // write the bitmap to current band location
-    dlg->WriteToFile(bitmap, m_lba + lba, bitmap_size);
+    LeanWriteBlocks(bitmap, lba, bitmap_size);
   }
 
+  /*
   // set all bits in last bitmap that are past end of volume
   //  we are either at LBA l, or there was only 1 band.
-  k = (unsigned) ((m_size - lba) / 8);
+  int k = (unsigned) ((m_size - lba) / 8);
   bitmap[k] = (0xFF >> ((m_size - lba) % 8));
-  for (k++; k<dlg->m_sect_size; k++)
+  for (k++; k<dlg->m_block_size; k++)
     bitmap[k] = 0xFF;
   if (tot_bands == 1)
     lba = super->bitmap_start;
-  dlg->WriteToFile(bitmap, m_lba + lba, bitmap_size);
+  LeanWriteBlocks(bitmap, lba, bitmap_size);
+  */
   
   // before we leave, set/clear EAs_in_Inode per format.m_eas_after_inode
   m_ESs_in_Inode = format.m_eas_after_inode;
@@ -580,15 +612,14 @@ bool CLean::Format(const BOOL AskForBoot) {
 }
 
 void CLean::OnUpdateCode() {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   struct S_FYSOSSIG s_sig;
   CFile bsfile;
   CString cs;
   
-  BYTE *existing = (BYTE *) calloc(m_super_lba * dlg->m_sect_size, 1);
+  BYTE *existing = (BYTE *) calloc(m_super_block_loc * m_block_size, 1);
   
-  // first, read in what we already have (at least the first sector)
-  dlg->ReadFromFile(existing, m_lba, 1);
+  // first, read in what we already have (at least the first block)
+  LeanReadBlocks(existing, 0, 1);
   
   // save the FYSOS signature block incase we restore it below
   memcpy(&s_sig, existing + S_FYSOSSIG_OFFSET, sizeof(struct S_FYSOSSIG));
@@ -609,10 +640,10 @@ void CLean::OnUpdateCode() {
     POSITION pos = odlg.GetStartPosition();
     if (bsfile.Open(odlg.GetNextPathName(pos), CFile::modeRead | CFile::typeBinary | CFile::shareDenyWrite, NULL) != 0) {
       size_t filesize = (size_t) bsfile.GetLength();
-      if (filesize > (m_super_lba * dlg->m_sect_size)) {
-        cs.Format("Boot sector must be <= %i bytes", (m_super_lba * dlg->m_sect_size));
+      if (filesize > (m_super_block_loc * m_block_size)) {
+        cs.Format("Boot sector must be <= %i bytes", (m_super_block_loc * m_block_size));
         AfxMessageBox(cs);
-        filesize = (m_super_lba * dlg->m_sect_size);
+        filesize = (m_super_block_loc * m_block_size);
       }
       bsfile.Read(existing, (UINT) filesize);
       bsfile.Close();
@@ -623,24 +654,24 @@ void CLean::OnUpdateCode() {
       memcpy(existing + S_FYSOSSIG_OFFSET, &s_sig, sizeof(struct S_FYSOSSIG));
     
     // write it
-    dlg->WriteToFile(existing, m_lba, m_super_lba);
+    LeanWriteBlocks(existing, 0, m_super_block_loc);
   }
   
   free(existing);
 }
 
 void CLean::OnLeanCrcUpdate() {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE buffer[MAX_SECT_SIZE];
+  BYTE *buffer = (BYTE *) calloc(m_block_size, 1);
 
   ReceiveFromDialog(&m_super);
 
-  memset(buffer, 0, MAX_SECT_SIZE);
   memcpy(buffer, &m_super, sizeof(struct S_LEAN_SUPER));
   
-  m_super.checksum = LeanCalcCRC(buffer, dlg->m_sect_size);
+  m_super.checksum = LeanCalcCRC(buffer, m_block_size);
   m_crc.Format("0x%08X", m_super.checksum);
   SetDlgItemText(IDC_LEAN_CRC, m_crc);
+
+  free(buffer);
 }
 
 void CLean::OnLeanMagicUpdate() {
@@ -668,27 +699,25 @@ void CLean::OnLeanCurrentState() {
   }
 }
 
+void CLean::OnChangeLeanJournal() {
+  CString cs;
+  DWORD64 inode;
+  
+  GetDlgItemText(IDC_JOURNAL_LBA, cs);
+  inode = convert64(cs);
+  
+  GetDlgItem(ID_JOURNAL_INODE)->EnableWindow(inode > 0);
+  GetDlgItem(ID_VIEW_JOURNAL)->EnableWindow(inode > 0);
+}
+
 void CLean::OnChangeLeanVersion() {
   CString cs;
   WORD version;
-  DWORD64 JournalInode;
-  BOOL enable;
   
   GetDlgItemText(IDC_LEAN_VERSION, cs);
   version = convert16(cs);
-  
   cs.Format("%i.%i", version >> 8, version & 0xFF);
   SetDlgItemText(IDC_LEAN_VERSION_DISP, cs);
-
-  GetDlgItemText(IDC_JOURNAL_LBA, cs);
-  JournalInode = convert64(cs);
-
-  enable = (version == 0x0007) && (JournalInode > 0);
-  GetDlgItem(ID_VIEW_JOURNAL)->EnableWindow(enable);
-  GetDlgItem(ID_JOURNAL_INODE)->EnableWindow(enable);
-
-  GetDlgItem(IDC_JOURNAL_LBA)->EnableWindow(version == 0x0007);
-  GetDlgItem(IDC_LEAN_SECT_SIZE)->EnableWindow(version == 0x0007);
 }
 
 void CLean::OnChangeLeanPreAlloc() {
@@ -702,26 +731,29 @@ void CLean::OnChangeLeanPreAlloc() {
   SetDlgItemText(IDC_LEAN_PRE_ALLOC_DISP, cs);
 }
 
-void CLean::OnChangeLeanSectBand() {
+void CLean::OnChangeLeanBlockBand() {
   CString cs;
   int byte;
   
-  GetDlgItemText(IDC_LEAN_SECT_BAND, cs);
+  GetDlgItemText(IDC_LEAN_BLOCKS_BAND, cs);
   byte = convert8(cs);
   
   cs.Format("%i", 1 << byte);
-  SetDlgItemText(IDC_LEAN_SECT_BAND_DISP, cs);
+  SetDlgItemText(IDC_LEAN_BLOCKS_BAND_DISP, cs);
 }
 
-void CLean::OnChangeLeanSectSize() {
+void CLean::OnChangeLeanBlockSize() {
   CString cs;
   int byte;
   
-  GetDlgItemText(IDC_LEAN_SECT_SIZE, cs);
+  GetDlgItemText(IDC_LEAN_BLOCK_SIZE, cs);
   byte = convert8(cs);
   
-  cs.Format("%i", 1 << (byte + 9));
-  SetDlgItemText(IDC_LEAN_SECT_SIZE_DISP, cs);
+  if (byte > 0)
+    cs.Format("%i", 1 << byte);
+  else
+    cs = "?";
+  SetDlgItemText(IDC_LEAN_BLOCK_SIZE_DISP, cs);
 }
 
 // Lean colors will have a red shade to them.
@@ -853,20 +885,19 @@ void CLean::ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM 
   }
 }
 
-void *CLean::ReadFile(DWORD64 lba, DWORD64 *Size) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+void *CLean::ReadFile(DWORD64 block, DWORD64 *Size) {
   void *buffer = NULL;
   struct S_LEAN_INODE *inode;
   BYTE *ptr;
-  unsigned i;
   CString cs;
+  DWORD64 count;
   
-  inode = (struct S_LEAN_INODE *) calloc(MAX_SECT_SIZE, 1);
-  dlg->ReadFromFile(inode, m_lba + lba, 1);
+  inode = (struct S_LEAN_INODE *) calloc(m_block_size, 1);
+  LeanReadBlocks(inode, block, 1);
   
   // check to make sure the inode is valid
   if (!ValidInode(inode)) {
-    cs.Format("Read: Found invalid Inode at %I64i", lba);
+    cs.Format("Read: Found invalid Inode at %I64i", block);
     AfxMessageBox(cs);
     free(inode);
     return NULL;
@@ -875,44 +906,63 @@ void *CLean::ReadFile(DWORD64 lba, DWORD64 *Size) {
   if (Size) *Size = inode->file_size;
   
   // safety catch
-  if (inode->sector_count == 0)
+  if (inode->block_count == 0)
     return NULL;
   
-  buffer = (struct S_LEAN_DIRENTRY *) malloc((DWORD) inode->sector_count * dlg->m_sect_size);
+  // this allocates at least 1 block, even if the file size is zero
+  if (inode->file_size < m_block_size)
+    buffer = (struct S_LEAN_DIRENTRY *) calloc(m_block_size, 1);
+  else
+    buffer = (struct S_LEAN_DIRENTRY *) calloc((size_t) inode->file_size, 1);
   ptr = (BYTE *) buffer;
+
+  // if the file size is zero, just return
+  if (inode->file_size == 0)
+    return ptr;
   
   // does the file start in the inode?
+  count = inode->file_size;
   if (!(inode->attributes & LEAN_ATTR_EAS_IN_INODE)) {
-    memcpy(ptr, (BYTE *) inode + sizeof(struct S_LEAN_INODE), (dlg->m_sect_size - sizeof(struct S_LEAN_INODE)));
-    ptr += (dlg->m_sect_size - sizeof(struct S_LEAN_INODE));
+    if (count > (m_block_size - sizeof(struct S_LEAN_INODE))) {
+      memcpy(ptr, (BYTE *) inode + sizeof(struct S_LEAN_INODE), (m_block_size - sizeof(struct S_LEAN_INODE)));
+      ptr += (m_block_size - sizeof(struct S_LEAN_INODE));
+      count -= (m_block_size - sizeof(struct S_LEAN_INODE));
+    } else {
+      memcpy(ptr, (BYTE *) inode + sizeof(struct S_LEAN_INODE), (size_t) count);
+      return ptr;
+    }
   }
 
   // check that the starting extent value matches our inode value
-  if (lba != inode->extent_start[0]) {
+  if (block != inode->extent_start[0]) {
     free(buffer);
     return NULL;
   }
 
-  struct S_LEAN_SECTORS extents;
+  struct S_LEAN_BLOCKS extents;
   if (ReadFileExtents(&extents, inode->extent_start[0]) < 1) {
     free(buffer);
     return NULL;
   }
 
   if (extents.extent_count > 0) {
-    // The first read needs to skip the inode
-    if (extents.extent_size[0] > 1) {
-      dlg->ReadFromFile(ptr, m_lba + extents.extent_start[0] + 1, extents.extent_size[0] - 1);
-      ptr += ((extents.extent_size[0] - 1) * dlg->m_sect_size);
-    }
-    // do the remaining extents (if any)
-    for (i=1; i<extents.extent_count; i++) {
-      // TODO: make sure we don't read past end of buffer
-      if (extents.extent_size[i] > 0) {
-        dlg->ReadFromFile(ptr, m_lba + extents.extent_start[i], extents.extent_size[i]);
-        ptr += (extents.extent_size[i] * dlg->m_sect_size);
+    BYTE *block = (BYTE *) malloc(m_block_size);
+    unsigned i = 0, j = 1; // The first read needs to skip the inode (j = 1)
+    while (count > 0) {
+      if (j >= extents.extent_size[i])
+        i++, j = 0;
+      LeanReadBlocks(block, extents.extent_start[i] + j, 1);
+      if (count > m_block_size) {
+        memcpy(ptr, block, m_block_size);
+        ptr += m_block_size;
+        count -= m_block_size;
+      } else {
+        memcpy(ptr, block, (size_t) count);
+        count = 0;
       }
+      j++;
     }
+    free(block);
   }
   FreeExtentBuffer(&extents);
   
@@ -920,14 +970,13 @@ void *CLean::ReadFile(DWORD64 lba, DWORD64 *Size) {
   return buffer;
 }
 
-void CLean::WriteFile(void *buffer, const struct S_LEAN_SECTORS *extents, DWORD64 Size) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+void CLean::WriteFile(void *buffer, struct S_LEAN_BLOCKS *extents, DWORD64 Size) {
   struct S_LEAN_INODE *inode;
   BYTE *ptr = (BYTE *) buffer;
-  unsigned i;
+  DWORD64 count;
   
-  inode = (struct S_LEAN_INODE *) calloc(MAX_SECT_SIZE, 1);
-  dlg->ReadFromFile(inode, m_lba + extents->extent_start[0], 1);
+  inode = (struct S_LEAN_INODE *) calloc(m_block_size, 1);
+  LeanReadBlocks(inode, extents->extent_start[0], 1);
   
   // check to make sure the inode is valid
   if (!ValidInode(inode)) {
@@ -937,32 +986,57 @@ void CLean::WriteFile(void *buffer, const struct S_LEAN_SECTORS *extents, DWORD6
     free(inode);
     return;
   }
-  
-  // update the inode (just incase we need to)
-  inode->file_size = Size;
-  WriteFileExtents(extents, inode);
+
+  // actual count of bytes allocated for the file
+  DWORD64 allocated_space = extents->block_count * m_block_size;
   
   // does the file start in the inode?
+  count = Size;
   if (!(inode->attributes & LEAN_ATTR_EAS_IN_INODE)) {
-    memcpy((BYTE *) inode + sizeof(struct S_LEAN_INODE), ptr, (dlg->m_sect_size - sizeof(struct S_LEAN_INODE)));
-    ptr += (dlg->m_sect_size - sizeof(struct S_LEAN_INODE));
-  }
-  
-  if (extents->extent_count > 0) {
-    // The first write needs to skip the inode
-    if (extents->extent_size[0] > 1) {
-      dlg->WriteToFile(ptr, m_lba + extents->extent_start[0] + 1, extents->extent_size[0] - 1);
-      ptr += ((extents->extent_size[0] - 1) * dlg->m_sect_size);
+    if (count > (m_block_size - sizeof(struct S_LEAN_INODE))) {
+      memcpy((BYTE *) inode + sizeof(struct S_LEAN_INODE), ptr, (m_block_size - sizeof(struct S_LEAN_INODE)));
+      ptr += (m_block_size - sizeof(struct S_LEAN_INODE));
+      count -= (m_block_size - sizeof(struct S_LEAN_INODE));
+    } else {
+      if (m_del_clear)
+        memset((BYTE *) inode + sizeof(struct S_LEAN_INODE), 0, (m_block_size - sizeof(struct S_LEAN_INODE)));
+      memcpy((BYTE *) inode + sizeof(struct S_LEAN_INODE), ptr, (size_t) count);
+      count = 0;
     }
-    // do the remaining extents (if any)
-    for (i=1; i<extents->extent_count; i++) {
-      // TODO: make sure we don't write past end of buffer
-      if (extents->extent_size[i] > 0) {
-        dlg->WriteToFile(ptr, m_lba + extents->extent_start[i], extents->extent_size[i]);
-        ptr += (extents->extent_size[i] * dlg->m_sect_size);
-      }
+    allocated_space -= sizeof(struct S_LEAN_INODE);
+  } else
+    allocated_space -= m_block_size;
+
+  // before we write the extents, do we need to append any?
+  if (Size > allocated_space)
+    AppendToExtents(extents, Size - allocated_space, 0, TRUE);
+  // TODO:
+  //if (Size < allocated_space)
+  //  TruncateExtents(extents, allocated_space - Size, 0, TRUE);
+  WriteFileExtents(extents, inode);
+
+  // update the inode (just incase we need to)
+  inode->file_size = Size;
+
+  BYTE *block = (BYTE *) malloc(m_block_size);
+  unsigned i = 0, j = 1; // The first write needs to skip the inode (j = 1)
+  while (count > 0) {
+    if (j >= extents->extent_size[i])
+      i++, j = 0;
+    if (count > m_block_size) {
+      memcpy(block, ptr, m_block_size);
+      ptr += m_block_size;
+      count -= m_block_size;
+    } else {
+      if (m_del_clear)
+        memset(block, 0, m_block_size);
+      memcpy(block, ptr, (size_t) count);
+      count = 0;
     }
+    LeanWriteBlocks(block, extents->extent_start[i] + j, 1);
+    j++;
   }
+  free(block);
   
   // update the inode's Timestamps
   CTime time = CTime::GetCurrentTime();
@@ -971,30 +1045,100 @@ void CLean::WriteFile(void *buffer, const struct S_LEAN_SECTORS *extents, DWORD6
   
   // update the inode's check sum and write it back
   inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
-  dlg->WriteToFile(inode, m_lba + extents->extent_start[0], 1);
+  LeanWriteBlocks(inode, extents->extent_start[0], 1);
   
   free(inode);
 }
 
 void CLean::ZeroExtent(DWORD64 ExtentStart, DWORD ExtentSize) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  void *zero = calloc(dlg->m_sect_size, 1);
+  void *zero = calloc(m_block_size, 1);
 
   for (DWORD i=0; i<ExtentSize; i++)
-    dlg->WriteToFile(zero, m_lba + ExtentStart, 1);
+    LeanWriteBlocks(zero, ExtentStart + i, 1);
 
   free(zero);
 }
 
-// http://freedos-32.sourceforge.net/lean/specification.php
 // A driver must use the magic, checksum and primarySuper fields of the superblock to identify a valid superblock.
+// the super must be between byte offset 512 and byte offset 131072, inclusively.
 BOOL CLean::DetectLeanFS(void) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE *buffer = (BYTE *) malloc(131072 + 512);
+  BOOL fnd = FALSE;
+  
+  // mark the block as "not found"
+  m_super_block_loc = 0xFFFFFFFF;
+  
+  // since we have an unknown block size, the super must be on a 512-byte boundary
+  //  from 512 to 131072, inclusively.  That is 257 512-byte sectors.
+  // We also (temporarily) change the sector size to 512, so we only read 257 512-byte sectors.
+  DWORD64 lba = (m_lba * dlg->m_sect_size) / 512;
+  unsigned org_size = dlg->m_sect_size;
+  dlg->m_sect_size = 512;
+  dlg->ReadFromFile(buffer, lba, 257);
+  dlg->m_sect_size = org_size;
+
+  for (unsigned sector=1; sector<=256; sector++) {
+    struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) (buffer + (sector * 512));
+
+    // the first entry should be 'LEAN'
+    if (super->magic != LEAN_SUPER_MAGIC)
+      continue;
+
+    // block / block size
+    // (we don't support anything over 64k)
+    if ((super->log_block_size < 8) || (super->log_block_size > 16))
+      continue;
+    unsigned block_size = (1 << super->log_block_size);
+    // the superblock must be block aligned
+    if (((sector * 512) % block_size) > 0)
+      continue;
+    unsigned block = ((sector * 512) / block_size);
+
+    // How about the check sum
+    DWORD crc = 0, *p = (DWORD *) super;
+    for (unsigned i=1; i<(block_size / sizeof(DWORD)); i++)
+      crc = (crc << 31) + (crc >> 1) + p[i];
+    if (crc != super->checksum)
+      continue;
+    
+    // check the primarySuper field.  It should == block
+    if (super->primary_super != (DWORD64) block)
+      continue;
+    
+    // We make a few more checks along the way, here.
+    
+    // the log2 entry should be at least 12 and not more than 31
+    // 12 for 512-byte blocks, 13 for 1024-byte blocks, etc...
+    if (super->log_blocks_per_band > 31)
+      continue;
+    if ((super->log_blocks_per_band - 3) < super->log_block_size)
+      continue;
+    
+    // all but bits 1:0 of state should be zero
+    if (super->state & ~0x3)
+      continue;
+    
+    // must be version 0.7 (we don't support backward compatibility)
+    if (super->fs_version != 0x0007)
+      continue;
+    
+    // else we have a valid LEAN FS super
+    m_super_block_loc = block;
+    m_block_size = block_size;
+    m_tot_blocks = (m_size * dlg->m_sect_size) / m_block_size;
+    memcpy(&m_super, super, sizeof(struct S_LEAN_SUPER));
+    fnd = TRUE;
+  }
+
+  free(buffer);
+  return fnd;
+}
+
+BOOL CLean::DetectLeanFSOld(void) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE buffer[MAX_SECT_SIZE];
   struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) buffer;
-  
-  // mark the sector as "not found"
-  m_super_lba = 0xFFFFFFFF;
   
   // the lean specs say that the super can be in sector 1 - 32 (zero based)
   // count is 32 when finding primary, and 1 when finding backup
@@ -1019,7 +1163,7 @@ BOOL CLean::DetectLeanFS(void) {
     // We make a few more checks along the way, here.
     
     // the log2 entry should be at least 12 and not more than 31
-    if ((super->log_sectors_per_band < 12) || (super->log_sectors_per_band > 31))
+    if ((super->log_blocks_per_band < 12) || (super->log_blocks_per_band > 31))
       continue;
     
     // all but bits 1:0 of state should be zero
@@ -1027,11 +1171,11 @@ BOOL CLean::DetectLeanFS(void) {
       continue;
     
     // must be at least version 0.6
-    if (super->fs_version < 0x0006)
+    if (super->fs_version != 0x0006)
       continue;
     
     // else we have a valid LEAN FS super
-    m_super_lba = sector;
+    m_super_block_loc = sector;
     memcpy(&m_super, super, sizeof(struct S_LEAN_SUPER));
     return TRUE;
   }
@@ -1069,14 +1213,13 @@ BOOL CLean::ValidInode(const struct S_LEAN_INODE *inode) {
 }
 
 BOOL CLean::ValidIndirect(const struct S_LEAN_INDIRECT *indirect) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   
   // check to see if indirect->magic = 'INDX';
   if (indirect->magic != LEAN_INDIRECT_MAGIC)
     return FALSE;
   
   // check to see if crc is correct
-  if (indirect->checksum != LeanCalcCRC(indirect, dlg->m_sect_size))
+  if (indirect->checksum != LeanCalcCRC(indirect, m_block_size))
     return FALSE;
   
   // other checks here
@@ -1090,26 +1233,27 @@ void CLean::SendToDialog(struct S_LEAN_SUPER *super) {
   m_magic.Format("0x%08X", super->magic);
   m_version.Format("0x%04X", super->fs_version);
   m_pre_alloc.Format("%i", super->pre_alloc_count);
-  m_sect_band.Format("%i", super->log_sectors_per_band);
+  m_blocks_band.Format("%i", super->log_blocks_per_band);
   m_cur_state.Format("0x%08X", super->state);
   GUID_Format(m_guid, &super->guid);
   m_label.Format("%s", super->volume_label);
-  m_sect_count.Format("%I64i", super->sector_count);
-  m_free_sectors.Format("%I64i", super->free_sector_count);
+  m_block_count.Format("%I64i", super->block_count);
+  m_free_blocks.Format("%I64i", super->free_block_count);
   m_primary_lba.Format("%I64i", super->primary_super);
   m_backup_lba.Format("%I64i", super->backup_super);
   m_bitmap_lba.Format("%I64i", super->bitmap_start);
   m_root_lba.Format("%I64i", super->root_start);
   m_bad_lba.Format("%I64i", super->bad_start);
-  m_sect_size.Format("%i", super->log_sector_size);
+  m_log_block_size.Format("%i", super->log_block_size);
   m_journal_lba.Format("%I64i", super->journal);
   
   UpdateData(FALSE); // send to Dialog
   
+  OnChangeLeanJournal();
   OnChangeLeanVersion();
   OnChangeLeanPreAlloc();
-  OnChangeLeanSectBand();
-  OnChangeLeanSectSize();
+  OnChangeLeanBlockBand();
+  OnChangeLeanBlockSize();
 }
 
 void CLean::ReceiveFromDialog(struct S_LEAN_SUPER *super) {
@@ -1119,18 +1263,18 @@ void CLean::ReceiveFromDialog(struct S_LEAN_SUPER *super) {
   super->magic = convert32(m_magic);
   super->fs_version = convert16(m_version);
   super->pre_alloc_count = convert8(m_pre_alloc);
-  super->log_sectors_per_band = convert8(m_sect_band);
+  super->log_blocks_per_band = convert8(m_blocks_band);
   super->state = convert32(m_cur_state);
   GUID_Retrieve(m_guid, &super->guid);
   strcpy((char *) super->volume_label, m_label);
-  super->sector_count = convert64(m_sect_count);
-  super->free_sector_count = convert64(m_free_sectors);
+  super->block_count = convert64(m_block_count);
+  super->free_block_count = convert64(m_free_blocks);
   super->primary_super = convert64(m_primary_lba);
   super->backup_super = convert64(m_backup_lba);
   super->bitmap_start = convert64(m_bitmap_lba);
   super->root_start = convert64(m_root_lba);
   super->bad_start = convert64(m_bad_lba);
-  super->log_sector_size = convert8(m_sect_size);
+  super->log_block_size = convert8(m_log_block_size);
   super->journal = convert64(m_journal_lba);
 }
 
@@ -1296,8 +1440,7 @@ void CLean::OnLeanInsert() {
 // csName = name of file to insert
 // csPath = path on host of file to insert
 void CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  struct S_LEAN_SECTORS extents;
+  struct S_LEAN_BLOCKS extents;
   void *buffer;
   DWORD64 Size, TotSize;
   CFile file;
@@ -1309,14 +1452,14 @@ void CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
     return;
   }
   Size = file.GetLength();  // TODO: use long version
-  buffer = malloc((size_t) Size + dlg->m_sect_size);  // to prevent buffer overrun in WriteFile()
+  buffer = malloc((size_t) Size + m_block_size);  // to prevent buffer overrun in WriteFile()
   file.Read(buffer, (UINT) Size);
   file.Close();
   
-  // allocate the extents for it, returning a "struct S_LEAN_SECTORS"
+  // allocate the extents for it, returning a "struct S_LEAN_BLOCKS"
   AllocateExtentBuffer(&extents, LEAN_DEFAULT_COUNT);
   // Calculate how many actual bytes we will use
-  TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? dlg->m_sect_size : sizeof(struct S_LEAN_INODE));
+  TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : sizeof(struct S_LEAN_INODE));
   if (AppendToExtents(&extents, TotSize, 0, TRUE) == -1) {
     FreeExtentBuffer(&extents);
     free(buffer);
@@ -1329,22 +1472,6 @@ void CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
     FreeExtentBuffer(&extents);
     free(buffer);
     return;
-  }
-  
-  // did it return "not enough room"?
-  if (r == -2) {
-    // append room to the end of the directory
-    if (AppendToDir(Inode, 4096) != 1) {
-      FreeExtentBuffer(&extents);
-      free(buffer);
-      return;
-    }
-    // now try it again
-    if (AllocateRoot(csName, Inode, extents.extent_start[0], LEAN_FT_REG) != 1) {
-      FreeExtentBuffer(&extents);
-      free(buffer);
-      return;
-    }
   }
   
   // create an Inode at extents.extent_start[0]
@@ -1362,15 +1489,13 @@ void CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
 // csName = name of folder to insert
 // csPath = path on host of folder to insert
 void CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  struct S_LEAN_SECTORS extents;
-  const unsigned size = 8192;  // must be a multiple of sect_size
+  struct S_LEAN_BLOCKS extents;
   char szPath[MAX_PATH];
   DWORD Attrib = IsDlgButtonChecked(IDC_EAS_IN_INODE) ? LEAN_ATTR_EAS_IN_INODE : 0;  // Allow user to specify if EAS_IN_INODE or not on new creation.
   
-  // allocate the extents for the folder, returning a "struct S_LEAN_SECTORS"
+  // allocate the extents for the folder, returning a "struct S_LEAN_BLOCKS"
   AllocateExtentBuffer(&extents, LEAN_INODE_EXTENT_CNT);
-  if (AppendToExtents(&extents, size, 0, TRUE) == -1) {
+  if (AppendToExtents(&extents, (m_super.pre_alloc_count + 1) * m_block_size, 0, TRUE) == -1) {
     FreeExtentBuffer(&extents);
     return;
   }
@@ -1381,39 +1506,25 @@ void CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
     FreeExtentBuffer(&extents);
     return;
   }
-  if (r == -2) {
-    // append room to the end of the directory
-    if (AppendToDir(Inode, 4096) != 1) {
-      FreeExtentBuffer(&extents);
-      return;
-    }
-    if (AllocateRoot(csName, Inode, extents.extent_start[0], LEAN_FT_DIR) != 1) {
-      FreeExtentBuffer(&extents);
-      return;
-    }
-  }
-  
+
   // create an Inode at extents.extent_start[0]
-  BuildInode(&extents, size, LEAN_ATTR_IFDIR | Attrib);
-  
-  // create the directory in the image
-  void *buffer = malloc(size + dlg->m_sect_size);  // to prevent buffer overrun in WriteFile()
-  CreateEmptyDir(buffer, size);
-  WriteFile(buffer, &extents, size);
-  free(buffer);
-  
+  BuildInode(&extents, 0, LEAN_ATTR_IFDIR | Attrib);
+
   // add the . and .. entries
   CString csDots = ".";
   if (AllocateRoot(csDots, extents.extent_start[0], extents.extent_start[0], LEAN_FT_DIR) != 1) {
     FreeExtentBuffer(&extents);
     return;
   }
+  IncrementLinkCount(extents.extent_start[0]);
+
   csDots = "..";
   if (AllocateRoot(csDots, extents.extent_start[0], Inode, LEAN_FT_DIR) != 1) {
     FreeExtentBuffer(&extents);
     return;
   }
-  
+  IncrementLinkCount(Inode);
+
   // save the current directory
   GetCurrentDirectory(MAX_PATH, szPath);
   
@@ -1526,7 +1637,7 @@ void CLean::DeleteFolder(HTREEITEM hItem) {
 void CLean::DeleteFile(HTREEITEM hItem) {
   struct S_LEAN_ITEMS *items = (struct S_LEAN_ITEMS *) m_dir_tree.GetDataStruct(hItem);
   struct S_LEAN_DIRENTRY *root, *cur;
-  struct S_LEAN_SECTORS extents;
+  struct S_LEAN_BLOCKS extents;
   DWORD64 RootSize;
   DWORD Offset;
   
@@ -1555,6 +1666,11 @@ void CLean::DeleteFile(HTREEITEM hItem) {
   if (root) {
     cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + Offset);
     cur->type = LEAN_FT_MT;
+    if (m_del_clear) {
+      cur->inode = 0;
+      cur->name_len = 0;
+      memset(cur->name, 0, (cur->rec_len * 16) - LEAN_DIRENTRY_NAME);
+    }
     if (ReadFileExtents(&extents, items->Inode) > 0) {
       WriteFile(root, &extents, RootSize);
       FreeExtentBuffer(&extents);
@@ -1567,40 +1683,39 @@ void CLean::OnSearch() {
   m_dir_tree.Search();
 }
 
-// S_LEAN_SECTORS is a list of extents.  Does not know about indirects or anything.
+// S_LEAN_BLOCKS is a list of extents.  Does not know about indirects or anything.
 //  is simply a list of extents.  It is up to the other functions to read/write the actual extents to the disk
-void CLean::FreeExtents(const struct S_LEAN_SECTORS *Extents) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+void CLean::FreeExtents(const struct S_LEAN_BLOCKS *Extents) {
   BYTE *bitmap = NULL;
   DWORD last_band = 0xFFFFFFFF, band;
-  DWORD64 lba, bitmap_lba = 0;
+  DWORD64 lba, bitmap_block = 0;
   unsigned int i, extent;
-  unsigned free_count = 0;  // count of sectors free'd
+  unsigned free_count = 0;  // count of blocks free'd
   
-  const DWORD64 band_size = ((DWORD64) 1 << m_super.log_sectors_per_band); // sectors per band
-  const unsigned bitmap_size = (unsigned) (band_size >> 12);     // sectors per bitmap
+  const DWORD64 band_size = ((DWORD64) 1 << m_super.log_blocks_per_band); // blocks per band
+  const unsigned bitmap_size = (unsigned) (band_size >> 12);     // blocks per bitmap
 
   // create the buffer
-  bitmap = (BYTE *) malloc(bitmap_size * dlg->m_sect_size);
+  bitmap = (BYTE *) malloc(bitmap_size * m_block_size);
 
   for (extent=0; extent<Extents->extent_count; extent++) {
     for (i=0; i<Extents->extent_size[extent]; i++) {
       lba = Extents->extent_start[extent] + i;
-      band = (DWORD) (lba >> m_super.log_sectors_per_band);
+      band = (DWORD) (lba >> m_super.log_blocks_per_band);
       // are we in the same band as the last one, or do we need to calculate it, load it
       if (band != last_band) {
         // need to write the last one before we read a new one?
         if (last_band != 0xFFFFFFFF)
-          dlg->WriteToFile(bitmap, m_lba + bitmap_lba, bitmap_size);
+          LeanWriteBlocks(bitmap, bitmap_block, bitmap_size);
         last_band = band;
-        bitmap_lba = (band==0) ? m_super.bitmap_start : (band * band_size);
-        dlg->ReadFromFile(bitmap, m_lba + bitmap_lba, bitmap_size);
+        bitmap_block = (band==0) ? m_super.bitmap_start : (band * band_size);
+        LeanReadBlocks(bitmap, bitmap_block, bitmap_size);
       }
       // clear the bit in this band
-      // calculate sector in this band, byte, and bit within bitmap for 'sector'
-      unsigned sector_in_this_band = (unsigned) (lba & ((1 << m_super.log_sectors_per_band) - 1));
-      unsigned byte = sector_in_this_band / 8;
-      unsigned bit = sector_in_this_band % 8;
+      // calculate block in this band, byte, and bit within bitmap for 'block'
+      unsigned block_in_this_band = (unsigned) (lba & ((1 << m_super.log_blocks_per_band) - 1));
+      unsigned byte = block_in_this_band / 8;
+      unsigned bit = block_in_this_band % 8;
       bitmap[byte] &= ~(1 << bit);
       free_count++;
     }
@@ -1608,37 +1723,36 @@ void CLean::FreeExtents(const struct S_LEAN_SECTORS *Extents) {
 
   // do we need to write the last modified band?
   if (last_band != 0xFFFFFFFF)
-    dlg->WriteToFile(bitmap, m_lba + bitmap_lba, bitmap_size);
+    LeanWriteBlocks(bitmap, bitmap_block, bitmap_size);
 
   // we also need to update the FreeCount in the super.
-  m_super.free_sector_count += free_count;
+  m_super.free_block_count += free_count;
   // TODO: update super:CRC and write the super to the disk
 
   // free the buffer
   free(bitmap);
 }
 
-// returns a free sector (or zero if none found)
-DWORD64 CLean::GetFreeSector(DWORD64 Start, BOOL MarkIt) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+// returns a free block (or zero if none found)
+DWORD64 CLean::GetFreeBlock(DWORD64 Start, BOOL MarkIt) {
   BYTE *buffer;
-  DWORD64 bitmap_lba;
+  DWORD64 bitmap_block;
   
   int j;
   unsigned i, pos;
-  const DWORD64 band_size = ((DWORD64) 1 << m_super.log_sectors_per_band); // sectors per band
-  const unsigned bitmap_size = (unsigned) (band_size >> 12);     // sectors per bitmap
-  const unsigned bytes_bitmap = bitmap_size * dlg->m_sect_size;
-  const unsigned tot_bands = (unsigned) ((m_super.sector_count + (band_size - 1)) / band_size);
-  buffer = (BYTE *) malloc(bitmap_size * dlg->m_sect_size);
-  DWORD64 Lba = 0;
+  const DWORD64 band_size = ((DWORD64) 1 << m_super.log_blocks_per_band); // blocks per band
+  const unsigned bitmap_size = (unsigned) (band_size >> 12);              // blocks per bitmap
+  const unsigned bytes_bitmap = bitmap_size * m_block_size;
+  const unsigned tot_bands = (unsigned) ((m_super.block_count + (band_size - 1)) / band_size);
+  buffer = (BYTE *) malloc(bitmap_size * m_block_size);
+  DWORD64 block = 0;
   
-  // TODO: Start  // start with specified sector.  Will have to skip to next band and whatnot
+  // TODO: Start  // start with specified block.  Will have to skip to next band and what not
   
   for (i=0; i<tot_bands; i++) {
     // read in a bitmap
-    bitmap_lba = (i==0) ? m_super.bitmap_start : (band_size * i);
-    dlg->ReadFromFile(buffer, m_lba + bitmap_lba, bitmap_size);
+    bitmap_block = (i==0) ? m_super.bitmap_start : (band_size * i);
+    LeanReadBlocks(buffer, bitmap_block, bitmap_size);
     pos = 0;
     
     while (pos < bytes_bitmap) {
@@ -1646,15 +1760,15 @@ DWORD64 CLean::GetFreeSector(DWORD64 Start, BOOL MarkIt) {
         if ((buffer[pos] & (1<<j)) == 0) {
           if (MarkIt) {
             buffer[pos] |= (1<<j);  // mark it
-            dlg->WriteToFile(buffer, m_lba + bitmap_lba, bitmap_size);
+            LeanWriteBlocks(buffer, bitmap_block, bitmap_size);
             // we also need to update the FreeCount in the super.
-            m_super.free_sector_count--;
+            m_super.free_block_count--;
             // TODO: update super:CRC and write the super to the disk
           }
           free(buffer);
-          return Lba;
+          return block;
         }
-        Lba++;
+        block++;
       }
       pos++;
     }
@@ -1664,60 +1778,59 @@ DWORD64 CLean::GetFreeSector(DWORD64 Start, BOOL MarkIt) {
   return 0;
 }
 
-// Mark a Sector as used/free in the corresponding band's bitmap
-void CLean::MarkSector(DWORD64 Sector, BOOL MarkIt) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+// Mark a Block as used/free in the corresponding band's bitmap
+void CLean::MarkBlock(DWORD64 Block, BOOL MarkIt) {
   BYTE *bitmap = NULL;
-  DWORD64 bitmap_lba;
+  DWORD64 bitmap_block;
   DWORD band;
   
-  const DWORD64 band_size = ((DWORD64) 1 << m_super.log_sectors_per_band); // sectors per band
-  const unsigned bitmap_size = (unsigned) (band_size >> 12);     // sectors per bitmap
+  const DWORD64 band_size = ((DWORD64) 1 << m_super.log_blocks_per_band); // blocks per band
+  const unsigned bitmap_size = (unsigned) (band_size >> 12);              // blocks per bitmap
 
   // create the buffer
-  bitmap = (BYTE *) malloc(bitmap_size * dlg->m_sect_size);
+  bitmap = (BYTE *) malloc(bitmap_size * m_block_size);
   
-  band = (DWORD) (Sector >> m_super.log_sectors_per_band);
-  bitmap_lba = (band==0) ? m_super.bitmap_start : (band * band_size);
-  dlg->ReadFromFile(bitmap, m_lba + bitmap_lba, bitmap_size);
+  band = (DWORD) (Block >> m_super.log_blocks_per_band);
+  bitmap_block = (band==0) ? m_super.bitmap_start : (band * band_size);
+  LeanReadBlocks(bitmap, bitmap_block, bitmap_size);
 
   // clear/set the bit in this band
-  // calculate sector in this band, byte, and bit within bitmap for 'sector'
-  unsigned sector_in_this_band = (unsigned) (Sector & ((1 << m_super.log_sectors_per_band) - 1));
-  unsigned byte = sector_in_this_band / 8;
-  unsigned bit = sector_in_this_band % 8;
+  // calculate block in this band, byte, and bit within bitmap for 'block'
+  unsigned block_in_this_band = (unsigned) (Block & ((1 << m_super.log_blocks_per_band) - 1));
+  unsigned byte = block_in_this_band / 8;
+  unsigned bit = block_in_this_band % 8;
   if (MarkIt)
     bitmap[byte] |= (1 << bit);
   else
     bitmap[byte] &= ~(1 << bit);
   
-  dlg->WriteToFile(bitmap, m_lba + bitmap_lba, bitmap_size);
+  LeanWriteBlocks(bitmap, bitmap_block, bitmap_size);
   
   free(bitmap);
 }
 
-// allocate sectors, building extents for a Size count of sectors
-// S_LEAN_SECTORS is a list of extents.  Does not know about indirects or anything.
+// allocate blocks, building extents for a Size count of blocks
+// S_LEAN_BLOCKS is a list of extents.  Does not know about indirects or anything.
 //  is simply a list of extents.  It is up to the other functions to read/write the actual extents to the disk
-int CLean::AppendToExtents(struct S_LEAN_SECTORS *extents, DWORD64 Size, DWORD64 Start, BOOL MarkIt) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+// Size = bytes we need appended
+int CLean::AppendToExtents(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD64 Start, BOOL MarkIt) {
   unsigned i, cnt = extents->extent_count;
-  unsigned count = (unsigned) ((Size + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
-  DWORD64 Lba = Start;
+  unsigned count = (unsigned) ((Size + (m_block_size - 1)) / m_block_size);
+  DWORD64 block = Start;
 
   for (i=0; i<count; i++) {
-    Lba = GetFreeSector(Lba, MarkIt);
+    block = GetFreeBlock(block, MarkIt);
     if (extents->extent_size[cnt] == 0) {
-      extents->extent_start[cnt] = Lba;
+      extents->extent_start[cnt] = block;
       extents->extent_size[cnt]++;
-    } else if (Lba == (extents->extent_start[cnt] + extents->extent_size[cnt])) {
+    } else if (block == (extents->extent_start[cnt] + extents->extent_size[cnt])) {
       extents->extent_size[cnt]++;
       // TODO: if Extents->extent_size[cnt] > DWORD sized then cnt++, etc
     } else {
       cnt++;
       if (cnt >= extents->allocated_count)
         ReAllocateExtentBuffer(extents, extents->allocated_count + LEAN_DEFAULT_COUNT);
-      extents->extent_start[cnt] = Lba;
+      extents->extent_start[cnt] = block;
       extents->extent_size[cnt] = 1;
     }
   }
@@ -1730,23 +1843,29 @@ int CLean::AppendToExtents(struct S_LEAN_SECTORS *extents, DWORD64 Size, DWORD64
 }
 
 // get the extents of the file
-int CLean::ReadFileExtents(struct S_LEAN_SECTORS *extents, DWORD64 Inode) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE inode_buffer[MAX_SECT_SIZE];
-  BYTE indirect_buffer[MAX_SECT_SIZE];
+int CLean::ReadFileExtents(struct S_LEAN_BLOCKS *extents, DWORD64 Inode) {
+  BYTE *inode_buffer = (BYTE *) malloc(m_block_size);
+  BYTE *indirect_buffer = (BYTE *) malloc(m_block_size);
   struct S_LEAN_INODE *inode;
   struct S_LEAN_INDIRECT *indirect;
-  DWORD64 ind_lba;
+  DWORD64 ind_block;
   unsigned i;
   
   // initialize our pointers
   inode = (struct S_LEAN_INODE *) inode_buffer;
   indirect = (struct S_LEAN_INDIRECT *) indirect_buffer;
 
+  unsigned max_extents = (m_block_size - LEAN_INDIRECT_SIZE) / 12;
+  DWORD64 *extent_start = (DWORD64 *) (indirect_buffer + LEAN_INDIRECT_SIZE);
+  DWORD *extent_size = (DWORD *) (indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * sizeof(DWORD64)));
+  
   // read the inode
-  dlg->ReadFromFile(inode, m_lba + Inode, 1);
-  if (!ValidInode(inode))
+  LeanReadBlocks(inode, Inode, 1);
+  if (!ValidInode(inode)) {
+    free(inode_buffer);
+    free(indirect_buffer);
     return -1;
+  }
 
   // allocate at least LEAN_INODE_EXTENT_CNT extents to hold the direct extents
   AllocateExtentBuffer(extents, LEAN_INODE_EXTENT_CNT);
@@ -1755,15 +1874,16 @@ int CLean::ReadFileExtents(struct S_LEAN_SECTORS *extents, DWORD64 Inode) {
   for (i=0; i<inode->extent_count; i++) {
     extents->extent_start[extents->extent_count] = inode->extent_start[i];
     extents->extent_size[extents->extent_count] = inode->extent_size[i];
+    extents->block_count += inode->extent_size[i];
     extents->extent_count++;
   }
   
   // are there any indirect extents?
   if (inode->first_indirect > 0) {
-    ind_lba = inode->first_indirect;
-    while (ind_lba > 0) {
-      // read in the indirect sector
-      dlg->ReadFromFile(indirect, m_lba + ind_lba, 1);
+    ind_block = inode->first_indirect;
+    while (ind_block > 0) {
+      // read in the indirect block
+      LeanReadBlocks(indirect, ind_block, 1);
       if (!ValidIndirect(indirect))
         break;
 
@@ -1772,32 +1892,39 @@ int CLean::ReadFileExtents(struct S_LEAN_SECTORS *extents, DWORD64 Inode) {
 
       // retrieve the extents in this indirect block
       for (i=0; i<indirect->extent_count; i++) {
-        extents->extent_start[extents->extent_count] = indirect->extent_start[i];
-        extents->extent_size[extents->extent_count] = indirect->extent_size[i];
+        extents->extent_start[extents->extent_count] = extent_start[i];
+        extents->extent_size[extents->extent_count] = extent_size[i];
+        extents->block_count += extent_size[i];
         extents->extent_count++;
       }
 
       // get next indirect (0 == no more)
-      ind_lba = indirect->next_indirect;
+      ind_block = indirect->next_indirect;
     }
   }
   
+  free(inode_buffer);
+  free(indirect_buffer);
   return extents->extent_count;
 }
 
 // write the extents of the file to the file
 // The count of extents could actually extend past the current inode count.
 //  therefore, we add indirects if needed
-int CLean::WriteFileExtents(const struct S_LEAN_SECTORS *extents, struct S_LEAN_INODE *inode) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE indirect_buffer[MAX_SECT_SIZE];
+int CLean::WriteFileExtents(const struct S_LEAN_BLOCKS *extents, struct S_LEAN_INODE *inode) {
+  BYTE *indirect_buffer = (BYTE *) malloc(m_block_size);
   struct S_LEAN_INDIRECT *indirect;
-  DWORD64 prev_lba, this_lba, next_lba, remaining;
-  unsigned i, count = 0, max_extents;
+  DWORD64 prev_block, this_block, next_block, remaining;
+  unsigned i, count = 0;
   
   // initialize our pointer
   indirect = (struct S_LEAN_INDIRECT *) indirect_buffer;
 
+  // calculate the max count of extents we can have per this block size
+  unsigned max_extents = (m_block_size - LEAN_INDIRECT_SIZE) / 12;
+  DWORD64 *extent_start = (DWORD64 *) (indirect_buffer + LEAN_INDIRECT_SIZE);
+  DWORD *extent_size = (DWORD *) (indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * sizeof(DWORD64)));
+  
   // do the direct extents first
   for (i=0; (i<LEAN_INODE_EXTENT_CNT) && (count<extents->extent_count); i++) {
     inode->extent_start[i] = extents->extent_start[count];
@@ -1805,8 +1932,8 @@ int CLean::WriteFileExtents(const struct S_LEAN_SECTORS *extents, struct S_LEAN_
     count++;
   }
 
-  this_lba = 0;
-  prev_lba = 0;
+  this_block = 0;
+  prev_block = 0;
   remaining = 0;
   BOOL used = FALSE;
   
@@ -1815,43 +1942,32 @@ int CLean::WriteFileExtents(const struct S_LEAN_SECTORS *extents, struct S_LEAN_
   // are there any indirect extents needed?
   if (count < extents->extent_count) {
     if (inode->first_indirect > 0) {
-      this_lba = inode->first_indirect;
+      this_block = inode->first_indirect;
       used = TRUE;
     } else {
-      this_lba = GetFreeSector(0, TRUE);
-      inode->first_indirect = this_lba;
+      this_block = GetFreeBlock(0, TRUE);
+      inode->first_indirect = this_block;
       used = FALSE;
     }
     
-    indirect->sector_count = 0;
-    
-    // calculate the max count of extents we can have per this sector size
-    if (dlg->m_sect_size == 1024)
-      max_extents = LEAN_INDIRECT_EXTENT_CNT_1024;
-    else if (dlg->m_sect_size == 2048)
-      max_extents = LEAN_INDIRECT_EXTENT_CNT_2048;
-    else if (dlg->m_sect_size == 4096)
-      max_extents = LEAN_INDIRECT_EXTENT_CNT_4096;
-    else
-      max_extents = LEAN_INDIRECT_EXTENT_CNT_512;
-    
+    indirect->block_count = 0;
     while (count < extents->extent_count) {
       if (!used) {
         // initialize the indirect block
-        memset(indirect, 0, MAX_SECT_SIZE);
+        memset(indirect, 0, m_block_size);
         indirect->magic = LEAN_INDIRECT_MAGIC;
         indirect->inode = extents->extent_start[0];
-        indirect->this_sector = this_lba;
-        indirect->prev_indirect = prev_lba;
+        indirect->this_block = this_block;
+        indirect->prev_indirect = prev_block;
         indirect->next_indirect = 0;
       } else
-        dlg->ReadFromFile(indirect_buffer, m_lba + this_lba, 1);
+        LeanReadBlocks(indirect_buffer, this_block, 1);
       
       // write to the indirect extents
       for (i=0; (i<max_extents) && (count<extents->extent_count); i++) {
-        indirect->extent_start[i] = extents->extent_start[count];
-        indirect->extent_size[i] = extents->extent_size[count];
-        indirect->sector_count += extents->extent_size[count];
+        extent_start[i] = extents->extent_start[count];
+        extent_size[i] = extents->extent_size[count];
+        indirect->block_count += extents->extent_size[count];
         count++;
       }
       indirect->extent_count = i;
@@ -1860,45 +1976,46 @@ int CLean::WriteFileExtents(const struct S_LEAN_SECTORS *extents, struct S_LEAN_
       // will there be more?
       if (count < extents->extent_count) {
         if (used && (indirect->next_indirect > 0)) {
-          next_lba = indirect->next_indirect;
+          next_block = indirect->next_indirect;
         } else {
-          next_lba = GetFreeSector(0, TRUE);
-          indirect->next_indirect = next_lba;
+          next_block = GetFreeBlock(0, TRUE);
+          indirect->next_indirect = next_block;
           used = FALSE;
         }
       } else {
-        next_lba = this_lba;
+        next_block = this_block;
         if (used)
           remaining = indirect->next_indirect;
         indirect->next_indirect = 0;
       }
-      indirect->checksum = LeanCalcCRC(indirect, dlg->m_sect_size);
+      indirect->checksum = LeanCalcCRC(indirect, m_block_size);
       
       // write the indirect back
-      dlg->WriteToFile(indirect_buffer, m_lba + this_lba, 1);
+      LeanWriteBlocks(indirect_buffer, this_block, 1);
       
       // initialize for next round
-      prev_lba = this_lba;
-      this_lba = next_lba;
+      prev_block = this_block;
+      this_block = next_block;
     }
   }
   
   // if we don't need any more indirects, yet there are some allocated,
   //  we need to free each remaining indirect block
   while (remaining > 0) {
-    MarkSector(remaining, FALSE);
-    dlg->ReadFromFile(indirect_buffer, m_lba + remaining, 1);
-    // TODO: Test indirect
+    MarkBlock(remaining, FALSE);
+    LeanReadBlocks(indirect_buffer, remaining, 1);
+    // TODO: Test indirect, free it
     remaining = indirect->next_indirect;
   }
   
   // update the inode structure
-  inode->last_indirect = this_lba;
+  inode->last_indirect = this_block;
   inode->extent_count = (count > LEAN_INODE_EXTENT_CNT) ? LEAN_INODE_EXTENT_CNT : (BYTE) count;
   CTime time = CTime::GetCurrentTime();
   inode->sch_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
   inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
 
+  free(indirect_buffer);
   return extents->extent_count;
 }
 
@@ -1908,10 +2025,11 @@ int CLean::WriteFileExtents(const struct S_LEAN_SECTORS *extents, struct S_LEAN_
 //         -2 on not enough room in root
 int CLean::AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attrib) {
   struct S_LEAN_DIRENTRY *root, *cur, *next;
-  struct S_LEAN_SECTORS extents;
+  struct S_LEAN_BLOCKS extents;
+  const WORD len = csName.GetLength();
   DWORD64 root_size;
   BYTE byte;
-  
+
   root = (struct S_LEAN_DIRENTRY *) ReadFile(Inode, &root_size);
   if (root) {
     cur = root;
@@ -1921,12 +2039,11 @@ int CLean::AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attri
       if (cur->rec_len == 0)
         break;
       if (cur->type == LEAN_FT_MT) {
-        WORD len = csName.GetLength();
-        if (((cur->rec_len * 16) - 12) >= len) {
+        if (((cur->rec_len * 16) - LEAN_DIRENTRY_NAME) >= len) {
           // see if there is enough room to divide this record in to two
-          if (cur->rec_len > ((((len + 12) + 15) / 16) + 1)) {  // +1 is only 1 extra???
+          if (cur->rec_len > ((((len + LEAN_DIRENTRY_NAME) + 15) / 16) + 1)) {  // +1 is only 1 extra???
             byte = cur->rec_len;
-            cur->rec_len = ((len + 12 + 15) / 16);
+            cur->rec_len = ((len + LEAN_DIRENTRY_NAME + 15) / 16);
             next = (struct S_LEAN_DIRENTRY *) ((BYTE *) cur + (cur->rec_len * 16));
             next->rec_len = byte - cur->rec_len;
             next->inode = 0;
@@ -1946,102 +2063,35 @@ int CLean::AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attri
       }
       cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) cur + (cur->rec_len * 16));
     }
-    free(root);
+    
+    // did not find an empty entry in the current buffer,
+    //  so lets add to the file length and put it there
+    unsigned extended_size = ((LEAN_DIRENTRY_NAME + len) + 15) & ~15;
+    root = (struct S_LEAN_DIRENTRY *) realloc(root, (size_t) (root_size + extended_size));
+    cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + root_size);
+    cur->inode = Start;
+    cur->type = Attrib;
+    cur->rec_len = ((len + LEAN_DIRENTRY_NAME + 15) / 16);
+    cur->name_len = len;
+    memcpy(cur->name, csName, len);
+
+    // WriteFile will add to the extents if needed
+    WriteFile(root, &extents, root_size + extended_size);
     FreeExtentBuffer(&extents);
-    return -2;
+    free(root);
+    return 1;
   }
   AfxMessageBox("Error adding to directory");
   return -1;
 }
 
-// appends to the end of a directory either by increasing FileSize due to
-//  the fact that we already have sectors allocated, or
-// allocates more sectors and then increases FileSize
-// Clears the newly allocated area and places empty DIR entries in it.
-// Size should be a multiple of sect_size
-// returns 1 if successful
-int CLean::AppendToDir(DWORD64 Inode, DWORD Size) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  struct S_LEAN_INODE *inode;
-  
-  // make sure Size is a multiple of sect_size
-  Size = (Size + (dlg->m_sect_size - 1)) & ~(dlg->m_sect_size - 1);
-  
-  inode = (struct S_LEAN_INODE *) calloc(MAX_SECT_SIZE, 1);
-  dlg->ReadFromFile(inode, m_lba + Inode, 1);
-  
-  // check to make sure the inode is valid
-  if (!ValidInode(inode)) {
-    CString cs;
-    cs.Format("Append: Found invalid Inode at %I64i", Inode);
-    AfxMessageBox(cs);
-    free(inode);
-    return -1;
-  }
-  
-  // get the file's extents
-  struct S_LEAN_SECTORS extents;
-  if (ReadFileExtents(&extents, Inode) < 0)
-    return -1;
-  
-  // first see if we already have the sectors allocated for this amount
-  // if not, we will have to allocate some.
-  if (((inode->sector_count * dlg->m_sect_size) - inode->file_size) < Size) {
-    DWORD64 Start = 0;
-    if (extents.extent_count > 0)
-      Start = extents.extent_start[extents.extent_count - 1] + extents.extent_size[extents.extent_count - 1];
-    AppendToExtents(&extents, Size, Start, TRUE);
-    // copy them back to the inode
-    WriteFileExtents(&extents, inode);
-    dlg->WriteToFile(inode, m_lba + Inode, 1);
-  } 
-  
-  // Read in the new set of sectors
-  DWORD64 root_size;
-  struct S_LEAN_DIRENTRY *root, *cur;
-  root = (struct S_LEAN_DIRENTRY *) ReadFile(Inode, &root_size);
-  if (root) {
-    cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + root_size);
-    CreateEmptyDir(cur, Size);
-    WriteFile(root, &extents, root_size + Size);
-    free(root);
-  } else {
-    free(inode);
-    return -1;
-  }
-  free(inode);
-  FreeExtentBuffer(&extents);
-  
-  return 1;
-}
-
-// create an empty directory listing in passed buffer
-// size must be a multiple of sect_size
-void CLean::CreateEmptyDir(void *buffer, DWORD Size) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  unsigned sect_size = dlg->m_sect_size;
-  struct S_LEAN_DIRENTRY *root;
-  
-  memset(buffer, 0, Size);
-  
-  sect_size -= LEAN_INODE_SIZE; // the first one is sect size - size of inode since we start in the inode
-  root = (struct S_LEAN_DIRENTRY *) buffer;
-  while ((BYTE *) root < ((BYTE *) buffer + Size)) {
-    root->rec_len = (sect_size / 16);
-    Size -= sect_size;
-    root = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + sect_size);
-    sect_size = dlg->m_sect_size;  // restore the sector size
-  }
-}
-
-void CLean::BuildInode(struct S_LEAN_SECTORS *extents, DWORD64 Size, DWORD Attrib) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+void CLean::BuildInode(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD Attrib) {
   struct S_LEAN_INODE *inode;
   
   CTime time = CTime::GetCurrentTime();
   const INT64 now = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
   
-  inode = (struct S_LEAN_INODE *) calloc(MAX_SECT_SIZE, 1);
+  inode = (struct S_LEAN_INODE *) calloc(m_block_size, 1);
   
   inode->magic = LEAN_INODE_MAGIC;
   inode->extent_count = (extents->extent_count > LEAN_INODE_EXTENT_CNT) ? LEAN_INODE_EXTENT_CNT : (BYTE) extents->extent_count;
@@ -2050,10 +2100,13 @@ void CLean::BuildInode(struct S_LEAN_SECTORS *extents, DWORD64 Size, DWORD Attri
   inode->attributes = Attrib;
   inode->file_size = Size;
   if (Attrib & LEAN_ATTR_EAS_IN_INODE)
-    inode->sector_count = 1 + ((Size + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
+    inode->block_count = 1 + ((Size + (m_block_size - 1)) / m_block_size);
   else {
-    DWORD64 s = Size - (dlg->m_sect_size - (sizeof(struct S_LEAN_INODE)));
-    inode->sector_count = 1 + ((s + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
+    if (Size > (m_block_size - sizeof(struct S_LEAN_INODE))) {
+      DWORD64 s = Size - (m_block_size - sizeof(struct S_LEAN_INODE));
+      inode->block_count = 1 + ((s + (m_block_size - 1)) / m_block_size);
+    } else
+      inode->block_count = 1;
   }
   inode->acc_time = now;
   inode->sch_time = now;
@@ -2063,23 +2116,47 @@ void CLean::BuildInode(struct S_LEAN_SECTORS *extents, DWORD64 Size, DWORD Attri
   inode->last_indirect = 0;
   inode->fork = 0;
 
-  WriteFileExtents(extents, inode);  // most write at least the first 6 so the checksum is correct
-  dlg->WriteToFile(inode, m_lba + extents->extent_start[0], 1);
+  WriteFileExtents(extents, inode);  // must write at least the first 6 so the checksum is correct
+  LeanWriteBlocks(inode, extents->extent_start[0], 1);
   free(inode);
 }
 
-void CLean::DeleteInode(DWORD64 Inode) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE buffer[MAX_SECT_SIZE];
-  struct S_LEAN_INODE *inode = (struct S_LEAN_INODE *) buffer;
-  struct S_LEAN_SECTORS extents;
+void CLean::IncrementLinkCount(DWORD64 Inode) {
+  struct S_LEAN_INODE *inode = (struct S_LEAN_INODE *) malloc(m_block_size);
   
-  dlg->ReadFromFile(buffer, m_lba + Inode, 1);
+  LeanReadBlocks(inode, Inode, 1);
+
+  inode->links_count++;
+  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
+  
+  LeanWriteBlocks(inode, Inode, 1);
+  free(inode);
+}
+
+// TODO: does not delete the Inode... Should it, or leave it to the user?
+void CLean::DecrementLinkCount(DWORD64 Inode) {
+  struct S_LEAN_INODE *inode = (struct S_LEAN_INODE *) malloc(m_block_size);
+  
+  LeanReadBlocks(inode, Inode, 1);
 
   if (inode->links_count > 1) {
     inode->links_count--;
     inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
-    dlg->WriteToFile(buffer, m_lba + Inode, 1);
+    
+    LeanWriteBlocks(inode, Inode, 1);
+  }
+  free(inode);
+}
+
+void CLean::DeleteInode(DWORD64 Inode) {
+  struct S_LEAN_INODE *inode = (struct S_LEAN_INODE *) malloc(m_block_size);
+  struct S_LEAN_BLOCKS extents;
+  
+  LeanReadBlocks(inode, Inode, 1);
+
+  if (inode->links_count > 1) {
+    inode->links_count--;
+    inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
   } else {
     if (inode->fork)
       DeleteInode(inode->fork);
@@ -2092,23 +2169,23 @@ void CLean::DeleteInode(DWORD64 Inode) {
     
     // also clear the inode or parts of it???
     memset(inode, 0, sizeof(struct S_LEAN_INODE));
-    dlg->WriteToFile(buffer, m_lba + Inode, 1);
   }
+  
+  LeanWriteBlocks(inode, Inode, 1);
+  free(inode);
 }
 
 void CLean::OnLeanEntry() {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   HTREEITEM hItem = m_dir_tree.GetSelectedItem();
   CLeanEntry LeanEntry;
-  BYTE buffer[MAX_SECT_SIZE];
-  struct S_LEAN_INODE *inode_buff = (struct S_LEAN_INODE *) buffer;
+  struct S_LEAN_INODE *inode_buff = (struct S_LEAN_INODE *) malloc(m_block_size);
   
   if (hItem) {
     struct S_LEAN_ITEMS *items = (struct S_LEAN_ITEMS *) m_dir_tree.GetDataStruct(hItem);
     if (items) {
       // read the inode
-      dlg->ReadFromFile(buffer, m_lba + items->Inode, 1);
-      memcpy(&LeanEntry.m_inode, buffer, sizeof(struct S_LEAN_INODE));
+      LeanReadBlocks(inode_buff, items->Inode, 1);
+      memcpy(&LeanEntry.m_inode, inode_buff, sizeof(struct S_LEAN_INODE));
       LeanEntry.m_hItem = hItem;
       LeanEntry.m_parent = this;
       LeanEntry.m_inode_num = items->Inode;
@@ -2172,7 +2249,7 @@ void CLean::OnViewJournal() {
   Journal.m_parent = this;
   if (Journal.m_buffer) {
     if (Journal.DoModal() == IDOK) {
-      struct S_LEAN_SECTORS extents;
+      struct S_LEAN_BLOCKS extents;
       AllocateExtentBuffer(&extents, 1);
       extents.extent_count = 1;
       extents.extent_size[0] = 1 + JOURNAL_SIZE;
@@ -2185,22 +2262,22 @@ void CLean::OnViewJournal() {
 }
 
 void CLean::OnJournalInode() {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE buffer[MAX_SECT_SIZE];
+  BYTE *buffer = (BYTE *) malloc(m_block_size);
   CLeanEntry LeanEntry;
   
   // read the inode
-  dlg->ReadFromFile(buffer, m_lba + m_super.journal, 1);
+  LeanReadBlocks(buffer, m_super.journal, 1);
   memcpy(&LeanEntry.m_inode, buffer, sizeof(struct S_LEAN_INODE));
   LeanEntry.m_hItem = NULL;
   LeanEntry.m_parent = this;
   LeanEntry.m_inode_num = m_super.journal;
   if (LeanEntry.DoModal() == IDOK) { // apply button pressed?
     // must read it back in so we don't "destroy" the EA's we might have updated in LeanEntry
-    dlg->ReadFromFile(buffer, m_lba + m_super.journal, 1);
+    LeanReadBlocks(buffer, m_super.journal, 1);
     memcpy(buffer, &LeanEntry.m_inode, sizeof(struct S_LEAN_INODE));
-    dlg->WriteToFile(buffer, m_lba + m_super.journal, 1);
+    LeanWriteBlocks(buffer, m_super.journal, 1);
   }
+  free(buffer);
 }
 
 void CLean::OnErase() {
@@ -2216,16 +2293,17 @@ void CLean::OnErase() {
 }
 
 // allocate memory for the extents
-void CLean::AllocateExtentBuffer(struct S_LEAN_SECTORS *extents, const unsigned count) {
+void CLean::AllocateExtentBuffer(struct S_LEAN_BLOCKS *extents, const unsigned count) {
   extents->was_error = FALSE;
   extents->extent_count = 0;
   extents->allocated_count = count;
+  extents->block_count = 0;
   extents->extent_start = (DWORD64 *) calloc(count, sizeof(DWORD64));
   extents->extent_size = (DWORD *) calloc(count, sizeof(DWORD));
 }
 
 // allocate memory for the extents
-void CLean::ReAllocateExtentBuffer(struct S_LEAN_SECTORS *extents, const unsigned count) {
+void CLean::ReAllocateExtentBuffer(struct S_LEAN_BLOCKS *extents, const unsigned count) {
   void *ptr;
 
   // we don't use realloc() to enlarge the buffers so that we
@@ -2252,7 +2330,7 @@ void CLean::ReAllocateExtentBuffer(struct S_LEAN_SECTORS *extents, const unsigne
 }
 
 // free the memory used by the extents
-void CLean::FreeExtentBuffer(struct S_LEAN_SECTORS *extents) {
+void CLean::FreeExtentBuffer(struct S_LEAN_BLOCKS *extents) {
   extents->extent_count = 0;
   if (extents->extent_start)
     free(extents->extent_start);
@@ -2261,4 +2339,3 @@ void CLean::FreeExtentBuffer(struct S_LEAN_SECTORS *extents) {
     free(extents->extent_size);
   extents->extent_size = NULL;
 }
-
