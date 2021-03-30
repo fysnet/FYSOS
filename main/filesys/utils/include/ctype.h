@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -70,7 +70,7 @@
 #define TRUE   1
 #define FALSE  0
 
-#if defined(DJGPP)
+#if defined(DJGPP) && !defined(__cplusplus)
   typedef unsigned  char      bool;
 #endif
 

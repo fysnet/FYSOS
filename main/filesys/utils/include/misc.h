@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -232,10 +232,7 @@ struct S_RESOURCE *parse_resource(const char *filename) {
   char str[NAME_LEN_MAX];
   FILE *fp;
   
-  errno_t err;
-
-  err = fopen_s(&fp, filename, "r");
-  if (err != 0) {
+  if ((fp = fopen(filename, "r")) == NULL) {
     printf("\nError opening resource file.");
     return NULL;
   }
@@ -249,13 +246,13 @@ struct S_RESOURCE *parse_resource(const char *filename) {
     get_a_string(fp, str);
     if (strcmp(str, "mbrfile") == 0) {
       get_a_string(fp, str);
-      strcpy_s(r->mbr_filename, str);
+      strcpy(r->mbr_filename, str);
     } else if (strcmp(str, "bootfile") == 0) {
       get_a_string(fp, str);
-      strcpy_s(r->boot_filename, str);
+      strcpy(r->boot_filename, str);
     } else if (strcmp(str, "imgfile") == 0) {
       get_a_string(fp, str);
-      strcpy_s(r->targ_filename, str);
+      strcpy(r->targ_filename, str);
     } else if (strcmp(str, "base_lba") == 0) {
       get_a_string(fp, str);
       r->base_lba = strtoul(str, NULL, 0);
@@ -275,7 +272,7 @@ struct S_RESOURCE *parse_resource(const char *filename) {
       get_a_string(fp, str);
       r->spt = (bit8u) strtoul(str, NULL, 0);
     } else if (strlen(str) > 0) {
-      strcpy_s(r->files[cnt].path_filename, str);
+      strcpy(r->files[cnt].path_filename, str);
       get_a_string(fp, r->files[cnt].filename);
       get_a_string(fp, str);
       r->files[cnt].param = strtoul(str, NULL, 0);
