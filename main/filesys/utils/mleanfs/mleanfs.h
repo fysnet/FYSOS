@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -57,7 +57,7 @@
  */
 
 /*
- *  Last updated: 15 July 2020
+ *  Last updated: 28 Mar 2021
  */
 
 // set it to 1 (align on byte)
@@ -72,7 +72,9 @@
 
 #define MAX_PATH 260
 
-char strtstr[] = "\nMLEANFS  v2.00.00    Forever Young Software 1984-2019\n\n";
+#define LOG2(x) (int) (log((double) (x)) / log(2.0))  // log2(x) = log(x) / log(2.0)
+
+char strtstr[] = "\nMLEANFS  v2.10.00    Forever Young Software 1984-2021\n\n";
 
 // default superblock location (will sector pad to this location if boot_size is less than)
 //  if boot code is larger, will move super location to just past boot code
@@ -91,22 +93,25 @@ char strtstr[] = "\nMLEANFS  v2.00.00    Forever Young Software 1984-2019\n\n";
 #define LEAN_INDIRECT_MAGIC  0x58444E49
 
 struct S_LEAN_SUPER {
-  bit32u checksum;                // bit32u sum of all fields.
-  bit32u magic;                   // 0x4E41454C ('LEAN')
-  bit16u fs_version;              // 0x0006 = 0.6
-  bit8u  pre_alloc_count;         // count minus one of contiguous sectors that driver should try to preallocate
-  bit8u  log_sectors_per_band;    // 1 << log_sectors_per_band = sectors_per_band. Valid values are 12, 13, 14, ...
-  bit32u state;                   // bit 0 = unmounted?, bit 1 = error?
+  uint32_t checksum;                // uint32_t sum of all fields.
+  uint32_t magic;                   // 0x4E41454C ('LEAN')
+  uint16_t fs_version;              // 0x0006 = 0.6
+  uint8_t  pre_alloc_count;         // count minus one of contiguous blocks that driver should try to preallocate
+  uint8_t  log_blocks_per_band;     // 1 << log_blocks_per_band = blocks_per_band. Valid values are 12, 13, 14, ...
+  uint32_t state;                   // bit 0 = unmounted?, bit 1 = error?
   struct S_GUID guid;             // Globally Unique IDentifier
-  bit8u  volume_label[64];        // can be modified by the LABEL command
-  bit64u sector_count;            // The total number of sectors that form a file system volume
-  bit64u free_sector_count;       // The number of free sectors in the volume. A value of zero means disk full.
-  bit64u primary_super;           // sector number of primary super block
-  bit64u backup_super;            // sector number of backup super block
-  bit64u bitmap_start;            // This is the address of the sector where the first bands bitmap starts
-  bit64u root_start;              // This is the address of the sector where the root directory of the volume starts, the inode number of the root directory.
-  bit64u bad_start;               // This is the address of the sector where the pseudo-file to track bad sectors starts.
-  bit8u  reserved[360];           // zeros
+  uint8_t  volume_label[64];        // can be modified by the LABEL command
+  uint64_t block_count;             // The total number of blocks that form a file system volume
+  uint64_t free_block_count;        // The number of free blocks in the volume. A value of zero means disk full.
+  uint64_t primary_super;           // block number of primary super block
+  uint64_t backup_super;            // block number of backup super block
+  uint64_t bitmap_start;            // This is the address of the block where the first bands bitmap starts
+  uint64_t root_start;              // This is the address of the block where the root directory of the volume starts, the inode number of the root directory.
+  uint64_t bad_start;               // This is the address of the block where the pseudo-file to track bad blocks starts.
+  uint64_t journal_inode;           // This is the address of the block for the journal file.
+  uint8_t  log_block_size;          // 1 << log_block_size = block_size in bytes. Valid values are 9, 10, 11, ...
+  uint8_t  reserved[7];             // reserved and preserved
+  //uint8_t  reserved[];            // zeros
 };
 
 #define S_LEAN_INODE_SIZE     176
@@ -115,26 +120,26 @@ struct S_LEAN_SUPER {
 
 // 176 bytes each
 struct S_LEAN_INODE {
-  bit32u checksum;                // bit32u sum of all fields before this one.
-  bit32u magic;                   // 0x45444F4E  ('NODE')
-  bit8u  extent_count;            // count of extents in this inode struct.
-  bit8u  reserved[3];             // reserved
-  bit32u indirect_count;          // number of indirect sectors owned by file
-  bit32u links_count;             // The number of hard links (the count of directory entries) referring to this file, at least 1
-  bit32u uid;                     // currently reserved, set to 0
-  bit32u gid;                     // currently reserved, set to 0
-  bit32u attributes;              // see table below
-  bit64u file_size;               // file size
-  bit64u sector_count;            // count of sectors used
+  uint32_t checksum;                // uint32_t sum of all fields before this one.
+  uint32_t magic;                   // 0x45444F4E  ('NODE')
+  uint8_t  extent_count;            // count of extents in this inode struct.
+  uint8_t  reserved[3];             // reserved
+  uint32_t indirect_count;          // number of indirect blocks owned by file
+  uint32_t links_count;             // The number of hard links (the count of directory entries) referring to this file, at least 1
+  uint32_t uid;                     // currently reserved, set to 0
+  uint32_t gid;                     // currently reserved, set to 0
+  uint32_t attributes;              // see table below
+  uint64_t file_size;               // file size
+  uint64_t block_count;             // count of blocks used
   bit64s acc_time;                // last accessed: number of mS elapsed since midnight of 1970-01-01
   bit64s sch_time;                // status change: number of mS elapsed since midnight of 1970-01-01
   bit64s mod_time;                // last modified: number of mS elapsed since midnight of 1970-01-01
   bit64s cre_time;                //       created: number of mS elapsed since midnight of 1970-01-01
-  bit64u first_indirect;          // address of the first indirect sector of the file.
-  bit64u last_indirect;           // address of the last indirect sector of the file.
-  bit64u fork;
-  bit64u extent_start[LEAN_INODE_EXTENT_CNT]; // The array of extents
-  bit32u extent_size[LEAN_INODE_EXTENT_CNT]; 
+  uint64_t first_indirect;          // address of the first indirect block of the file.
+  uint64_t last_indirect;           // address of the last indirect block of the file.
+  uint64_t fork;
+  uint64_t extent_start[LEAN_INODE_EXTENT_CNT]; // The array of extents
+  uint32_t extent_size[LEAN_INODE_EXTENT_CNT]; 
 };
 
 //attributes:
@@ -155,8 +160,8 @@ struct S_LEAN_INODE {
 #define  LEAN_ATTR_ARCHIVE      (1 << 14) // File changed since last backup 
 #define  LEAN_ATTR_SYNC_FL      (1 << 15) // Synchronous updates 
 #define  LEAN_ATTR_NOATIME_FL   (1 << 16) // Don't update last access time 
-#define  LEAN_ATTR_IMMUTABLE_FL (1 << 17) // Don't move file sectors 
-#define  LEAN_ATTR_PREALLOC     (1 << 18) // Keep any preallocated sectors beyond fileSize when the file is closed
+#define  LEAN_ATTR_IMMUTABLE_FL (1 << 17) // Don't move file blocks 
+#define  LEAN_ATTR_PREALLOC     (1 << 18) // Keep any preallocated blocks beyond fileSize when the file is closed
 #define  LEAN_ATTR_INLINEXTATTR (1 << 19) // Remaining bytes after the inode structure are reserved for inline extended attributes
 //       LEAN_ATTR_             (1 << 20)  // reserved
 //       LEAN_ATTR_             (1 << 21)  // reserved
@@ -177,11 +182,11 @@ struct S_LEAN_INODE {
 #define LEAN_NAME_LEN_MAX  4068   // 255 is largest value allowed in rec_len * 16 bytes per record - 12 bytes for header
 #define LEAN_DIRENTRY_NAME   12
 struct S_LEAN_DIRENTRY {
-  bit64u inode;     // The inode number of the file linked by this directory entry, the address of the first cluster of the file.
-  bit8u  type;      // see table below (0 = deleted)
-  bit8u  rec_len;   // len of total record in 8 byte units.
-  bit16u name_len;  // total length of name.
-  bit8u  name[4];   // (UTF-8) must *not* be null terminated, remaining bytes undefined if not a multiple of 8.  UTF-8
+  uint64_t inode;     // The inode number of the file linked by this directory entry, the address of the first cluster of the file.
+  uint8_t  type;      // see table below (0 = deleted)
+  uint8_t  rec_len;   // len of total record in 8 byte units.
+  uint16_t name_len;  // total length of name.
+  uint8_t  name[4];   // (UTF-8) must *not* be null terminated, remaining bytes undefined if not a multiple of 8.  UTF-8
 };                  // 4 to make it 16 bytes for first para.  Not limited to 4 bytes.
 
 // type:
@@ -191,12 +196,11 @@ struct S_LEAN_DIRENTRY {
 #define LEAN_FT_LNK   3 // File type: symbolic link
 #define LEAN_FT_FRK   4 // File type: fork
 
-
 #define FOLDER_SIZE  15  // default sectors per sub folder (inode + FOLDER_SIZE)
 
 struct S_LEAN_EXTENT {
-  bit64u start[LEAN_INODE_EXTENT_CNT]; // The array of extents
-  bit32u size[LEAN_INODE_EXTENT_CNT]; 
+  uint64_t start[LEAN_INODE_EXTENT_CNT]; // The array of extents
+  uint32_t size[LEAN_INODE_EXTENT_CNT]; 
 };
 
 #pragma pack(pop)
@@ -214,15 +218,15 @@ struct S_FOLDERS {
   struct S_FOLDERS *parent;
 };
 
-
-bit64u get_useconds(void);
+uint8_t lean_calc_log_band_size(const size_t block_size, const size_t tot_blocks);
+uint64_t get_useconds(void);
 void bitmap_mark(const int band, int start, int count, const bool used);
-bit64u bitmap_find(void);
+uint64_t bitmap_find(void);
 size_t get_next_extent(size_t, struct S_LEAN_EXTENT *);
-void create_root_entry(const size_t, char *, const size_t, bit64u, const bit64u);
-void root_start(struct S_LEAN_DIRENTRY *record, const bit64u, const bit64u);
-void create_inode(FILE *, const bit64u, const bit64u, const bit32u, const int, const size_t, struct S_LEAN_EXTENT *);
+void create_root_entry(const size_t, char *, const size_t, uint64_t, const uint64_t);
+void root_start(struct S_LEAN_DIRENTRY *record, const uint64_t, const uint64_t);
+void create_inode(FILE *, const uint64_t, const uint64_t, const uint32_t, const int, const size_t, struct S_LEAN_EXTENT *);
 
 void parse_command(int, char *[], char *, bool *, char *);
 
-bit32u lean_calc_crc(const void *, unsigned int);
+uint32_t lean_calc_crc(const void *, unsigned int);

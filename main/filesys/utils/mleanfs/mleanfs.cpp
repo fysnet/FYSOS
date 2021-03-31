@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -77,10 +77,10 @@
  *  Assumptions/prerequisites:
  *   - requires 64-bit integers
  *
- *  Last updated: 15 July 2020
+ *  Last updated: 28 Mar 2021
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
- *   gcc -Os gd_ehci.c -o gd_ehci.exe -s
+ *   gcc -Os mleanfs.c -o mleanfs.exe -s
  *
  *  Usage:
  *    mleanfs filename.ext /e /v
@@ -90,7 +90,9 @@
 
 #include <ctype.h>
 #include <conio.h>
+#include <math.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -104,11 +106,11 @@ struct S_FOLDERS *folders = NULL;
 size_t cur_folder = 0;
 size_t cur_folder_size = 0;
 
-size_t cur_sector = 0;
-bit8u *bitmaps = NULL;
-size_t sectors_used = 0;
+size_t cur_block = 0;
+uint8_t *bitmaps = NULL;
+size_t blocks_used = 0;
 size_t band_size, bitmap_size, tot_bands;
-size_t tot_sects;
+size_t tot_blocks, block_size;
 
 int main(int argc, char *argv[]) {
   size_t super_loc = LEAN_SUPER_LOCATION;
@@ -138,29 +140,61 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
+  /*
   // do we need to add sectors to end on a cylinder boundary?
   size_t cylinders = (size_t) (resources->tot_sectors + ((16 * 63) - 1)) / (16 * 63);    // cylinders used
   size_t add = (size_t) ((cylinders * (16 * 63)) - resources->tot_sectors); // sectors to add to boundary on cylinder
   if (add && (resources->tot_sectors > 2880)) {  // don't add if floppy image
-    printf(" Total Sectors does not end on cylinder boundary. Expand to %I64i? [Y|N] ", resources->tot_sectors + add);
-    if (toupper(_getche()) == 'Y') {
+    printf(" Total Sectors does not end on cylinder boundary. Expand to %" LL64BIT "i? [Y|N] ", resources->tot_sectors + add);
+    if (toupper(getchecho()) == 'Y') {
       resources->tot_sectors += add;
       // need to calculate again since we added sectors
       cylinders = (size_t) ((resources->tot_sectors + ((16 * 63) - 1)) / (16 * 63));
     }
     puts("");
   }
-  tot_sects = (size_t) resources->tot_sectors;
+  */
+  // this gives a rough cylinder usage (TODO: We need to use resources->heads and resources->spt here?)
+  size_t cylinders = (size_t) (((resources->tot_sectors * block_size) / SECT_SIZE) / (16 * 63));    // roughly the cylinders used
 
-  // make sure log_band_size is within boundaries
-  if ((resources->param0 < 12) || (resources->param0 > 31)) {
-    printf(" Log Bands (2^%i) must be within boundaries.  Default to 12? [Y|N] ", resources->param0);
-    if (toupper(_getche()) == 'Y')
-      resources->param0 = 12;
+  // total blocks in partition
+  tot_blocks = (size_t) resources->tot_sectors;
+
+  // make sure log_blocks_size is within boundaries
+  // (we only support up to 64k blocks here)
+  if ((resources->param1 < 8) || (resources->param1 > 16)) {
+    printf(" Log Block Size (2^%i) must be within boundaries.  Default to 12 and 512-byte blocks? [Y|N] ", resources->param1);
+    if (toupper(getchecho()) == 'Y')
+      resources->param1 = 9;
     else
       return -1;
     puts("");
   }
+
+  // make sure log_band_size is within boundaries
+  if ((resources->param0 < 12) || (resources->param0 > 31)) {
+    printf(" Log Band Size (2^%i) must be within boundaries.  Default to 12 and 512-byte blocks? [Y|N] ", resources->param0);
+    if (toupper(getchecho()) == 'Y') {
+      resources->param0 = 12;
+      resources->param1 = 9;
+    } else
+      return -1;
+    puts("");
+  }
+
+  // make sure log_band_size is within log block size values
+  if ((resources->param0 - 3) < resources->param1) {
+    printf(" A block size of %i (2^%i) must have a band size of at least %i (2^%i). Okay? [Y|N] ", 
+      1 << resources->param1, resources->param1, 1 << (resources->param1 + 3), resources->param1 + 3);
+    if (toupper(getchecho()) == 'Y')
+      resources->param0 = (resources->param1 + 3);
+    else
+      return -1;
+    puts("");
+  }
+
+  // done getting parameters, start building the image
+  block_size = ((uint64_t) 1 << resources->param1);
 
   if (!existing_image) {
     // create target file
@@ -178,11 +212,12 @@ int main(int argc, char *argv[]) {
   }
 
   // allocate our temp buffer
-  // must be at least 33 sectors in length
-  bit8u *buffer = (bit8u *) calloc(33 * SECT_SIZE, 1);
+  // must be at least 33 blocks in length
+  uint8_t *buffer = (uint8_t *) calloc(33 * block_size, 1);
 
   // if we are not working on an existing image file, 
   if (!existing_image) {
+    // *** At this point, we read/write SECT_SIZE-byte sectors ***
     // create the MBR and padding sectors
     u = 0;
     if (strlen(resources->mbr_filename)) {
@@ -193,11 +228,11 @@ int main(int argc, char *argv[]) {
         return -2;
       }
       fread(buffer, SECT_SIZE, 1, src);
-
+      
       // create and write the Disk Indentifier
       // We call rand() multiple times.
-      * (bit32u *) &buffer[0x01B8] = (bit32u) ((rand() << 20) | (rand() << 10) | (rand() << 0));
-      * (bit16u *) &buffer[0x01BC] = 0x0000;
+      * (uint32_t *) &buffer[0x01B8] = (uint32_t) ((rand() << 20) | (rand() << 10) | (rand() << 0));
+      * (uint16_t *) &buffer[0x01BC] = 0x0000;
 
       // create a single partition entry pointing to our partition
       struct PART_TBLE *pt = (struct PART_TBLE *) &buffer[0x01BE];
@@ -205,9 +240,9 @@ int main(int argc, char *argv[]) {
       lba_to_chs(&pt->start_chs, (size_t) resources->base_lba);
       pt->si = 0xEA;  //lEAn
       lba_to_chs(&pt->end_chs, (size_t) ((cylinders * resources->heads * resources->spt) - 1 - resources->base_lba));  // last sector - 1 for the MBR
-      pt->startlba = (bit32u) resources->base_lba;
-      pt->size = (bit32u) ((cylinders * resources->heads * resources->spt) - resources->base_lba);
-      printf(" Writing MBR to LBA %I64i\n", FTELL(targ) / SECT_SIZE);
+      pt->startlba = (uint32_t) resources->base_lba;
+      pt->size = (uint32_t) ((cylinders * resources->heads * resources->spt) - resources->base_lba);
+      printf(" Writing MBR to LBA %" LL64BIT "i\n", FTELL(targ) / SECT_SIZE);
       fwrite(buffer, SECT_SIZE, 1, targ);
       memset(buffer, 0, SECT_SIZE);
       u = 1;
@@ -217,9 +252,10 @@ int main(int argc, char *argv[]) {
       printf(" Writing Padding between MBR and Base LBA...\n");
     for (; u < resources->base_lba; u++)
       fwrite(buffer, SECT_SIZE, 1, targ);
-    //resources->tot_sectors -= resources->base_lba;
-    tot_sects -= (size_t) resources->base_lba;
-
+    resources->tot_sectors -= resources->base_lba;
+    tot_blocks -= (size_t) resources->base_lba;
+    
+    // *** At this point, we read/write block_size blocks ***
     // create the boot code sectors (up to 32)
     if (strlen(resources->boot_filename)) {
       if ((src = fopen(resources->boot_filename, "rb")) == NULL) {
@@ -231,12 +267,12 @@ int main(int argc, char *argv[]) {
 
       // clearing the buffer first makes sure that if we don't read 33 sectors
       //  of boot file (leanfs.bin), the last part will be zeros.
-      memset(buffer, 0, SECT_SIZE * 32);
-      boot_size = fread(buffer, SECT_SIZE, 32, src);  // boot_size = sectors
+      memset(buffer, 0, block_size * 32);
+      boot_size = fread(buffer, block_size, 32, src);  // boot_size = boot code in blocks
       fclose(src);
     } else {
       boot_size = 1;  // must reserve at least 1 sector for boot
-      memset(buffer, 0, SECT_SIZE * 32); // but can be up to 32 with default LEAN_SUPER_LOCATION = 32
+      memset(buffer, 0, block_size * 32); // but can be up to 32 with default LEAN_SUPER_LOCATION = 32
     }
 
     // update the sig and base lba within the given boot code
@@ -246,9 +282,9 @@ int main(int argc, char *argv[]) {
     //  sig       dword  (unique id for partition/disk)
     //  base_lba  qword  (0 for floppy, could be 63 for partitions)
     //  boot sig  word   (0xAA55)
-    * (bit32u *) &buffer[498] = ((rand() & 0xFFFF) << 16) | (rand() & 0xFFFF);
-    //if (* (bit64u *) &buffer[502] == 0)  // we only update the base if the .bin file had it as zeros already.
-    * (bit64u *) &buffer[502] = FTELL(targ) / SECT_SIZE;
+    * (uint32_t *) &buffer[498] = ((rand() & 0xFFFF) << 16) | (rand() & 0xFFFF);
+    //if (* (uint64_t *) &buffer[502] == 0)  // we only update the base if the .bin file had it as zeros already.
+    * (uint64_t *) &buffer[502] = FTELL(targ) / SECT_SIZE;
 
     // calculate the location of the super block
     if (boot_size > (super_loc - 1)) {
@@ -266,53 +302,57 @@ int main(int argc, char *argv[]) {
 
     // write the first (up to 32) sectors
     buffer[510] = 0x55; buffer[511] = 0xAA;
-    printf(" Writing Boot Sector(s) to LBA %I64i\n", FTELL(targ) / SECT_SIZE);
+    printf(" Writing Boot Sector(s) to LBA %" LL64BIT "i\n", (uint64_t) (FTELL(targ) / SECT_SIZE));
     fwrite(buffer, SECT_SIZE, super_loc, targ);
   } // !existing_image
 
-  // A band can be 2^12 to 2^31 sectors.
-  band_size = (1ULL << resources->param0);  // in sectors
-  bitmap_size = (band_size >> 12);       // in sectors
-  tot_bands = (size_t) (resources->tot_sectors + (band_size - 1)) / band_size;
+  // we could let the code figure out the band size
+  //const uint8_t log_band_size = lean_calc_log_band_size(block_size, tot_blocks);
+  // or we get it from the resource file
+  const uint8_t log_band_size = resources->param0;
+  
+  uint32_t band_size = (1 << log_band_size);
+  bitmap_size = (band_size / block_size / 8);
+  tot_bands = (unsigned) (tot_blocks + (band_size - 1)) / band_size;
 
   // now create a super block
-  struct S_LEAN_SUPER* super = (struct S_LEAN_SUPER*) buffer;
+  struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) buffer;
+  memset(super, 0, block_size);
   super->magic = LEAN_SUPER_MAGIC;
-  super->fs_version = 0x0006;  // 0.6
-  super->log_sectors_per_band = resources->param0;
+  super->fs_version = 0x0007;  // 0.7
+  super->log_blocks_per_band = log_band_size;
   super->pre_alloc_count = (8 - 1);
   super->state = (0 << 1) | (1 << 0);  // clean unmount
   calc_guid(&super->guid);
   strncpy((char *) super->volume_label, label, 63);
   super->volume_label[63] = 0;  // make sure label is null terminated
-  super->sector_count = resources->tot_sectors;     // 32 = boot, 1 for super, bitmaps, root size, 1 backup super  (70 sectors)
-  super->free_sector_count = 0; // we update this later
+  super->block_count = tot_blocks;
+  super->free_block_count = 0; // we update this later
   super->primary_super = super_loc;
-  super->backup_super = ((resources->tot_sectors < band_size) ? resources->tot_sectors : band_size) - 1; // last sector in first band
+  super->backup_super = ((tot_blocks < band_size) ? tot_blocks : band_size) - 1; // last block in first band
   super->bitmap_start = super_loc + 1;
   super->root_start = super->bitmap_start + bitmap_size;
   super->bad_start = 0;  // no bad sectors (yet?)
-  memset(super->reserved, 0, 360);
+  super->journal_inode = 0;
+  super->log_block_size = resources->param1;
 
   // create a buffer for the bitmap(s), and mark the first few bits as used.
-  bitmaps = (bit8u *) calloc(tot_bands * (bitmap_size * SECT_SIZE), 1);
+  bitmaps = (uint8_t *) calloc(tot_bands * (bitmap_size * block_size), 1);
   bitmap_mark(0, 0, (int) super->root_start, TRUE);
   bitmap_mark(0, (int) band_size - 1, 1, TRUE);  // backup super
   for (u = 1; u < tot_bands; ++u)
     bitmap_mark(u, 0, (int) bitmap_size, TRUE);
-  // mark the end of the last bitmap for safety
-  bitmap_mark((int) (tot_bands - 1), (int) (resources->tot_sectors - ((tot_bands - 1) * band_size)), (int) ((tot_bands * band_size) - (bit32u) resources->tot_sectors), FALSE);
 
   // allocate the folders data
   folders = (struct S_FOLDERS *) calloc(DEF_FOLDER_CNT * sizeof(struct S_FOLDERS), 1);
   cur_folder_size = DEF_FOLDER_CNT;
 
-  // mark where to start looking for free sectors
-  cur_sector = (size_t) super->root_start;
+  // mark where to start looking for free blocks
+  cur_block = (size_t) super->root_start;
 
   // create the root
   strcpy(folders[0].name, "/");
-  folders[0].root = calloc(FOLDER_SIZE * SECT_SIZE, 1);
+  folders[0].root = calloc(FOLDER_SIZE * block_size, 1);
   root_start((struct S_LEAN_DIRENTRY *) folders[0].root, super->root_start, super->root_start);
   folders[0].cur_rec = 2;
   folders[0].links_count = 2;   // self ('.' link & '..' link)
@@ -322,14 +362,14 @@ int main(int argc, char *argv[]) {
   ++cur_folder;
 
   /*  Since we have an empty disk and root, we know that we can start with the
-   *  first sector and write files consecutively.  There is no need to find
-   *  free sectors when we create new entries.  Therefore, we will start with
-   *  the first sector after the root and the next entry within the root.
-   *  We will also keep track of how many sectors we use so that we can
+   *  first block and write files consecutively.  There is no need to find
+   *  free blocks when we create new entries.  Therefore, we will start with
+   *  the first block after the root and the next entry within the root.
+   *  We will also keep track of how many blocks we use so that we can
    *  update the bitmap.
    */
   size_t read;
-  bit64u file_size;
+  uint64_t file_size;
   struct S_LEAN_EXTENT extent;
   size_t ext_cnt;
   for (u = 0; u < resources->file_cnt; u++) {
@@ -344,22 +384,22 @@ int main(int argc, char *argv[]) {
 
     // create the root's entry
 #ifdef INODE_HAS_EAS
-    size = (file_size + (SECT_SIZE - 1)) / SECT_SIZE;
+    size = (file_size + (block_size - 1)) / block_size;
 #else
-    size = (size_t) (file_size - (SECT_SIZE - S_LEAN_INODE_SIZE) + (SECT_SIZE - 1)) / SECT_SIZE;
+    size = (size_t) (file_size - (block_size - S_LEAN_INODE_SIZE) + (block_size - 1)) / block_size;
 #endif
     ext_cnt = get_next_extent(size + 1, &extent);
     create_root_entry(0, resources->files[u].filename, 0, extent.start[0], super->root_start);
 
     // create the inode
-    printf(" % 2i: Writing %s to LBA %I64i\n", u, resources->files[u].filename, resources->base_lba + extent.start[0]);
-    FSEEK(targ, (resources->base_lba + extent.start[0]) * SECT_SIZE, SEEK_SET);
+    printf(" % 2i: Writing %s to block %" LL64BIT "i\n", u, resources->files[u].filename, resources->base_lba + extent.start[0]);
+    FSEEK(targ, (resources->base_lba + extent.start[0]) * block_size, SEEK_SET);
     create_inode(targ, file_size, file_size, LEAN_ATTR_ARCHIVE | LEAN_ATTR_IFREG, 1, ext_cnt, &extent);
 
 #ifndef INODE_HAS_EAS
-    memset(buffer + SECT_SIZE, 0, (SECT_SIZE - S_LEAN_INODE_SIZE));
-    read = fread(buffer + SECT_SIZE, 1, (SECT_SIZE - S_LEAN_INODE_SIZE), src);
-    fwrite(buffer + SECT_SIZE, (SECT_SIZE - S_LEAN_INODE_SIZE), 1, targ);
+    memset(buffer + block_size, 0, (block_size - S_LEAN_INODE_SIZE));
+    read = fread(buffer + block_size, 1, (block_size - S_LEAN_INODE_SIZE), src);
+    fwrite(buffer + block_size, (block_size - S_LEAN_INODE_SIZE), 1, targ);
 #endif
 
     unsigned int uu = 0;
@@ -367,24 +407,24 @@ int main(int argc, char *argv[]) {
     --extent.size[0];   // skip over inode
     do {
       // by clearing the buffer first, we make sure that the "padding" bytes are all zeros
-      //  (buffer is used by the super, we need to move to next sector)
-      memset(buffer + SECT_SIZE, 0, SECT_SIZE);
-      read = fread(buffer + SECT_SIZE, 1, SECT_SIZE, src);
+      //  (buffer is used by the super, we need to move to next block)
+      memset(buffer + block_size, 0, block_size);
+      read = fread(buffer + block_size, 1, block_size, src);
       if (read == 0)
         break;
-      FSEEK(targ, (resources->base_lba + extent.start[uu]) * SECT_SIZE, SEEK_SET);
-      fwrite(buffer + SECT_SIZE, SECT_SIZE, 1, targ);
+      FSEEK(targ, (resources->base_lba + extent.start[uu]) * block_size, SEEK_SET);
+      fwrite(buffer + block_size, block_size, 1, targ);
       ++extent.start[uu];
       if (--extent.size[uu] == 0)
         ++uu;
-    } while (read == SECT_SIZE);
+    } while (read == block_size);
     fclose(src);
   }
 
   // write the folders
   for (u = 0; u < cur_folder; u++) {
-    printf(" Writing folder '%s' to LBA %I64i\n", folders[u].name, resources->base_lba + folders[u].extent.start[0]);
-    // if we added to the folder size, we need to allocate some more sectors
+    printf(" Writing folder '%s' to block %" LL64BIT "i\n", folders[u].name, resources->base_lba + folders[u].extent.start[0]);
+    // if we added to the folder size, we need to allocate some more blocks
     // this works since we have an empty canvas, it won't have more than two extents allocated,
     //  and we only had at most two already allocated, totaling less than the limit we allow.
     if (folders[u].buf_size > FOLDER_SIZE) {
@@ -395,52 +435,53 @@ int main(int argc, char *argv[]) {
         ++folders[u].ext_cnt;
       }
     }
-    FSEEK(targ, (resources->base_lba + folders[u].extent.start[0]) * SECT_SIZE, SEEK_SET);
-    create_inode(targ, folders[u].cur_rec * sizeof(struct S_LEAN_DIRENTRY), folders[u].buf_size * SECT_SIZE,
+    FSEEK(targ, (resources->base_lba + folders[u].extent.start[0]) * block_size, SEEK_SET);
+    create_inode(targ, folders[u].cur_rec * sizeof(struct S_LEAN_DIRENTRY), folders[u].buf_size * block_size,
       LEAN_ATTR_IFDIR | LEAN_ATTR_PREALLOC, folders[u].links_count, folders[u].ext_cnt, &folders[u].extent);
     void *p = folders[u].root;
 #ifndef INODE_HAS_EAS
-    fwrite(p, (SECT_SIZE - S_LEAN_INODE_SIZE), 1, targ);
-    p = (void *) ((bit8u *) p + (SECT_SIZE - S_LEAN_INODE_SIZE));
+    fwrite(p, (block_size - S_LEAN_INODE_SIZE), 1, targ);
+    p = (void *) ((uint8_t *) p + (block_size - S_LEAN_INODE_SIZE));
 #endif
     unsigned uu = 0;
     for (unsigned int f = 0; f < folders[u].buf_size; f++) {
       ++folders[u].extent.start[uu];
-      FSEEK(targ, (resources->base_lba + folders[u].extent.start[uu]) * SECT_SIZE, SEEK_SET);
-      fwrite(p, SECT_SIZE, 1, targ);
+      FSEEK(targ, (resources->base_lba + folders[u].extent.start[uu]) * block_size, SEEK_SET);
+      fwrite(p, block_size, 1, targ);
       if (--folders[u].extent.size[uu] == 0)
         ++uu;
-      p = (void *) ((bit8u *) p + SECT_SIZE);
+      p = (void *) ((uint8_t *) p + block_size);
     }
     free(folders[u].root);
   }
   free(folders);
 
   // now write the first band to the disk
-  FSEEK(targ, (resources->base_lba + super_loc) * SECT_SIZE, SEEK_SET);
-  printf(" Writing Super Block to LBA %I64i\n", FTELL(targ) / SECT_SIZE);
-  super->free_sector_count = resources->tot_sectors - sectors_used;
-  super->checksum = lean_calc_crc(super, sizeof(struct S_LEAN_SUPER));
-  fwrite(super, SECT_SIZE, 1, targ);
-  FSEEK(targ, (resources->base_lba + super->backup_super) * SECT_SIZE, SEEK_SET);
-  printf(" Writing Backup Super Block to LBA %I64i\n", FTELL(targ) / SECT_SIZE);
-  fwrite(super, SECT_SIZE, 1, targ);
-  --tot_sects;
+  FSEEK(targ, (resources->base_lba + super_loc) * block_size, SEEK_SET);
+  printf(" Writing Super Block to block %" LL64BIT "i\n", FTELL(targ) / block_size);
+  super->free_block_count = resources->tot_sectors - blocks_used;
+  super->checksum = lean_calc_crc(super, block_size);
+  fwrite(super, block_size, 1, targ);
+  FSEEK(targ, (resources->base_lba + super->backup_super) * block_size, SEEK_SET);
+  printf(" Writing Backup Super Block to block %" LL64BIT "i\n", FTELL(targ) / block_size);
+  fwrite(super, block_size, 1, targ);
+  --tot_blocks;
 
   // now create and write each remaining band (just the bitmap)
-  bit8u *b = bitmaps;
+  size_t count_blocks = tot_blocks;
+  uint8_t *b = bitmaps;
   for (u = 0; u < tot_bands; ++u) {
     if (u == 0)
-      FSEEK(targ, (resources->base_lba + super_loc + 1) * SECT_SIZE, SEEK_SET);
+      FSEEK(targ, (resources->base_lba + super_loc + 1) * block_size, SEEK_SET);
     else
-      FSEEK(targ, (resources->base_lba + (band_size * u)) * SECT_SIZE, SEEK_SET);
-    printf(" Writing Bitmap #%i to LBA %I64i\n", (int) (u + 1), FTELL(targ) / SECT_SIZE);
-    fwrite(b, SECT_SIZE, bitmap_size, targ);
-    b += (bitmap_size * SECT_SIZE);
+      FSEEK(targ, (resources->base_lba + (band_size * u)) * block_size, SEEK_SET);
+    printf(" Writing Bitmap #%i to block %" LL64BIT "i\n", (int) (u + 1), (uint64_t) (FTELL(targ) / block_size));
+    fwrite(b, block_size, bitmap_size, targ);
+    b += (bitmap_size * block_size);
     if (u < (tot_bands - 1))
-      tot_sects -= band_size;
+      count_blocks -= band_size;
     else
-      tot_sects = (size_t) (resources->tot_sectors - (FTELL(targ) / SECT_SIZE));
+      count_blocks = (size_t) (resources->tot_sectors - (FTELL(targ) / block_size));
   }
 
   // if there was only one band, we have written all sectors
@@ -448,16 +489,16 @@ int main(int argc, char *argv[]) {
   //  sector of the band,
   // else we need to write remaining sectors (as zeros)
   if (tot_bands > 1) {
-    memset(buffer, 0, SECT_SIZE);
-    while (tot_sects--)
-      fwrite(buffer, SECT_SIZE, 1, targ);
+    memset(buffer, 0, block_size);
+    while (count_blocks--)
+      fwrite(buffer, block_size, 1, targ);
   }
 
   // print space used so we know how much more we have
   puts("");
-  printf("     Total space used: %i%%\n", (int) ((cur_sector * 100) / resources->tot_sectors));
-  printf(" Total byte remaining: %I64i  (%i Meg)\n", (resources->tot_sectors - cur_sector) * 512,
-    (int) (((resources->tot_sectors - cur_sector) + (2048 - 1)) >> 11));
+  printf("     Total space used: %i%%\n", (int) ((cur_block * 100) / tot_blocks));
+  printf(" Total bytes remaining: %" LL64BIT "i  (%i Meg)\n", (uint64_t) ((tot_blocks - cur_block) * block_size),
+    (int) (((tot_blocks - cur_block) + (2048 - 1)) >> 11));  // 2047 to round up to the next meg
 
   // done, cleanup and return
   free(buffer);
@@ -468,18 +509,43 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
+/* Calculate how many blocks each band will use
+ *   returns the log value.  i.e.: returns (x) of  2^x 
+ */
+uint8_t lean_calc_log_band_size(const size_t block_size, const size_t tot_blocks) {
+  uint8_t ret = 12;
+  int i;
+
+  for (i=63; i>16; i--) {
+    if (tot_blocks & ((uint64_t) 1 << i)) {
+      ret = (uint8_t) (i - 4);
+      break;
+    }
+  }
+
+  // A band must be large enough to occupy all bits in a bitmap block.
+  //  therefore, 512-byte blocks must return at least a log2 of 12.
+  //             1024-byte blocks must return at least a log2 of 13.
+  //             2048-byte blocks must return at least a log2 of 14.
+  //             4096-byte blocks must return at least a log2 of 15, etc
+  if (ret < (LOG2(block_size) + 3))
+    return (LOG2(block_size) + 3);
+  
+  return ret;
+}
+
 /* This always skips the first dword since it is the crc field.
  *  The CRC is calculated as:
  *     crc = 0;
  *     loop (n times)
  *       crc = ror(crc) + dword[x]
  */
-bit32u lean_calc_crc(const void *ptr, unsigned int size) {
-  bit32u crc = 0;
-  const bit32u *p = (const bit32u *) ptr;
+uint32_t lean_calc_crc(const void *ptr, unsigned int size) {
+  uint32_t crc = 0;
+  const uint32_t *p = (const uint32_t *) ptr;
   unsigned int i;
 
-  size /= sizeof(bit32u);
+  size /= sizeof(uint32_t);
   for (i = 1; i < size; ++i)
     crc = (crc << 31) + (crc >> 1) + p[i];
 
@@ -492,17 +558,17 @@ bit32u lean_calc_crc(const void *ptr, unsigned int size) {
  * (we can't just use time(NULL) since that is not portable,
  *   and could be different on each compiler)
  */
-bit64u get_useconds(void) {
-  __time64_t rawtime;
-  struct tm timeinfo;
+uint64_t get_useconds(void) {
+  time_t rawtime;
+  struct tm *timeinfo;
 
-  _time64(&rawtime);
-  _localtime64_s(&timeinfo, &rawtime);
+  time(&rawtime);
+  timeinfo = localtime(&rawtime);
 
   // credit to: http://howardhinnant.github.io/date_algorithms.html
-  const int d = timeinfo.tm_mday;
-  const int m = timeinfo.tm_mon + 1;
-  const int y = (timeinfo.tm_year + 1900) - (m <= 2);
+  const int d = timeinfo->tm_mday;
+  const int m = timeinfo->tm_mon + 1;
+  const int y = (timeinfo->tm_year + 1900) - (m <= 2);
   const int era = (y >= 0 ? y : y - 399) / 400;
   const unsigned yoe = (unsigned) (y - era * 400);                  // [0, 399]
   const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;  // [0, 365]
@@ -510,9 +576,9 @@ bit64u get_useconds(void) {
   const unsigned days = era * 146097 + (int)doe - 719468;          // 719468 = days between 0000/03/01 and 1970/1/1.
 
   // then we need seconds
-  const unsigned hours = (days * 24) + timeinfo.tm_hour;
-  const unsigned mins = (hours * 60) + timeinfo.tm_min;
-  return (bit64u) (((bit64u) mins * 60) + (bit64u) timeinfo.tm_sec) * (bit64u) 1000000;
+  const unsigned hours = (days * 24) + timeinfo->tm_hour;
+  const unsigned mins = (hours * 60) + timeinfo->tm_min;
+  return (uint64_t) (((uint64_t) mins * 60) + (uint64_t) timeinfo->tm_sec) * (uint64_t) 1000000;
 
   // 1493751050000000 = 2 May 2017, ~6:45p
 }
@@ -524,30 +590,30 @@ bit64u get_useconds(void) {
 void bitmap_mark(const int band, int start, int count, const bool used) {
   // count the sectors used
   if (used)
-    sectors_used += count;
+    blocks_used += count;
 
   // point to the correct starting bitmap
-  bit8u *p = bitmaps + (band * (bitmap_size * SECT_SIZE));
+  uint8_t *p = bitmaps + (band * (bitmap_size * block_size));
   while (count--) {
     p[start / 8] |= (1 << (start % 8));
     ++start;
   }
 }
 
-bit64u bitmap_find(void) {
-  while (bitmaps[cur_sector / 8] & (1 << (cur_sector % 8))) {
-    ++cur_sector;
-    if (cur_sector >= (tot_sects - 1)) {  // -1 for the last sector (in the band) being the backup super (we just do -1 for ease)
+uint64_t bitmap_find(void) {
+  while (bitmaps[cur_block / 8] & (1 << (cur_block % 8))) {
+    ++cur_block;
+    if (cur_block >= (tot_blocks - 1)) {  // -1 for the last sector (in the band) being the backup super (we just do -1 for ease)
       printf("Image size too small.  No more available sectors...\n");
       exit(-1);
     }
   }
 
   // mark it
-  bitmaps[cur_sector / 8] |= (1 << (cur_sector % 8));
-  ++sectors_used;
+  bitmaps[cur_block / 8] |= (1 << (cur_block % 8));
+  ++blocks_used;
 
-  return cur_sector++;
+  return cur_block++;
 }
 
 // In theory, this should only need a maximum of two extents
@@ -555,15 +621,15 @@ bit64u bitmap_find(void) {
 //  however, when we get to the next band, we need to skip over the
 //   bitmap (and super backup), so this will need two extents.
 // size = bytes (remember to subtract if EA's not used)
-size_t get_next_extent(size_t size, struct S_LEAN_EXTENT* extent) {
+size_t get_next_extent(size_t size, struct S_LEAN_EXTENT *extent) {
   size_t i = 0;
-  bit64u sect, c = 1;
+  uint64_t block, c = 1;
 
   extent->start[0] = bitmap_find();
   extent->size[0] = 1;
   while (--size) {
-    sect = bitmap_find();
-    if (sect == (extent->start[i] + c)) {
+    block = bitmap_find();
+    if (block == (extent->start[i] + c)) {
       ++extent->size[i];
       ++c;
     }
@@ -573,7 +639,7 @@ size_t get_next_extent(size_t size, struct S_LEAN_EXTENT* extent) {
         printf("Extent size reached more than %i...\n", LEAN_INODE_EXTENT_CNT);
         exit(-1);
       }
-      extent->start[i] = sect;
+      extent->start[i] = block;
       extent->size[i] = 1;
       c = 1;
     }
@@ -583,7 +649,7 @@ size_t get_next_extent(size_t size, struct S_LEAN_EXTENT* extent) {
   return i + 1;
 }
 
-void create_root_entry(const size_t folder, char *filename, const size_t pos, bit64u sector, const bit64u parent) {
+void create_root_entry(const size_t folder, char *filename, const size_t pos, uint64_t block, const uint64_t parent) {
   char name[512], *p;
   size_t i;
   bool is_folder = FALSE, fnd = FALSE;
@@ -610,7 +676,7 @@ void create_root_entry(const size_t folder, char *filename, const size_t pos, bi
       // i == cur_folder from for() loop above
       strcpy(folders[i].name, name);
       folders[i].buf_size = FOLDER_SIZE;
-      folders[i].root = calloc(FOLDER_SIZE * SECT_SIZE, 1);
+      folders[i].root = calloc(FOLDER_SIZE * block_size, 1);
       folders[i].ext_cnt = get_next_extent(FOLDER_SIZE + 1, &folders[i].extent);
       root_start((struct S_LEAN_DIRENTRY*) folders[i].root, folders[i].extent.start[0], parent);
       folders[i].cur_rec = 2;
@@ -620,8 +686,8 @@ void create_root_entry(const size_t folder, char *filename, const size_t pos, bi
       ++cur_folder;
     }
 
-    create_root_entry(i, filename, strlen(name) + 1, sector, folders[i].extent.start[0]);
-    sector = folders[i].extent.start[0];
+    create_root_entry(i, filename, strlen(name) + 1, block, folders[i].extent.start[0]);
+    block = folders[i].extent.start[0];
     strcpy(name, name + pos);
   }	else
     strcpy(name, filename + pos);
@@ -630,16 +696,16 @@ void create_root_entry(const size_t folder, char *filename, const size_t pos, bi
   if (!fnd) {
     const size_t rec_len = ((strlen(name) + 12 + 15) / 16);
     // if we are near the end of the buffer, we need to add to the buffer size
-    if (((folders[folder].cur_rec + rec_len) * sizeof(struct S_LEAN_DIRENTRY)) > (folders[folder].buf_size * SECT_SIZE)) {
+    if (((folders[folder].cur_rec + rec_len) * sizeof(struct S_LEAN_DIRENTRY)) > (folders[folder].buf_size * block_size)) {
       folders[i].buf_size += FOLDER_SIZE;
-      folders[folder].root = (void *) realloc(folders[folder].root, (folders[i].buf_size * SECT_SIZE));
+      folders[folder].root = (void *) realloc(folders[folder].root, (folders[i].buf_size * block_size));
     }
-    struct S_LEAN_DIRENTRY* entry = (struct S_LEAN_DIRENTRY*)
-      ((bit8u*)folders[folder].root + (folders[folder].cur_rec * sizeof(struct S_LEAN_DIRENTRY)));
-    entry->name_len = (bit16u) strlen(name);
-    entry->inode = sector;
+    struct S_LEAN_DIRENTRY *entry = (struct S_LEAN_DIRENTRY *)
+      ((uint8_t *) folders[folder].root + (folders[folder].cur_rec * sizeof(struct S_LEAN_DIRENTRY)));
+    entry->name_len = (uint16_t) strlen(name);
+    entry->inode = block;
     entry->type = (is_folder) ? LEAN_FT_DIR : LEAN_FT_REG;
-    entry->rec_len = (bit8u) rec_len;
+    entry->rec_len = (uint8_t) rec_len;
     memcpy(entry->name, name, entry->name_len);
 
     // move to next record
@@ -654,7 +720,7 @@ void create_root_entry(const size_t folder, char *filename, const size_t pos, bi
 }
 
 // create the first two entries of a root directory
-void root_start(struct S_LEAN_DIRENTRY *record, const bit64u self, const bit64u parent) {
+void root_start(struct S_LEAN_DIRENTRY *record, const uint64_t self, const uint64_t parent) {
   // since '.' and '..' will be less than 4 chars each, we can cheat and use the record index [0] and [1]
   // The "." entry
   record[0].inode = self;
@@ -671,15 +737,14 @@ void root_start(struct S_LEAN_DIRENTRY *record, const bit64u self, const bit64u 
   record[1].name[1] = '.';
 }
 
-void create_inode(FILE *fp, const bit64u file_size, const bit64u allocation_size, const bit32u attrib,
+void create_inode(FILE *fp, const uint64_t file_size, const uint64_t allocation_size, const uint32_t attrib,
   const int link_count, const size_t ext_cnt, struct S_LEAN_EXTENT *extent) {
 
-  bit8u buffer[SECT_SIZE];
-  struct S_LEAN_INODE *inode = (struct S_LEAN_INODE *) buffer;
-  memset(buffer, 0, SECT_SIZE);
+  struct S_LEAN_INODE *inode = (struct S_LEAN_INODE *) malloc(block_size);
+  memset(inode, 0, block_size);
 
   inode->magic = LEAN_INODE_MAGIC;
-  inode->extent_count = (bit8u) ext_cnt;
+  inode->extent_count = (uint8_t) ext_cnt;
   memset(inode->reserved, 0, 3);
   inode->indirect_count = 0;
   inode->links_count = link_count;
@@ -690,12 +755,12 @@ void create_inode(FILE *fp, const bit64u file_size, const bit64u allocation_size
     attrib;
   inode->file_size = file_size;
 #ifdef INODE_HAS_EAS
-  inode->sector_count = ((allocation_size + (SECT_SIZE - 1)) / SECT_SIZE) + 1;
+  inode->block_count = ((allocation_size + (block_size - 1)) / block_size) + 1;
 #else
-  if (allocation_size > (SECT_SIZE - S_LEAN_INODE_SIZE))
-    inode->sector_count = (((allocation_size - (SECT_SIZE - S_LEAN_INODE_SIZE)) + (SECT_SIZE - 1)) / SECT_SIZE) + 1;
+  if (allocation_size > (block_size - S_LEAN_INODE_SIZE))
+    inode->block_count = (((allocation_size - (block_size - S_LEAN_INODE_SIZE)) + (block_size - 1)) / block_size) + 1;
   else
-    inode->sector_count = 1;  // everything fits in the INODE sector
+    inode->block_count = 1;  // everything fits in the INODE sector
 #endif
   inode->acc_time =
     inode->sch_time =
@@ -708,20 +773,22 @@ void create_inode(FILE *fp, const bit64u file_size, const bit64u allocation_size
     inode->extent_start[e] = extent->start[e];
     inode->extent_size[e] = extent->size[e];
   }
-  inode->checksum = lean_calc_crc((bit32u *) inode, S_LEAN_INODE_SIZE);
+  inode->checksum = lean_calc_crc((uint32_t *) inode, S_LEAN_INODE_SIZE);
 
 #ifdef INODE_HAS_EAS
   // extended attributes
-  bit32u *ea = (bit32u *) ((bit32u) inode + S_LEAN_INODE_SIZE);
-  ea[0] = SECT_SIZE - S_LEAN_INODE_SIZE - sizeof(bit32u);
+  uint32_t *ea = (uint32_t *) ((uint32_t) inode + S_LEAN_INODE_SIZE);
+  ea[0] = block_size - S_LEAN_INODE_SIZE - sizeof(uint32_t);
 #endif
 
   // write the inode to the disk
 #ifdef INODE_HAS_EAS
-  fwrite(buffer, SECT_SIZE, 1, fp);
+  fwrite(inode, block_size, 1, fp);
 #else
-  fwrite(buffer, S_LEAN_INODE_SIZE, 1, fp);
+  fwrite(inode, S_LEAN_INODE_SIZE, 1, fp);
 #endif
+  
+  free(inode);
 }
 
 /* Parse command line.  We are looking for the following items
