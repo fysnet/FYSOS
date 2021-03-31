@@ -71,6 +71,13 @@
 # error 64 bit ftell(), fseek() not defined
 #endif
 
+// try to create a portable getche() function call
+#if defined(_MSC_VER) || defined(DJGPP)
+  static inline int getchecho() { int ret = getch(); putch(ret); return ret; }
+#else
+  static inline int getchecho() { return getchar(); }
+#endif
+
 // 64-bit display
 #ifdef _MSC_VER
   #define LL64BIT "I64"
