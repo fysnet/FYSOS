@@ -5,9 +5,9 @@
 #  bootfile=filename  - This is the path/filename of the boot code file to use (should be no more than 32 sectors in length)
 #  imgfile=filename   - This is the path/filename of the target file to create/modify
 #  base_lba=0         - Base LBA to write the Super Block to
-#  tot_sects=0        - Total sectors to "allocate"
-#  param0=12          - Log Band Size (12 = (1<<12) = 4096 sectors per band)
-#  param1=            - Ignored
+#  tot_sects=0        - Total blocks to "allocate"
+#  param0=12          - Log Band Size (12 = (1<<12) = 4096 blocks per band)
+#  param1=            - Log Block Size (9 = (1<<9) = 512 bytes per block)
 #  heads=16           - heads per cylinder
 #  spt=63             - sectors per track
 #   path_to_source_file0, filename_to_use0, 0
@@ -26,11 +26,11 @@ imgfile=  D:\fysos\main\filesys\images\leanfs.img
 #   tot_sects does not include MBR or 16 sector boot
 # When /E is not used:
 #   Base_lba should be 63, but is not required.
-#   tot_sects includes MBR, 16 sector boot, and all remaining sectors
+#   tot_sects includes MBR, 16 sector boot, and all remaining blocks
 # You may use decimal or hexadecimal numbers
 base_lba= 0         # Base LBA of partition (LBA of 1st sector of boot code)
-tot_sects= 10080    # Total number of sectors in partition
-param0= 12          # (1<<12) sectors per band
+tot_sects= 10080    # Total number of blocks in partition
+param0= 12          # (1<<12) blocks per band
 heads= 16           # heads per cylinder
 spt= 63             # sectors per track
 
