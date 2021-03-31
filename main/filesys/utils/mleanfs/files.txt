@@ -7,7 +7,7 @@
 #  base_lba=0         - Base LBA to write the Super Block to
 #  tot_sects=0        - Total blocks to "allocate"
 #  param0=12          - Log Band Size (12 = (1<<12) = 4096 blocks per band)
-#  param1=            - Log Block Size (9 = (1<<9) = 512 bytes per block)
+#  param1=9           - Log Block Size (9 = (1<<9) = 512 bytes per block)
 #  heads=16           - heads per cylinder
 #  spt=63             - sectors per track
 #   path_to_source_file0, filename_to_use0, 0
