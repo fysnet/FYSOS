@@ -444,6 +444,15 @@ void CNewImage::OnSectSizeChange() {
       m_sector_size = 512;
       break;
   }
+
+  // Since we changed the sector size, we need to update
+  //  each partition's Meg Size display
+  CNewPart *partition;
+  int i, part_count = m_Sheet.GetPageCount();
+  for (i=0; i<part_count; i++) {
+    partition = (CNewPart *) m_Sheet.GetPage(i);
+    partition->OnSizeChanged();
+  }
 }
 
 void CNewImage::UpdateStatus(CString csStatus) {

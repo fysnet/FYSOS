@@ -918,6 +918,8 @@
 #define IDC_CREATED_CHANGE              1591
 #define IDC_CREATED_CHANGE2             1592
 #define IDC_LAST_CHANGE                 1592
+#define IDC_SIZE_MEGS                   1592
+#define IDC_EDIT1                       1593
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
@@ -937,7 +939,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        200
 #define _APS_NEXT_COMMAND_VALUE         32785
-#define _APS_NEXT_CONTROL_VALUE         1592
+#define _APS_NEXT_CONTROL_VALUE         1594
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

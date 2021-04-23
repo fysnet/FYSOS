@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -128,7 +128,8 @@ BOOL CNewPart::OnInitDialog() {
     GetDlgItem(IDC_ISO9660_288)->ShowWindow(SW_HIDE);
     GetDlgItem(IDC_ISO9660_HD)->ShowWindow(SW_HIDE);
   }
-  
+  OnSizeChanged();
+
   return TRUE;
 }
 
@@ -145,6 +146,20 @@ void CNewPart::OnPartChanged() {
     Sheet->GetTabControl()->SetItem(m_index, &ti);
     m_dirty = TRUE;
   }
+  
+  OnSizeChanged();
+}
+
+void CNewPart::OnSizeChanged() {
+  CNewImage *parent = (CNewImage *) m_parent;
+  CString megs;
+
+  UpdateData(TRUE); // bring from Dialog
+  if (((size_t) m_sectors * parent->m_sector_size) < (size_t) (1024 * 1024 * 1024))
+    megs.Format("%.3f Meg", (float) ((double) ((size_t) m_sectors * parent->m_sector_size) / (double) (size_t) (1024 * 1024)));
+  else
+    megs.Format("%.3f Gig", (float) ((double) ((size_t) m_sectors * parent->m_sector_size) / (double) (size_t) (1024 * 1024 * 1024)));
+  SetDlgItemText(IDC_SIZE_MEGS, megs);
 }
 
 void CNewPart::OnBrowse() {

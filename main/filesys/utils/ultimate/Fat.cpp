@@ -733,7 +733,6 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
     m_dir_tree.SetItemState(m_hRoot, TVIS_BOLD, TVIS_BOLD);
     
     UpdateWindow();
-    
     // fill the tree with the directory
     struct S_FAT_ROOT *root = NULL;
     if (m_fat_size == FS_FAT32) {
@@ -752,7 +751,7 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
       SaveItemInfo(m_hRoot, rootcluster, m_rootsize, NULL, 0, 0, 0, FALSE);
       CWaitCursor wait; // display a wait cursor
       m_too_many = FALSE;
-      m_parse_depth_limit = FALSE;
+      m_parse_depth_limit = 0;  // start new
       ParseDir(root, m_rootsize / sizeof(struct S_FAT_ROOT), m_hRoot, TRUE);
       m_dir_tree.Expand(m_hRoot, TVE_EXPAND);
       free(root);
@@ -768,6 +767,8 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   }
   Invalidate(TRUE);  // redraw the tab
 }
+
+CString csTemp;
 
 bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM parent, BOOL IsRoot) {
   struct S_FAT_ROOT *sub;
@@ -794,7 +795,7 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
       cnt = FatGetName(&root[i], name, &attrb, &start, &filesize, NULL) - 1; // -1 so we display the deleted SFN ????
     else if (ErrorCode != FAT_NO_ERROR) {
       hItem = m_dir_tree.Insert("Invalid Entry", ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, parent);
-      if (hItem == NULL) { m_too_many = TRUE; return TRUE; }
+      if (hItem == NULL) { m_too_many = TRUE; m_parse_depth_limit--; return TRUE; }
       SaveItemInfo(hItem, 0, filesize, &root[i], i, 1, ErrorCode, FALSE);
       cnt = 1;
       if (++ErrorCount >= ErrorMax)
@@ -806,7 +807,7 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
         if (IsDlgButtonChecked(IDC_SHOW_DEL)) {
           name = "(deleted entry)";
           hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, parent);
-          if (hItem == NULL) { m_too_many = TRUE; return TRUE; }
+          if (hItem == NULL) { m_too_many = TRUE; m_parse_depth_limit--; return TRUE; }
           SaveItemInfo(hItem, 0, filesize, &root[i], i, cnt, 0, FALSE);
         }
       } else {
@@ -815,13 +816,14 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
             hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER_HIDDEN, IMAGE_FOLDER_HIDDEN, parent);
           else
             hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
-          if (hItem == NULL) { m_too_many = TRUE; return TRUE; }
+          if (hItem == NULL) { m_too_many = TRUE; m_parse_depth_limit--; return TRUE; }
           SaveItemInfo(hItem, start, filesize, &root[i], i, cnt, 0, !IsDot);
           if (!IsDot) {
             sub = (struct S_FAT_ROOT *) ReadFile(start, &filesize, FALSE);
             if (sub) {
               if (!ParseDir(sub, (filesize + 31) / 32, hItem, FALSE)) {
                 free(sub);
+                m_parse_depth_limit--;
                 return FALSE;
               }
               free(sub);
@@ -829,14 +831,14 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
           }
         } else if (attrb & FAT_ATTR_VOLUME) {
           hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_LABEL, IMAGE_LABEL, parent);
-          if (hItem == NULL) { m_too_many = TRUE; return TRUE; }
+          if (hItem == NULL) { m_too_many = TRUE; m_parse_depth_limit--; return TRUE; }
           SaveItemInfo(hItem, 0, filesize, &root[i], i, cnt, 0, FALSE);
         } else {
           if (attrb & FAT_ATTR_HIDDEN)
             hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE_HIDDEN, IMAGE_FILE_HIDDEN, parent);
           else
             hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
-          if (hItem == NULL) { m_too_many = TRUE; return TRUE; }
+          if (hItem == NULL) { m_too_many = TRUE; m_parse_depth_limit--; return TRUE; }
           SaveItemInfo(hItem, start, filesize, &root[i], i, cnt, 0, TRUE);
         }
       }
@@ -844,9 +846,11 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
     i += cnt;
   }
 
+  m_parse_depth_limit--;
   return TRUE;
 }
 
+// 'size' is only valid if IsRoot > 0
 void *CFat::ReadFile(DWORD cluster, DWORD *size, BOOL IsRoot) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   struct S_FAT1216_BPB *bpb = (struct S_FAT1216_BPB *) m_bpb_buffer;
@@ -860,11 +864,8 @@ void *CFat::ReadFile(DWORD cluster, DWORD *size, BOOL IsRoot) {
   } else {
     struct S_FAT_ENTRIES ClusterList;
     FatFillClusterList(&ClusterList, cluster);
+    ptr = malloc(ClusterList.entry_count * (bpb->bytes_per_sect * bpb->sect_per_clust));
     for (int i=0; i<ClusterList.entry_count; i++) {
-      if (mem_size < (pos + (bpb->bytes_per_sect * bpb->sect_per_clust))) {
-        mem_size += (bpb->bytes_per_sect * bpb->sect_per_clust);
-        ptr = realloc(ptr, mem_size);
-      }
       dlg->ReadFromFile((BYTE *) ptr + pos, m_lba + m_datastart + ((ClusterList.entries[i] - 2) * bpb->sect_per_clust), bpb->sect_per_clust);
       pos += (bpb->bytes_per_sect * bpb->sect_per_clust);
     }
@@ -1172,6 +1173,7 @@ DWORD CFat::GetNextCluster(void *FatBuffer, DWORD cluster) {
 }
 
 int CFat::FatFillClusterList(struct S_FAT_ENTRIES *EntryList, DWORD Cluster) {
+  CWaitCursor wait; // display a wait cursor
   EntryList->was_error = FALSE;
   EntryList->entry_count = 0;
   EntryList->entry_size = 128;
@@ -1505,8 +1507,8 @@ void CFat::CreateSFN(CString csLFN, int seq, BYTE name[8], BYTE ext[3]) {
 }
 
 // 15-9 Year (0 = 1980, 119 = 2099 supported under DOS/Windows, theoretically up to 127 = 2107)
-// 8-5  Month (1Â–12)
-// 4-0  Day (1Â–31) 
+// 8-5  Month (1–12)
+// 4-0  Day (1–31) 
 WORD CFat::CreateDate(void) {
   CTime time = CTime::GetCurrentTime();
   WORD word;
@@ -1711,7 +1713,7 @@ void CFat::OnFatCopy() {
     CopyFolder(hItem, csPath, csName);
   } else {
     CFileDialog dlg (
-      FALSE,            // Create an saveas file dialog
+      FALSE,            // Create a saveas file dialog
       NULL,             // Default file extension
       csName,           // Default Filename
       OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_EXPLORER | OFN_OVERWRITEPROMPT, // flags
@@ -1891,7 +1893,7 @@ BOOL CFat::InsertFile(DWORD Cluster, CString csName, CString csPath, BOOL IsRoot
     free(buffer);
     return FALSE;
   }
-  
+
   // create a root entry in the folder
   AllocateRoot(csName, Cluster, fat_entries.entries[0], (DWORD) size, FAT_ATTR_ARCHIVE, IsRoot);
   
@@ -2071,6 +2073,7 @@ void CFat::DeleteFile(HTREEITEM hItem) {
     cluster = root[items->Index + i - 1].strtclst;
     if (m_fat_size == FS_FAT32)
       cluster |= (root[items->Index + i - 1].type.fat32.strtclst32 << 16);
+
     // save the first char for undelete (the first byte in the resv[] area is not used for both FAT12,16 and FAT32
     root[items->Index + i - 1].type.resv[0] = root[items->Index + i - 1].name[0];
     //root[items->Index + i - 1].strtclst = 0;
@@ -2178,8 +2181,10 @@ void CFat::OnFatEntry() {
       // fill fat entry list
       FatEntry.m_fat_entries.entries = NULL;
       FatEntry.m_fat_entries.entry_count = 0;
-      if (items->Cluster > 0)
+      if (items->Cluster > 0) {
+        CWaitCursor wait;  // creates and changes to a wait cursor (automatically changes back on destroy())
         FatFillClusterList(&FatEntry.m_fat_entries, items->Cluster);
+      }
       if (FatEntry.DoModal() == IDOK) { // apply button pressed?
         memcpy(&items->Entry, FatEntry.m_lfns, ROOT_ENTRY_MAX * sizeof(struct S_FAT_ROOT));
         //items->EntryCount = FatEntry.m_lfn_count + 1;  // must keep the same amount of entries so we write them all back
@@ -2191,7 +2196,7 @@ void CFat::OnFatEntry() {
         ConvertDumpToBuffer(FatEntry.m_resvd, items->Entry[sfn_index].type.resv, 10);
         items->Entry[sfn_index].time = convert16(FatEntry.m_time);
         items->Entry[sfn_index].date = convert16(FatEntry.m_date);
-        items->Entry[sfn_index].strtclst = convert16(FatEntry.m_cluster);
+        items->Entry[sfn_index].strtclst = convert16(FatEntry.m_cluster) & 0xFFFF;
         items->Entry[sfn_index].filesize = convert32(FatEntry.m_filesize);
         UpdateEntry(hItem, items);
         // reload the list
@@ -2337,8 +2342,10 @@ void CFat::OnErase() {
   
   if (AfxMessageBox("This will erase the whole partition!  Continue?", MB_YESNO, 0) == IDYES) {
     memset(buffer, 0, MAX_SECT_SIZE);
+    CWaitCursor wait; // display a wait cursor
     for (DWORD64 lba=0; lba<m_size; lba++)
       dlg->WriteToFile(buffer, m_lba + lba, 1);
+    wait.Restore(); // unnecassary since the 'destroy' code will restore it, but just to make sure.
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
 }

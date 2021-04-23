@@ -101,6 +101,8 @@ public:
   //}}AFX_VIRTUAL
 
 // Implementation
+public:
+  afx_msg void OnSizeChanged();
 protected:
   // Generated message map functions
   //{{AFX_MSG(CNewPart)

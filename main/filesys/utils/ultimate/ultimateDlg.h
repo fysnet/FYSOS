@@ -87,7 +87,7 @@
 
 #include "Unknown.h"
 
-#define MAX_DIR_PARSE_DEPTH  100    // max recursive depth we allow
+#define MAX_DIR_PARSE_DEPTH  150    // max recursive depth we allow
 
 #define MAX_SUB_VOLUMES   16
 

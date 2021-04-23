@@ -1063,19 +1063,21 @@ void CLean::ZeroExtent(DWORD64 ExtentStart, DWORD ExtentSize) {
 // the super must be between byte offset 512 and byte offset 131072, inclusively.
 BOOL CLean::DetectLeanFS(void) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE *buffer = (BYTE *) malloc(131072 + 512);
+  BYTE *buffer = (BYTE *) malloc(131072 + 65536);
   BOOL fnd = FALSE;
   
   // mark the block as "not found"
   m_super_block_loc = 0xFFFFFFFF;
   
   // since we have an unknown block size, the super must be on a 512-byte boundary
-  //  from 512 to 131072, inclusively.  That is 257 512-byte sectors.
-  // We also (temporarily) change the sector size to 512, so we only read 257 512-byte sectors.
+  //  from 512 to and including 131072.  That is 256+1 512-byte sectors.
+  // since we support up to 64k block sizes, we read an extra 128 512-byte sectors so we can
+  //  check the checksum as well.
+  // We also (temporarily) change the sector size to 512, so we only read 256+128 512-byte sectors.
   DWORD64 lba = (m_lba * dlg->m_sect_size) / 512;
   unsigned org_size = dlg->m_sect_size;
   dlg->m_sect_size = 512;
-  dlg->ReadFromFile(buffer, lba, 257);
+  dlg->ReadFromFile(buffer, lba, 256+128);
   dlg->m_sect_size = org_size;
 
   for (unsigned sector=1; sector<=256; sector++) {
@@ -2286,8 +2288,10 @@ void CLean::OnErase() {
   
   if (AfxMessageBox("This will erase the whole partition!  Continue?", MB_YESNO, 0) == IDYES) {
     memset(buffer, 0, MAX_SECT_SIZE);
+    CWaitCursor wait; // display a wait cursor
     for (DWORD64 lba=0; lba<m_size; lba++)
       dlg->WriteToFile(buffer, m_lba + lba, 1);
+    wait.Restore(); // unnecassary since the 'destroy' code will restore it, but just to make sure.
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
 }

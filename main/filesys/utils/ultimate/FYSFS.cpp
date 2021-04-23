@@ -1023,8 +1023,10 @@ void CFYSFS::OnErase() {
   
   if (AfxMessageBox("This will erase the whole partition!  Continue?", MB_YESNO, 0) == IDYES) {
     memset(buffer, 0, MAX_SECT_SIZE);
+    CWaitCursor wait; // display a wait cursor
     for (DWORD64 lba=0; lba<m_size; lba++)
       dlg->WriteToFile(buffer, m_lba + lba, 1);
+    wait.Restore(); // unnecassary since the 'destroy' code will restore it, but just to make sure.
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
 }

@@ -329,7 +329,7 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
     ErrorCode = CheckRootEntry(r);
     if (ErrorCode != ISO_NO_ERROR) {
       hItem = m_dir_tree.Insert("Invalid Entry", ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, parent);
-      if (hItem == NULL) return TRUE;
+      if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
       SaveItemInfo(hItem, r, 0, FALSE);
       if (++ErrorCount >= ErrorMax)
         break;
@@ -338,12 +338,12 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
       if ((r->fi_len == 1) && (r->ident[0] == 0)) {
         name = ".";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
-        if (hItem == NULL) return TRUE;
+        if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
         SaveItemInfo(hItem, r, 0, FALSE);
       } else if ((r->fi_len == 1) && (r->ident[0] == 1)) {
         name = "..";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
-        if (hItem == NULL) return TRUE;
+        if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
         SaveItemInfo(hItem, r, 0, FALSE);
       } else {
         // stop at ';'
@@ -362,19 +362,20 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
         
         if (r->flags & ISO_ROOT_FLAGS_DIR) {
           hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
-          if (hItem == NULL) return TRUE;
+          if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
           SaveItemInfo(hItem, r, 0, TRUE);
           sub = (struct S_ISO_ROOT *) ReadFile(r->extent_loc, r->data_len, r->flags, FALSE);
           if (sub) {
             if (!ParseDir(sub, r->data_len, hItem, FALSE)) {
               free(sub);
+              m_parse_depth_limit--;
               return FALSE;
             }
             free(sub);
           }
         } else {
           hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
-          if (hItem == NULL) return TRUE;
+          if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
           SaveItemInfo(hItem, r, 0, TRUE);
         }
       }
@@ -383,6 +384,7 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
     r = (struct S_ISO_ROOT *) ((BYTE *) r + r->len);
   }
   
+  m_parse_depth_limit--;
   return TRUE;
 }
 
