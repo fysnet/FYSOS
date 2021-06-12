@@ -63,8 +63,13 @@ Please note that there are other things I have forgotten to mention that you wil
  into consideration when using this code.  One thing is the 0x400 offset of the kernel file I use,
  though I don't think it matters here, but do check.  I will make note of things as I update the
  code and remember other things.
-  
-If you find any errors or have any questions, please feel free to send me an email at:
+
+#### Errors, or it just flat out doesn't work
+If you find any errors or have any questions, please feel free to send me an email.  It would
+make it a lot easier on my part if you send me an URL to the image you tried.  If you don't
+have an URL for the image, please contact me asking how you can send me the image.
+If I have the image file you are using that produced the error, it will make it much easier
+for me to fix the error.  Thank you.  You can contact me at:
 
 #### fys [at] fysnet [dot] net
 
