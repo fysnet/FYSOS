@@ -475,6 +475,6 @@ small_params_total db  ' Total Sectors: ',0
 ; indicate pmode code so we can pad with a value greater than 64k
 .pmode
 
-temp_buff  dup ((2880 * 512) - $),0FFh
+temp_buff  dup ((2880 * 512) - $),00h
 
 .end
