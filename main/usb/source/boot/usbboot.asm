@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2020
+ ;                             Copyright (c) 1984-2021
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -74,9 +74,9 @@
  ;    This code uses instructions that are valid for a 386 or later 
  ;    Intel x86 or compatible CPU.
  ;
- ;  Last updated: 13 July 2020
+ ;  Last updated: 17 June 2021
  ;
- ;  Assembled using (NBASM v00.26.74) (http://www.fysnet/newbasic.htm)
+ ;  Assembled using (NBASM v00.26.80) (http://www.fysnet/newbasic.htm)
  ;   nbasm usbboot
  ;
 
@@ -143,29 +143,27 @@ FSType       db  FAT_SIZE      ; File system type
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; start of our boot code
-           
+
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ;  setup the stack and seg registers (real mode)
+           ;  (with our read_long_sectors code, our SS must be equal to DS)
 start:     cli                     ; don't allow interrupts
-           mov  bp,07C0h           ; 07C0:0000h = 0000:7C00h = 0x07C00
-           mov  ds,bp              ;
-           mov  es,bp              ;
-           mov  ss,bp              ; start of stack segment (07C0h)
-           mov  sp,4400h           ; first push at 07C0:43FEh
-                                   ; (17k size in bytes)
-                                   ; (07C0:4400h = 0C00:0000h which is just
-                                   ;    under 0C00:0000h where ROOT resides)
+           mov  ax,07C0h           ; 07C0:0000h = 0000:7C00h = 0x07C00
+           mov  ds,ax              ;
+           mov  es,ax              ;
+           mov  ss,ax              ; start of stack segment (0000h)
+           mov  sp,0FFFEh          ; first push at 07C0:FFFEh (-2)
            sti                     ; allow interrupts again
-
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; save the drive value the BIOS sent us
            mov  drive,dl
-
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; print a string to the screen so we know we made it here.
            mov  si,offset made_it_str
            call display_string
-
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; now let's see if the BIOS emulates the BIOS Extended Disk Read Service(s)
            mov  ah,41h
@@ -203,6 +201,7 @@ disk_read_error:
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; else use service 42h
+           ; (this assumes SS = DS)
 use_big_read:
            push dword 0    ; offset 12
            push dword 1    ; offset 8
@@ -218,20 +217,18 @@ use_big_read:
            mov  dl,drive   ;
            int  13h
            jc   short disk_read_error
+           
            add  sp,16      ; remove the items from the stack
            
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 done_read:
-           
            
            ; there are about 70 bytes free right here to add
            ; more code or other strings.  If this is not enough,
            ; we can always add it below and increment the EXTRA_SECTS
            ; equate.
            
-           
            jmp  do_remaining
-
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; display a char to the screen using the BIOS
@@ -295,18 +292,19 @@ hexdb:  push    eax
         shr     eax,4           ; do high nibble first
         call    hexdn
         pop     eax
-hexdn:  and     eax,0fh         ; isolate nibble
+hexdn:  and     al,0Fh          ; isolate nibble
         add     al,'0'          ; convert to ascii
         cmp     al,'9'          ; valid digit?
-        jbe     hexdn1          ; yes
+        jbe     short @f        ; yes
         add     al,7            ; use alpha range
-hexdn1: call    display_char
+@@:     call    display_char
         ret
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; These must remain in the first sector since we use them before we
 ;  successfully read the remaining sectors.
-made_it_str     db  "We made it so let's print some information:",13,10,0
+made_it_str     db  "We made it so let's print some information: "
+crlf_str        db  13,10,0
 read_error_str  db  'The called INT 13h service returned an error.  Halting...',13,10,0
 extensions      db  0   ; assume we do not allow the extended read services
 drive           db  0
@@ -352,7 +350,7 @@ drive           db  0
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; start of second sector
 do_remaining:
-
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; print the drive number the BIOS sent us
            mov  si,offset drv_number_str
@@ -360,7 +358,7 @@ do_remaining:
            mov  al,drive
            call hexdb
            call display_CRLF
-           
+
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; print the status of the extension flag
            mov  si,offset extensions_str
@@ -390,7 +388,7 @@ do_remaining:
            call display_string
            mov  al,bl       ; bl = type
            call hexdb
-           ;call display_CRLF
+           call display_CRLF
            
            mov  si,offset small_params_cyls
            call display_string
@@ -398,13 +396,13 @@ do_remaining:
            mov  ah,cl
            shr  ah,6
            call hexdw
-           ;call display_CRLF
+           call display_CRLF
 
            mov  si,offset small_params_heads
            call display_string
            mov  al,dh
            call hexdb
-           ;call display_CRLF
+           call display_CRLF
 
            mov  si,offset small_params_spt
            call display_string
@@ -420,7 +418,7 @@ use_big_params:
            mov  ah,48h
            mov  dl,drive
            mov  si,offset temp_buff
-           mov  word [si],1Ah
+           mov  word [si],42h
            int  13h
            jc   disk_read_error
            
@@ -429,20 +427,20 @@ use_big_params:
            call display_string
            mov  eax,[di+04h]
            call hexdd
-           ;call display_CRLF
-
+           call display_CRLF
+           
            mov  si,offset small_params_heads
            call display_string
            mov  eax,[di+08h]
            call hexdd
-           ;call display_CRLF
-
+           call display_CRLF
+           
            mov  si,offset small_params_spt
            call display_string
            mov  eax,[di+0Ch]
            call hexdd
-           ;call display_CRLF
-
+           call display_CRLF
+           
            mov  si,offset small_params_total
            call display_string
            mov  eax,[di+10h]
@@ -454,8 +452,6 @@ use_big_params:
 done_params:
            jmp  freeze
 
-
-crlf_str           db  13,10,0
 drv_number_str     db  'The BIOS gives us a drive value of: ',0
 extensions_str     db  'Extensions supported: ',0
 small_params_type  db  ' Type: ',0
@@ -463,7 +459,6 @@ small_params_cyls  db  ' Cylinders: ',0
 small_params_heads db  ' Heads: ',0
 small_params_spt   db  ' SPT: ',0
 small_params_total db  ' Total Sectors: ',0
-
 
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -480,6 +475,6 @@ small_params_total db  ' Total Sectors: ',0
 ; indicate pmode code so we can pad with a value greater than 64k
 .pmode
 
-temp_buff  dup ((2880 * 512) - $),0
+temp_buff  dup ((2880 * 512) - $),0FFh
 
 .end
