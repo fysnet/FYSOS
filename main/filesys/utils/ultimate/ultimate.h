@@ -87,6 +87,7 @@
 #define FS_FAT16   16
 #define FS_FYSFS   22
 #define FS_FAT32   32
+#define FS_FSZ     90
 
 #define ENDIAN_16U(x)   ((((x) & 0xFF) << 8) | (((x) & 0xFF00) >> 8))
 #define ENDIAN_32U(x)   ((((x) & 0xFF) << 24) | (((x) & 0xFF00) << 8) | (((x) & 0xFF0000) >> 8) | (((x) & 0xFF000000) >> 24))

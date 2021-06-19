@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -56,7 +56,7 @@
  *             http://www.fysnet.net/osdesign_book_series.htm
  */
 
-// Fat.cpp : implementation file
+// fsz.cpp : implementation file
 
 #include "stdafx.h"
 #include "pch.h"
@@ -68,13 +68,13 @@
 #include "MyImageList.h"
 #include "MyTreeCtrl.h"
 
-#include "Fat.h"
-#include "FatEntry.h"
-#include "Fat32Info.h"
-#include "FatFormat.h"
+#include "fsz.h"
+//#include "FatEntry.h"
+//#include "Fat32Info.h"
+//#include "FatFormat.h"
 
 #include "Modeless.h"
-#include "InsertVName.h"
+//#include "InsertVName.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -83,124 +83,94 @@ static char THIS_FILE[] = __FILE__;
 #endif
 
 /////////////////////////////////////////////////////////////////////////////
-// CFat property page
+// CFSZ property page
 
-IMPLEMENT_DYNCREATE(CFat, CPropertyPage)
+IMPLEMENT_DYNCREATE(CFSZ, CPropertyPage)
 
-CFat::CFat() : CPropertyPage(CFat::IDD) {
-  //{{AFX_DATA_INIT(CFat)
-  m_jmp0 = _T("");
-  m_jmp1 = _T("");
-  m_jmp2 = _T("");
-  m_bytes_sect = _T("");
-  m_descriptor = _T("");
-  m_fat_type = _T("");
-  m_fats = _T("");
-  m_heads = _T("");
-  m_hidden_sects = _T("");
-  m_label = _T("");
-  m_oem_name = _T("");
-  m_clust_num = _T("");
-  m_root_entries = _T("");
-  m_sects_cluster = _T("");
-  m_sect_fat = _T("");
-  m_sect_fat32 = _T("");
-  m_sect_track = _T("");
-  m_sectors = _T("");
-  m_sectors_ext = _T("");
-  m_fs_version = _T("");
-  m_backup_sector = _T("");
-  m_drv_num = _T("");
-  m_info_sector = _T("");
-  m_reserved = _T("");
-  m_sect_reserved = _T("");
-  m_serial_number = _T("");
-  m_fat_sig = _T("");
+CFSZ::CFSZ() : CPropertyPage(CFSZ::IDD) {
+  //{{AFX_DATA_INIT(CFSZ)
+  m_magic = _T("");
+  m_version_major = _T("");
+  m_version_minor = _T("");
+  m_logsec = _T("");
+  m_enctype = _T("");
+  m_flags = _T("");
+  m_maxmounts = _T("");
+  m_currmounts = _T("");
+  m_numsec = _T("");
+  m_freesec = _T("");
+  m_freesecfid = _T("");
+  m_rootfid = _T("");
+  m_badsecfid = _T("");
+  m_indexfid = _T("");
+  m_metafid = _T("");
+  m_journalfid = _T("");
+  m_journalhead = _T("");
+  m_journaltail = _T("");
+  m_journalmax = _T("");
+  m_encrypt = _T("");
+  m_enchash = _T("");
+  m_createdate = _T("");
+  m_lastmountdate = _T("");
+  m_lastunmountdate = _T("");
+  m_lastcheckdate = _T("");
+  m_uuid = _T("");
+  m_magic2 = _T("");
+  m_checksum = _T("");
   m_show_del = FALSE;
   m_del_clear = FALSE;
   //}}AFX_DATA_INIT
-  m_fat_buffer = NULL;
-  m_bpb_buffer = NULL;
-  m_hard_format = FALSE;
+  m_super = NULL;
+  //m_hard_format = FALSE;
 }
 
-CFat::~CFat() {
-  if (m_fat_buffer)
-    free(m_fat_buffer);
-  if (m_bpb_buffer)
-    free(m_bpb_buffer);
+CFSZ::~CFSZ() {
+  if (m_super)
+    free(m_super);
   
-  m_fat_buffer = NULL;
-  m_bpb_buffer = NULL;
+  m_super = NULL;
 }
 
-void CFat::DoDataExchange(CDataExchange* pDX) {
+void CFSZ::DoDataExchange(CDataExchange* pDX) {
   CPropertyPage::DoDataExchange(pDX);
-  //{{AFX_DATA_MAP(CFat)
+  //{{AFX_DATA_MAP(CFSZ)
   DDX_Control(pDX, IDC_DIR_TREE, m_dir_tree);
-  DDX_Text(pDX, IDC_FAT_JMP0, m_jmp0);
-  DDV_MaxChars(pDX, m_jmp0, 4);
-  DDX_Text(pDX, IDC_FAT_JMP1, m_jmp1);
-  DDV_MaxChars(pDX, m_jmp1, 4);
-  DDX_Text(pDX, IDC_FAT_JMP2, m_jmp2);
-  DDV_MaxChars(pDX, m_jmp2, 4);
-  DDX_Text(pDX, IDC_FAT_BYTES_SECT, m_bytes_sect);
-  DDV_MaxChars(pDX, m_bytes_sect, 16);
-  DDX_Text(pDX, IDC_FAT_DESCRIPTOR, m_descriptor);
-  DDV_MaxChars(pDX, m_descriptor, 8);
-  DDX_Text(pDX, IDC_FAT_FAT_TYPE, m_fat_type);
-  DDV_MaxChars(pDX, m_fat_type, 8);
-  DDX_Text(pDX, IDC_FAT_FATS, m_fats);
-  DDV_MaxChars(pDX, m_fats, 8);
-  DDX_Text(pDX, IDC_FAT_HEADS, m_heads);
-  DDV_MaxChars(pDX, m_heads, 8);
-  DDX_Text(pDX, IDC_FAT_HIDDEN_SECTS, m_hidden_sects);
-  DDV_MaxChars(pDX, m_hidden_sects, 16);
-  DDX_Text(pDX, IDC_FAT_LABEL, m_label);
-  DDV_MaxChars(pDX, m_label, 16);
-  DDX_Text(pDX, IDC_FAT_OEM_NAME, m_oem_name);
-  DDV_MaxChars(pDX, m_oem_name, 16);
-  DDX_Text(pDX, IDC_FAT_CLUST_NUM, m_clust_num);
-  DDV_MaxChars(pDX, m_clust_num, 16);
-  DDX_Text(pDX, IDC_FAT_ROOT_ENTRIES, m_root_entries);
-  DDV_MaxChars(pDX, m_root_entries, 16);
-  DDX_Text(pDX, IDC_FAT_SECT_CLUSTER, m_sects_cluster);
-  DDV_MaxChars(pDX, m_sects_cluster, 16);
-  DDX_Text(pDX, IDC_FAT_SECT_FAT, m_sect_fat);
-  DDV_MaxChars(pDX, m_sect_fat, 16);
-  DDX_Text(pDX, IDC_FAT_SECT_FAT32, m_sect_fat32);
-  DDV_MaxChars(pDX, m_sect_fat32, 32);
-  DDX_Text(pDX, IDC_FAT_EXT_FLAGS, m_ext_flags);
-  DDV_MaxChars(pDX, m_ext_flags, 32);
-  DDX_Text(pDX, IDC_FAT_SECT_TRACK, m_sect_track);
-  DDV_MaxChars(pDX, m_sect_track, 8);
-  DDX_Text(pDX, IDC_FAT_SECTORS, m_sectors);
-  DDV_MaxChars(pDX, m_sectors, 16);
-  DDX_Text(pDX, IDC_FAT_SECTORS_EXT, m_sectors_ext);
-  DDV_MaxChars(pDX, m_sectors_ext, 16);
-  DDX_Text(pDX, IDC_FAT_FS_VERSION, m_fs_version);
-  DDV_MaxChars(pDX, m_fs_version, 8);
-  DDX_Text(pDX, IDC_FAT_BACKUP_SECT, m_backup_sector);
-  DDV_MaxChars(pDX, m_backup_sector, 32);
-  DDX_Text(pDX, IDC_FAT_DRV_NUM, m_drv_num);
-  DDV_MaxChars(pDX, m_drv_num, 8);
-  DDX_Text(pDX, IDC_FAT_INFO_SECTOR, m_info_sector);
-  DDV_MaxChars(pDX, m_info_sector, 16);
-  DDX_Text(pDX, IDC_FAT_RESERVED, m_reserved);
-  DDV_MaxChars(pDX, m_reserved, 8);
-  DDX_Text(pDX, IDC_FAT_SECT_RESERVED, m_sect_reserved);
-  DDV_MaxChars(pDX, m_sect_reserved, 32);
-  DDX_Text(pDX, IDC_FAT_SERIAL_NUM, m_serial_number);
-  DDV_MaxChars(pDX, m_serial_number, 32);
-  DDX_Text(pDX, IDC_FAT_SIG, m_fat_sig);
-  DDV_MaxChars(pDX, m_fat_sig, 8);
+  DDX_Text(pDX, IDC_FSZ_MAGIC, m_magic);
+  DDX_Text(pDX, IDC_FSZ_VER_MAJ, m_version_major);
+  DDX_Text(pDX, IDC_FSZ_VER_MIN, m_version_minor);
+  DDX_Text(pDX, IDC_FSZ_LOGSEC, m_logsec);
+  DDX_Text(pDX, IDC_FSZ_ENCTYPE, m_enctype);
+  DDX_Text(pDX, IDC_FSZ_FLAGS, m_flags);
+  DDX_Text(pDX, IDC_FSZ_MAXMOUNTS, m_maxmounts);
+  DDX_Text(pDX, IDC_FSZ_CURRMOUNTS, m_currmounts);
+  DDX_Text(pDX, IDC_FSZ_NUMSEC, m_numsec);
+  DDX_Text(pDX, IDC_FSZ_FREESEC, m_freesec);
+  DDX_Text(pDX, IDC_FSZ_ROOTFID, m_rootfid);
+  DDX_Text(pDX, IDC_FSZ_FREESECFID, m_freesecfid);
+  DDX_Text(pDX, IDC_FSZ_BADSECFID, m_badsecfid);
+  DDX_Text(pDX, IDC_FSZ_INDEXFID, m_indexfid);
+  DDX_Text(pDX, IDC_FSZ_METAFID, m_metafid);
+  DDX_Text(pDX, IDC_FSZ_JOURNALFID, m_journalfid);
+  DDX_Text(pDX, IDC_FSZ_JOURNALHEAD, m_journalhead);
+  DDX_Text(pDX, IDC_FSZ_JOURNALTAIL, m_journaltail);
+  DDX_Text(pDX, IDC_FSZ_JOURNALMAX, m_journalmax);
+  //DDX_Text(pDX, IDC_FSZ_ENCRYPT, m_encrypt);
+  DDX_Text(pDX, IDC_FSZ_ENCHASH, m_enchash);
+  DDX_Text(pDX, IDC_FSZ_CREATEDATE, m_createdate);
+  DDX_Text(pDX, IDC_FSZ_LASTMOUNTDATE, m_lastmountdate);
+  DDX_Text(pDX, IDC_FSZ_LASTUNMOUNTDATE, m_lastunmountdate);
+  DDX_Text(pDX, IDC_FSZ_LASTCHECKDATE, m_lastcheckdate);
+  DDX_Text(pDX, IDC_FSZ_UUID, m_uuid);
+  DDX_Text(pDX, IDC_FSZ_MAGIC2, m_magic2);
+  DDX_Text(pDX, IDC_FSZ_CHECKSUM, m_checksum);
   DDX_Check(pDX, IDC_SHOW_DEL, m_show_del);
   DDX_Check(pDX, IDC_DEL_CLEAR, m_del_clear);
   //}}AFX_DATA_MAP
 }
 
-BEGIN_MESSAGE_MAP(CFat, CPropertyPage)
-  //{{AFX_MSG_MAP(CFat)
+BEGIN_MESSAGE_MAP(CFSZ, CPropertyPage)
+  //{{AFX_MSG_MAP(CFSZ)
+  /*
   ON_BN_CLICKED(ID_APPLY, OnFatApply)
   ON_BN_CLICKED(ID_CLEAN, OnFatClean)
   ON_BN_CLICKED(ID_FORMAT, OnFatFormat)
@@ -212,11 +182,17 @@ BEGIN_MESSAGE_MAP(CFat, CPropertyPage)
   ON_BN_CLICKED(ID_SEARCH, OnSearch)
   ON_BN_CLICKED(ID_ERASE, OnErase)
   ON_NOTIFY(TVN_SELCHANGED, IDC_DIR_TREE, OnSelchangedDirTree)
+  */
+  ON_EN_CHANGE(IDC_FSZ_VER_MAJ, OnChangeVersion)
+  ON_EN_CHANGE(IDC_FSZ_VER_MIN, OnChangeVersion)
+  ON_EN_CHANGE(IDC_FSZ_LOGSEC, OnChangeLogSecSize)
+  ON_EN_CHANGE(IDC_FSZ_ENCHASH, OnChangeHashType)
+  ON_EN_CHANGE(IDC_FSZ_ENCTYPE, OnChangeEncryptType)
+  /*
   ON_BN_CLICKED(ID_ENTRY, OnFatEntry)
   ON_BN_CLICKED(ID_FYSOS_SIG, OnFysosSig)
   ON_BN_CLICKED(ID_FAT32_INFO, OnFat32Info)
   ON_EN_CHANGE(IDC_FAT_FS_VERSION, OnChangeFatFsVersion)
-  ON_BN_CLICKED(IDC_SERIAL_UPDATE, OnSerialUpdate)
   ON_BN_CLICKED(IDC_FAT_BACKUP_SECT_UPDATE, OnFatBackupSectUpdate)
   ON_BN_CLICKED(IDC_FAT_BACKUP_SECT_RESTORE, OnFatBackupSectRestore)
   ON_BN_CLICKED(IDC_OLD_FAT, OnOldFat)
@@ -226,37 +202,99 @@ BEGIN_MESSAGE_MAP(CFat, CPropertyPage)
   ON_BN_CLICKED(IDC_SHOW_DEL, OnShowDeleted)
   ON_BN_CLICKED(IDC_DEL_CLEAR, OnDelClear)
   ON_WM_HELPINFO()
+  */
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
-// CFat message handlers
-BOOL CFat::OnInitDialog() {
+// CFSZ message handlers
+BOOL CFSZ::OnInitDialog() {
   CPropertyPage::OnInitDialog();
   
   m_TreeImages.DoCreate();
   m_dir_tree.SetImageList(&m_TreeImages, TVSIL_NORMAL);
   
-  OnChangeFatFsVersion();
+  //OnChangeFatFsVersion();
   
   // display the base/size string
   CString csBaseSize;
   csBaseSize.Format("Start: %I64i, Size: %I64i", m_lba, m_size);
   SetDlgItemText(IDC_BASE_SIZE_STR, csBaseSize);
   
-  if (m_fat_size == FS_FAT12)
-    GetDlgItem(IDC_OLD_FAT)->EnableWindow(TRUE);
-  
-  m_show_del = AfxGetApp()->GetProfileInt("Settings", "FATShowDel", FALSE);
-  m_del_clear = AfxGetApp()->GetProfileInt("Settings", "FATDelClear", FALSE);
+  m_show_del = AfxGetApp()->GetProfileInt("Settings", "FSZShowDel", FALSE);
+  m_del_clear = AfxGetApp()->GetProfileInt("Settings", "FSZDelClear", FALSE);
   if (m_del_clear)
     SetDlgItemText(ID_DELETE, "Delete/Zero");
   else
     SetDlgItemText(ID_DELETE, "Delete");
-  
+
   return TRUE;
 }
 
+void CFSZ::OnChangeVersion() {
+  CString cs_maj, cs_min;
+  int maj, min;
+  
+  GetDlgItemText(IDC_FSZ_VER_MAJ, cs_maj);
+  GetDlgItemText(IDC_FSZ_VER_MIN, cs_min);
+  maj = convert8(cs_maj);
+  min = convert8(cs_min);
+
+  cs_maj.Format("%i.%i", maj, min);
+  SetDlgItemText(IDC_FSZ_VERSION, cs_maj);
+}
+
+void CFSZ::OnChangeLogSecSize() {
+  CString cs;
+  int i;
+  
+  GetDlgItemText(IDC_FSZ_LOGSEC, cs);
+  i = 1 << (convert8(cs) + 11);
+
+  cs.Format("%i", i);
+  SetDlgItemText(IDC_FSZ_SECTSIZE, cs);
+}
+
+void CFSZ::OnChangeHashType() {
+  CString cs;
+  int i;
+  
+  GetDlgItemText(IDC_FSZ_ENCHASH, cs);
+  i = convert32(cs);
+  GetDlgItem(IDC_FSZ_ENCTYPE)->EnableWindow(i > 0);
+  GetDlgItem(IDC_FSZ_ENCRYPT_NAME)->EnableWindow(i > 0);
+  GetDlgItem(IDC_FSZ_ENC_MASK_DO)->EnableWindow(i > 0);
+  
+  OnChangeEncryptType();
+}
+
+void CFSZ::OnChangeEncryptType() {
+  CString cs;
+  int i;
+
+  GetDlgItemText(IDC_FSZ_ENCHASH, cs);
+  i = convert32(cs);
+  if (i > 0) {
+    GetDlgItemText(IDC_FSZ_ENCTYPE, cs);
+    i = convert8(cs);
+
+    if (cs.GetLength() == 0)
+      i = -1;
+
+    switch (i) {
+      case 0:
+        SetDlgItemText(IDC_FSZ_ENCRYPT_NAME, "SHA256");
+        break;
+      case 1:
+        SetDlgItemText(IDC_FSZ_ENCRYPT_NAME, "AES 256");
+        break;
+      default:
+        SetDlgItemText(IDC_FSZ_ENCRYPT_NAME, "?????");
+    }
+  }
+}
+
+/*
 BOOL CFat::OnHelpInfo(HELPINFO *pHelpInfo) {
   CString url = AfxGetApp()->GetProfileString("Settings", "DefaultHelpURL", NULL);
   ShellExecute(AfxGetApp()->m_pMainWnd->m_hWnd, "open", 
@@ -283,14 +321,14 @@ void CFat::OnFatApply() {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE buffer[MAX_SECT_SIZE];
   
-  ReceiveFromDialog(m_bpb_buffer); // bring from Dialog
+  ReceiveFromDialog(m_super); // bring from Dialog
   
   // update the BPB
   dlg->ReadFromFile(buffer, m_lba, 1);
   if (m_fat_size == FS_FAT32)
-    memcpy(buffer, m_bpb_buffer, sizeof(struct S_FAT32_BPB));
+    memcpy(buffer, m_super, sizeof(struct S_FAT32_BPB));
   else
-    memcpy(buffer, m_bpb_buffer, sizeof(struct S_FAT1216_BPB));
+    memcpy(buffer, m_super, sizeof(struct S_FAT1216_BPB));
   dlg->WriteToFile(buffer, m_lba, 1);
   
   // need to write the FAT back to the image file
@@ -341,7 +379,7 @@ bool CFat::FatFormat(const BOOL AskForBoot) {
   }
   
   if (!m_hard_format)
-    ReceiveFromDialog(m_bpb_buffer); // bring from Dialog
+    ReceiveFromDialog(m_super); // bring from Dialog
   
   // if there are a lot of sectors, give a warning
   if (m_size > 1000000) {
@@ -560,15 +598,15 @@ bool CFat::FatFormat(const BOOL AskForBoot) {
   free(buffer);
   
   if (!m_hard_format)
-    SendToDialog(m_bpb_buffer); // Send back to Dialog
+    SendToDialog(m_super); // Send back to Dialog
 
   return TRUE;
 }
 
 void CFat::OnUpdateCode() {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) m_bpb_buffer;
-  struct S_FAT1216_BPB *bpb12 = (struct S_FAT1216_BPB *) m_bpb_buffer;
+  struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) m_super;
+  struct S_FAT1216_BPB *bpb12 = (struct S_FAT1216_BPB *) m_super;
   struct S_FYSOSSIG s_sig;
   CFile bsfile;
   CString cs;
@@ -653,18 +691,20 @@ void CFat::OnUpdateCode() {
   free(buffer);
   free(existing);
 }
+*/
 
 // Fat colors will have a blue shade to them.
-DWORD CFat::GetNewColor(int index) {
-  int r = ((106 - (index * 20)) > -1) ? (106 - (index * 20)) : 0;
-  int g = ((126 - (index * 18)) > -1) ? (126 - (index * 18)) : 0;
-  int b = ((239 - (index *  2)) > -1) ? (239 - (index *  2)) : 0;
+DWORD CFSZ::GetNewColor(int index) {
+  int r = ((255 - (index * 20)) > -1) ? (255 - (index * 20)) : 0;
+  int g = ((51 - (index * 18)) > -1) ? (51 - (index * 18)) : 0;
+  int b = ((0 - (index *  2)) > -1) ? (0 - (index *  2)) : 0;
   return RGB(r, g, b);
 }
 
-void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, const int fs_type, BOOL IsNewTab) {
+void CFSZ::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, BOOL IsNewTab) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  DWORD rootcluster;
+
+  //DWORD rootcluster;
   
   m_lba = lba;
   m_size = size;
@@ -673,42 +713,28 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   m_isvalid = TRUE;
   
   m_hard_format = FALSE;
+
+  if (!DetectFSZ()) {
+    AfxMessageBox("Did not find a valid FS/Z volume");
+    m_isvalid = FALSE;
+  }
   
-  m_bpb_buffer = malloc(MAX_SECT_SIZE);
-  dlg->ReadFromFile(m_bpb_buffer, lba, 1);
-  struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) m_bpb_buffer;
-  struct S_FAT1216_BPB *bpb12 = (struct S_FAT1216_BPB *) m_bpb_buffer;
+  // set some flags for us
+  struct S_FSZ_SUPER *super = (struct S_FSZ_SUPER *) m_super;
+  m_big_inode = (super->flags & FSZ_SB_BIGINODE) > 0;
   
-  m_fat_size = fs_type;
-  if (fs_type == FS_FAT12)
-    dlg->m_FatNames[index] = "FAT 12";
-  else if (fs_type == FS_FAT16)
-    dlg->m_FatNames[index] = "FAT 16";
-  else
-    dlg->m_FatNames[index] = "FAT 32";
+  // set the tab display
+  dlg->m_FSZNames[index] = "FSZ";
   m_psp.dwFlags |= PSP_USETITLE;
-  m_psp.pszTitle = dlg->m_FatNames[index];
-  dlg->m_image_bar.UpdateTitle(dlg->Fat[index].m_draw_index, (char *) (LPCTSTR) dlg->m_FatNames[index]);
+  m_psp.pszTitle = dlg->m_FSZNames[index];
+  dlg->m_image_bar.UpdateTitle(dlg->FSZ[index].m_draw_index, (char *) (LPCTSTR) dlg->m_FSZNames[index]);
   
   // Add the page to the control
   if (IsNewTab)
     dlg->m_TabControl.AddPage(this);
   dlg->m_TabControl.SetActivePage(this);
   
-  // if not FAT32, disable the FAT32 specific items
-  if (fs_type != FS_FAT32) {
-    GetDlgItem(IDC_FAT_SECT_FAT32)->EnableWindow(FALSE);
-    GetDlgItem(IDC_FAT_EXT_FLAGS)->EnableWindow(FALSE);
-    GetDlgItem(IDC_FAT_FS_VERSION)->EnableWindow(FALSE);
-    GetDlgItem(IDC_FAT_CLUST_NUM)->EnableWindow(FALSE);
-    GetDlgItem(IDC_FAT_INFO_SECTOR)->EnableWindow(FALSE);
-    GetDlgItem(IDC_FAT_BACKUP_SECT)->EnableWindow(FALSE);
-    GetDlgItem(IDC_FAT_BACKUP_SECT_UPDATE)->ShowWindow(SW_HIDE);
-    GetDlgItem(IDC_FAT_BACKUP_SECT_RESTORE)->ShowWindow(SW_HIDE);
-    GetDlgItem(IDC_FAT_FS_VERSION_DISP)->ShowWindow(SW_HIDE);
-    GetDlgItem(ID_FAT32_INFO)->ShowWindow(SW_HIDE);
-  }
-  SendToDialog(m_bpb_buffer);
+  SendToDialog(m_super);
   
   GetDlgItem(ID_ENTRY)->EnableWindow(FALSE);
   GetDlgItem(ID_COPY)->EnableWindow(FALSE);
@@ -716,15 +742,8 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   GetDlgItem(ID_DELETE)->EnableWindow(FALSE);
   GetDlgItem(ID_SEARCH)->EnableWindow(FALSE);
   
-  // don't parse the folders if the sector size doesn't match
-  if (dlg->m_sect_size != bpb12->bytes_per_sect) {
-    AfxMessageBox("FAT:\r\nBPB Bytes per Sector doesn't equal specified bytes per sector.\r\n");
-    return;
-  }
-  
-  // load the fat and folders
+  // load the (root) directory
   if (m_isvalid) {
-    m_fat_buffer = FatLoadFAT(m_fat_buffer);
     GetDlgItem(IDC_DIR_TREE)->EnableWindow(TRUE);
 
     // make sure the tree is emtpy
@@ -733,6 +752,8 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
     m_dir_tree.SetItemState(m_hRoot, TVIS_BOLD, TVIS_BOLD);
     
     UpdateWindow();
+    
+    /*
     // fill the tree with the directory
     struct S_FAT_ROOT *root = NULL;
     if (m_fat_size == FS_FAT32) {
@@ -764,10 +785,112 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
       GetDlgItem(IDC_DIR_TREE)->SetFocus();
       m_dir_tree.SelectSetFirstVisible(m_hRoot);
     }
+    */
   }
+
   Invalidate(TRUE);  // redraw the tab
 }
 
+static const DWORD crc32c_lookup[256] = {
+  0x00000000, 0xf26b8303, 0xe13b70f7, 0x1350f3f4, 0xc79a971f, 0x35f1141c, 0x26a1e7e8, 0xd4ca64eb, 0x8ad958cf,
+  0x78b2dbcc, 0x6be22838, 0x9989ab3b, 0x4d43cfd0, 0xbf284cd3, 0xac78bf27, 0x5e133c24, 0x105ec76f, 0xe235446c,
+  0xf165b798, 0x030e349b, 0xd7c45070, 0x25afd373, 0x36ff2087, 0xc494a384, 0x9a879fa0, 0x68ec1ca3, 0x7bbcef57,
+  0x89d76c54, 0x5d1d08bf, 0xaf768bbc, 0xbc267848, 0x4e4dfb4b, 0x20bd8ede, 0xd2d60ddd, 0xc186fe29, 0x33ed7d2a,
+  0xe72719c1, 0x154c9ac2, 0x061c6936, 0xf477ea35, 0xaa64d611, 0x580f5512, 0x4b5fa6e6, 0xb93425e5, 0x6dfe410e,
+  0x9f95c20d, 0x8cc531f9, 0x7eaeb2fa, 0x30e349b1, 0xc288cab2, 0xd1d83946, 0x23b3ba45, 0xf779deae, 0x05125dad,
+  0x1642ae59, 0xe4292d5a, 0xba3a117e, 0x4851927d, 0x5b016189, 0xa96ae28a, 0x7da08661, 0x8fcb0562, 0x9c9bf696,
+  0x6ef07595, 0x417b1dbc, 0xb3109ebf, 0xa0406d4b, 0x522bee48, 0x86e18aa3, 0x748a09a0, 0x67dafa54, 0x95b17957,
+  0xcba24573, 0x39c9c670, 0x2a993584, 0xd8f2b687, 0x0c38d26c, 0xfe53516f, 0xed03a29b, 0x1f682198, 0x5125dad3,
+  0xa34e59d0, 0xb01eaa24, 0x42752927, 0x96bf4dcc, 0x64d4cecf, 0x77843d3b, 0x85efbe38, 0xdbfc821c, 0x2997011f,
+  0x3ac7f2eb, 0xc8ac71e8, 0x1c661503, 0xee0d9600, 0xfd5d65f4, 0x0f36e6f7, 0x61c69362, 0x93ad1061, 0x80fde395,
+  0x72966096, 0xa65c047d, 0x5437877e, 0x4767748a, 0xb50cf789, 0xeb1fcbad, 0x197448ae, 0x0a24bb5a, 0xf84f3859,
+  0x2c855cb2, 0xdeeedfb1, 0xcdbe2c45, 0x3fd5af46, 0x7198540d, 0x83f3d70e, 0x90a324fa, 0x62c8a7f9, 0xb602c312,
+  0x44694011, 0x5739b3e5, 0xa55230e6, 0xfb410cc2, 0x092a8fc1, 0x1a7a7c35, 0xe811ff36, 0x3cdb9bdd, 0xceb018de,
+  0xdde0eb2a, 0x2f8b6829, 0x82f63b78, 0x709db87b, 0x63cd4b8f, 0x91a6c88c, 0x456cac67, 0xb7072f64, 0xa457dc90,
+  0x563c5f93, 0x082f63b7, 0xfa44e0b4, 0xe9141340, 0x1b7f9043, 0xcfb5f4a8, 0x3dde77ab, 0x2e8e845f, 0xdce5075c,
+  0x92a8fc17, 0x60c37f14, 0x73938ce0, 0x81f80fe3, 0x55326b08, 0xa759e80b, 0xb4091bff, 0x466298fc, 0x1871a4d8,
+  0xea1a27db, 0xf94ad42f, 0x0b21572c, 0xdfeb33c7, 0x2d80b0c4, 0x3ed04330, 0xccbbc033, 0xa24bb5a6, 0x502036a5,
+  0x4370c551, 0xb11b4652, 0x65d122b9, 0x97baa1ba, 0x84ea524e, 0x7681d14d, 0x2892ed69, 0xdaf96e6a, 0xc9a99d9e,
+  0x3bc21e9d, 0xef087a76, 0x1d63f975, 0x0e330a81, 0xfc588982, 0xb21572c9, 0x407ef1ca, 0x532e023e, 0xa145813d,
+  0x758fe5d6, 0x87e466d5, 0x94b49521, 0x66df1622, 0x38cc2a06, 0xcaa7a905, 0xd9f75af1, 0x2b9cd9f2, 0xff56bd19,
+  0x0d3d3e1a, 0x1e6dcdee, 0xec064eed, 0xc38d26c4, 0x31e6a5c7, 0x22b65633, 0xd0ddd530, 0x0417b1db, 0xf67c32d8,
+  0xe52cc12c, 0x1747422f, 0x49547e0b, 0xbb3ffd08, 0xa86f0efc, 0x5a048dff, 0x8ecee914, 0x7ca56a17, 0x6ff599e3,
+  0x9d9e1ae0, 0xd3d3e1ab, 0x21b862a8, 0x32e8915c, 0xc083125f, 0x144976b4, 0xe622f5b7, 0xf5720643, 0x07198540,
+  0x590ab964, 0xab613a67, 0xb831c993, 0x4a5a4a90, 0x9e902e7b, 0x6cfbad78, 0x7fab5e8c, 0x8dc0dd8f, 0xe330a81a,
+  0x115b2b19, 0x020bd8ed, 0xf0605bee, 0x24aa3f05, 0xd6c1bc06, 0xc5914ff2, 0x37faccf1, 0x69e9f0d5, 0x9b8273d6,
+  0x88d28022, 0x7ab90321, 0xae7367ca, 0x5c18e4c9, 0x4f48173d, 0xbd23943e, 0xf36e6f75, 0x0105ec76, 0x12551f82,
+  0xe03e9c81, 0x34f4f86a, 0xc69f7b69, 0xd5cf889d, 0x27a40b9e, 0x79b737ba, 0x8bdcb4b9, 0x988c474d, 0x6ae7c44e,
+  0xbe2da0a5, 0x4c4623a6, 0x5f16d052, 0xad7d5351
+};
+
+// Calculate CRC using the Castagnoli method, with polynomial 0x1EDC6F41
+DWORD CFSZ::crc32c_calc(void *buffer, size_t length) {
+  BYTE *src = (BYTE *) buffer;
+
+  DWORD crc32_val=0;
+  while (length--)
+    crc32_val = (crc32_val >> 8) ^ crc32c_lookup[ (crc32_val & 0xFF) ^ *src++];
+  
+  return crc32_val;
+}
+
+BOOL CFSZ::DetectFSZ(void) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE buffer[2048];
+  CString cs;
+  int i;
+
+  // since we have an unknown block size, we need to read 2048 bytes, only.
+  // We (temporarily) change the sector size to 512, so we only read 4 512-byte sectors.
+  unsigned org_size = dlg->m_sect_size;
+  dlg->m_sect_size = 512;
+  dlg->ReadFromFile(buffer, m_lba, 4);
+  dlg->m_sect_size = org_size;
+  
+  // now detect the file system
+  struct S_FSZ_SUPER *super = (struct S_FSZ_SUPER *) buffer;
+
+  if (super->magic != 0x5A2F5346)
+    return FALSE;
+
+  if (super->magic2 != 0x5A2F5346)
+    return FALSE;
+
+  if (crc32c_calc((char *) &super->magic, 508) != super->checksum)
+    return FALSE;
+
+  // check that any of the high 8-byte parts of the 16-byte values are all zeros.
+  // if any of these 16-byte values are greater than 64-bits, give an error.
+  // * we don't support anything larger than 64-bit values *
+  DQWORD *val = &super->numsec;
+  for (i=0; i<8; i++) {
+    if (val[i].HighPart != 0) {
+      AfxMessageBox("A 128-bit super member is larger than 64-bits.");
+      break;
+    }
+  }
+
+//  DWORD t = crc32c_calc((char *) &super->magic, 508);
+//  cs.Format(" 0x%08X   0x%08X ", super->checksum, t);
+//  AfxMessageBox(cs);
+
+  // found valid FS/Z volume
+  if (super->logsec <= 5)
+    m_block_size = 1 << (super->logsec + 11);
+  else {
+    cs.Format("Log Sector Size is out of range at %i.\nShould be 0 -> 5. Setting to a default of 4096.", super->logsec);
+    AfxMessageBox(cs);
+    m_block_size = 4096;  // default to 4096 if out of range
+    super->logsec = 1;
+  }
+
+  m_super = malloc(2048);
+  memcpy(m_super, buffer, 2048);
+
+  return TRUE;
+}
+
+/*
 bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM parent, BOOL IsRoot) {
   struct S_FAT_ROOT *sub;
   HTREEITEM hItem;
@@ -1531,87 +1654,52 @@ WORD CFat::CreateTime(void) {
   
   return word;
 }
+*/
 
 // update all items in dialog
-void CFat::SendToDialog(void *ptr) {
+void CFSZ::SendToDialog(void *ptr) {
   if (ptr == NULL)
     return;
   
-  if (m_fat_size == FS_FAT32) {
-    struct S_FAT32_BPB *bpb = (struct S_FAT32_BPB *) ptr;
-    m_jmp0.Format("0x%02X", bpb->jmp[0]);
-    m_jmp1.Format("0x%02X", bpb->jmp[1]);
-    m_jmp2.Format("0x%02X", bpb->jmp[2]);
-    m_oem_name.Format("%c%c%c%c%c%c%c%c", bpb->oem_name[0], bpb->oem_name[1], bpb->oem_name[2], bpb->oem_name[3],
-      bpb->oem_name[4], bpb->oem_name[5], bpb->oem_name[6], bpb->oem_name[7]);
-    m_bytes_sect.Format("%i", bpb->bytes_per_sect);
-    m_sects_cluster.Format("%i", bpb->sect_per_clust);
-    m_sect_reserved.Format("%i", bpb->sect_reserved);
-    m_fats.Format("%i", bpb->fats);
-    m_root_entries.Format("%i", bpb->root_entrys);
-    m_sectors.Format("%i", bpb->sectors);
-    m_descriptor.Format("0x%02X", bpb->descriptor);
-    m_sect_fat.Format("%i", bpb->sect_per_fat);
-    m_sect_track.Format("%i", bpb->sect_per_trk);
-    m_heads.Format("%i", bpb->heads);
-    m_hidden_sects.Format("%i", bpb->hidden_sects);
-    m_sectors_ext.Format("%i", bpb->sect_extnd);
-    m_sect_fat32.Format("%i", bpb->sect_per_fat32);
-    m_ext_flags.Format("0x%04X", bpb->ext_flags);
-    m_fs_version.Format("0x%04X", bpb->fs_version);
-    m_clust_num.Format("%i", bpb->root_base_cluster);
-    m_info_sector.Format("%i", bpb->fs_info_sec);
-    m_backup_sector.Format("%i", bpb->backup_boot_sec);
-    m_drv_num.Format("0x%02X", bpb->drive_num);
-    m_reserved.Format("0x%02X", bpb->resv);
-    m_fat_sig.Format("0x%02X", bpb->sig);
-    m_serial_number.Format("0x%08X", bpb->serial);
-    m_label.Format("%c%c%c%c%c%c%c%c%c%c%c", bpb->label[0], bpb->label[1], bpb->label[2], bpb->label[3],
-      bpb->label[4], bpb->label[5], bpb->label[6], bpb->label[7], bpb->label[8], bpb->label[9], bpb->label[10]);
-    m_fat_type.Format("%c%c%c%c%c%c%c%c", bpb->sys_type[0], bpb->sys_type[1], bpb->sys_type[2], bpb->sys_type[3],
-      bpb->sys_type[4], bpb->sys_type[5], bpb->sys_type[6], bpb->sys_type[7]);
-  } else {
-    struct S_FAT1216_BPB *bpb = (struct S_FAT1216_BPB *) ptr;
-    m_jmp0.Format("0x%02X", bpb->jmp[0]);
-    m_jmp1.Format("0x%02X", bpb->jmp[1]);
-    m_jmp2.Format("0x%02X", bpb->jmp[2]);
-    m_oem_name.Format("%c%c%c%c%c%c%c%c", bpb->oem_name[0], bpb->oem_name[1], bpb->oem_name[2], bpb->oem_name[3],
-      bpb->oem_name[4], bpb->oem_name[5], bpb->oem_name[6], bpb->oem_name[7]);
-    m_bytes_sect.Format("%i", bpb->bytes_per_sect);
-    m_sects_cluster.Format("%i", bpb->sect_per_clust);
-    m_sect_reserved.Format("%i", bpb->sect_reserved);
-    m_fats.Format("%i", bpb->fats);
-    m_root_entries.Format("%i", bpb->root_entrys);
-    m_sectors.Format("%i", bpb->sectors);
-    m_descriptor.Format("0x%02X", bpb->descriptor);
-    m_sect_fat.Format("%i", bpb->sect_per_fat);
-    m_sect_track.Format("%i", bpb->sect_per_trk);
-    m_heads.Format("%i", bpb->heads);
-    if (!IsDlgButtonChecked(IDC_OLD_FAT)) {
-      m_hidden_sects.Format("%i", bpb->hidden_sects);
-      m_sectors_ext.Format("%i", bpb->sect_extnd);
-      m_drv_num.Format("0x%02X", bpb->drive_num);
-      m_reserved.Format("0x%02X", bpb->resv);
-      m_fat_sig.Format("0x%02X", bpb->sig);
-      m_serial_number.Format("0x%08X", bpb->serial);
-      m_label.Format("%c%c%c%c%c%c%c%c%c%c%c", bpb->label[0], bpb->label[1], bpb->label[2], bpb->label[3],
-        bpb->label[4], bpb->label[5], bpb->label[6], bpb->label[7], bpb->label[8], bpb->label[9], bpb->label[10]);
-      m_fat_type.Format("%c%c%c%c%c%c%c%c", bpb->sys_type[0], bpb->sys_type[1], bpb->sys_type[2], bpb->sys_type[3],
-        bpb->sys_type[4], bpb->sys_type[5], bpb->sys_type[6], bpb->sys_type[7]);
-    } else
-      m_hidden_sects.Format("%i", * (WORD *) &bpb->hidden_sects);
-    
-    // need to clear out the FAT32 stuff
-    m_sect_fat32.Empty();
-    m_backup_sector.Empty();
-    m_clust_num.Empty();
-    m_info_sector.Empty();
-    m_fs_version.Empty();
-  }
+  struct S_FSZ_SUPER *super = (struct S_FSZ_SUPER *) ptr;
+
+  m_magic.Format("%c%c%c%c", (super->magic & 0x000000FF) >> 0, (super->magic & 0x0000FF00) >> 8, (super->magic & 0x00FF0000) >> 16, (super->magic & 0xFF000000) >> 24);
+  m_version_major.Format("%i", super->version_major);
+  m_version_minor.Format("%i", super->version_minor);
+  m_logsec.Format("%i", super->logsec);
+  m_flags.Format("0x%08X", super->flags);
+  m_maxmounts.Format("%i", super->maxmounts);
+  m_currmounts.Format("%i", super->currmounts);
+  m_numsec.Format("%I64i", super->numsec.LowPart);
+  m_freesec.Format("%I64i", super->freesec.LowPart);
+  m_freesecfid.Format("%I64i", super->freesecfid.LowPart);
+  m_rootfid.Format("%I64i", super->rootdirfid.LowPart);
+  m_badsecfid.Format("%I64i", super->badsecfid.LowPart);
+  m_indexfid.Format("%I64i", super->indexfid.LowPart);
+  m_metafid.Format("%I64i", super->metafid.LowPart);
+  m_journalfid.Format("%I64i", super->journalfid.LowPart);
+  m_journalhead.Format("%I64i", super->journalhead);
+  m_journaltail.Format("%I64i", super->journaltail);
+  m_journalmax.Format("%I64i", super->journalmax);
+  m_enctype.Format("%i", super->enctype);
+  m_enchash.Format("0x%08X", super->enchash);
+  m_createdate.Format("%I64i", super->createdate);
+  m_lastmountdate.Format("%I64i", super->lastmountdate);
+  m_lastunmountdate.Format("%I64i", super->lastunmountdate);
+  m_lastcheckdate.Format("%I64i", super->lastcheckdate);
+  GUID_Format(m_uuid, &super->uuid);
+  m_magic2.Format("%c%c%c%c", (super->magic2 & 0x000000FF) >> 0, (super->magic2 & 0x0000FF00) >> 8, (super->magic2 & 0x00FF0000) >> 16, (super->magic2 & 0xFF000000) >> 24);
+  m_checksum.Format("0x%08X", super->checksum);
   
   UpdateData(FALSE); // send to Dialog
+
+  OnChangeVersion();
+  OnChangeLogSecSize();
+  OnChangeHashType();
+  OnChangeEncryptType();
 }
 
+/*
 void CFat::ReceiveFromDialog(void *ptr) {
   if (ptr == NULL)
     return;
@@ -2169,11 +2257,7 @@ void CFat::OnFatEntry() {
       FatEntry.m_date.Format("0x%04X", items->Entry[sfn_index].date);
       FatEntry.m_cluster.Format("0x%04X", items->Entry[sfn_index].strtclst);
       FatEntry.m_filesize.Format("%i", items->Entry[sfn_index].filesize);
-      if (items->ErrorCode <= LASTERRORCODE) {
-        FatEntry.m_error_code = FatErrorCode[items->ErrorCode];
-        FatEntry.m_error_code.TrimLeft();
-      } else
-        FatEntry.m_error_code.Format("??????");
+      FatEntry.m_error_code.Format("%i", items->ErrorCode);
       FatEntry.m_lfns = malloc(ROOT_ENTRY_MAX * sizeof(struct S_FAT_ROOT));
       memcpy(FatEntry.m_lfns, &items->Entry, ROOT_ENTRY_MAX * sizeof(struct S_FAT_ROOT));
       FatEntry.m_lfn_count = items->EntryCount - 1;
@@ -2351,3 +2435,4 @@ void CFat::OnErase() {
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }
 }
+*/

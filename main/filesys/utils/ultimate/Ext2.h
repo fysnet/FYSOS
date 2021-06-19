@@ -429,6 +429,8 @@ struct S_EXT2_INODE {
   DWORD   crtime;         // File creation time, in seconds since the epoch.
   DWORD   crtime_extra;   // Extra file creation time bits. This provides sub-second precision.
   DWORD   version_hi;     // Upper 32-bits for version number.
+
+  BYTE    resv[100];      // TODO: extra values. We pad to a 256-byte inode. (see extra_isize above)
 };
 
 #define EXT2_FT_UNKNOWN  0

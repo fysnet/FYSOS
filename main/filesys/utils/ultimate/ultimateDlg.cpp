@@ -27,7 +27,7 @@
  * (INCLUDING, BUT NOT LIMITED TO,  PROCUREMENT OF  SUBSTITUTE GOODS  OR SERVICES;
  * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER  CAUSED AND ON
  * ANY  THEORY OF  LIABILITY, WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR  TORT 
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN  ANY WAY  OUT OF THE USE OF THIS
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING INtrying  ANY WAY  OUT OF THE USE OF THIS
  * PRODUCT, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  READER AND/OR USER
  * USES AS THEIR OWN RISK.
  * 
@@ -1332,6 +1332,9 @@ long CUltimateDlg::ReadFromFile(void *buffer, DWORD64 lba, long count) {
   CString cs;
   long cnt;
   BYTE *ptr = (BYTE *) buffer;
+
+  if (count == 0)
+    return 0;
   
   switch (m_file_type) {
     case DLG_FILE_TYPE_FLAT: {
@@ -1414,6 +1417,9 @@ void CUltimateDlg::WriteToFile(void *buffer, DWORD64 lba, long count) {
     long cnt;
     BYTE *ptr = (BYTE *) buffer;
     
+    if (count == 0)
+      return;
+    
     switch (m_file_type) {
       case DLG_FILE_TYPE_FLAT: {
         LARGE_INTEGER large_int;
@@ -1494,6 +1500,52 @@ void CUltimateDlg::WriteToFile(void *buffer, DWORD64 lba, long count) {
         AfxMessageBox("Error: Unknown DLF_FILE_TYPE...");
     }
   }
+}
+
+void CUltimateDlg::ReadBlocks(void *buffer, DWORD64 base, DWORD64 block, DWORD block_size, long count) {
+  
+  // we need to calculate the correct sector offset and count
+  if (block_size < m_sect_size) {
+    // This isn't very efficient, but how many times will the block size
+    //  be less than the sector size?
+    BYTE buff[MAX_SECT_SIZE];
+    BYTE *p = (BYTE *) buffer;
+    while (count--) {
+      DWORD64 sector = (block * block_size) / m_sect_size;
+      DWORD64 offset = (block * block_size) % m_sect_size;
+      ReadFromFile(buff, base + sector, 1);
+      memcpy(p, buff + offset, block_size);
+      p += block_size;
+      block++;
+    }
+  } else if (block_size == m_sect_size)
+    ReadFromFile(buffer, base + block, count);
+  else  //if (block_size > m_sect_size)
+    ReadFromFile(buffer, base + (block * (block_size / m_sect_size)), (count * (block_size / m_sect_size)));
+}
+
+void CUltimateDlg::WriteBlocks(void *buffer, DWORD64 base, DWORD64 block, DWORD block_size, long count) {
+  
+  // we need to calculate the correct sector offset and count
+  // possibly reading in a sector since block size is less than sector size
+  if (block_size < m_sect_size) {
+    // This isn't very efficient, but how many times will the block size
+    //  be less than the sector size?
+    BYTE buff[MAX_SECT_SIZE];
+    BYTE *p = (BYTE *) buffer;
+    while (count--) {
+      DWORD64 sector = (block * block_size) / m_sect_size;
+      DWORD64 offset = (block * block_size) % m_sect_size;
+      ReadFromFile(buff, base + sector, 1);
+      memcpy(buff + offset, p, block_size);
+      WriteToFile(buff, base + sector, 1);
+      p += block_size;
+      block++;
+    }
+  } else if (block_size == m_sect_size)
+    WriteToFile(buffer, base + block, count);
+  else  //if (block_size > m_sect_size)
+    WriteToFile(buffer, base + (block * (block_size / m_sect_size)), (count * (block_size / m_sect_size)));
 }
 
 // insert sectors starting at lba

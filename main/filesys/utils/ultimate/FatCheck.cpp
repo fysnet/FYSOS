@@ -245,7 +245,8 @@ void CFat::OnFatCheck() {
         ClusterJ = GetNextCluster(alt_buffer, j);
         if (Cluster0 != ClusterJ) {
           cs.Format("* Cluster index %u in FAT #%u doesn't match 1st FAT.\r\n"
-                    "    (0x%08X != 0x%08X)  Continue?", j, i, Cluster0, ClusterJ);
+                    "    (0x%08X != 0x%08X)  Continue?\r\n"
+                    "Note: Fat numbers are zero based. ex: FAT #1 is the second fat.\r\n", j, i, Cluster0, ClusterJ);
           fcInfo += cs;
           fcInfo += "\r\n";
           modeless.SetDlgItemText(IDC_EDIT, fcInfo);
@@ -262,7 +263,8 @@ void CFat::OnFatCheck() {
       // if error == TRUE, ask if we wish to copy the indexed FAT to FAT 0 and/or visa-versa
       if (error) {
         cs.Format("There are differences between FAT #%i and the 1st FAT.\r\n"
-                  "Do you wish to copy the 1st fat to FAT #%i?\r\n", i, i);
+                  "Do you wish to copy the 1st fat to FAT #%i?\r\n"
+                  "Note: Fat numbers are zero based. ex: FAT #1 is the second fat.\r\n", i, i);
         fcInfo += cs;
         ret = AfxMessageBox(cs, MB_ICONEXCLAMATION | MB_YESNOCANCEL | MB_DEFBUTTON3, 0);
         if (ret == IDYES) {
@@ -274,7 +276,8 @@ void CFat::OnFatCheck() {
           AfxMessageBox("Changes applied.");
         } else if (ret == IDNO) {
           fcInfo += "No\r\n";
-          cs.Format("Do you wish to copy FAT #%i to the 1st fat?\r\n", i);
+          cs.Format("Do you wish to copy FAT #%i to the 1st fat?\r\n"
+                    "Note: Fat numbers are zero based. ex: FAT #1 is the second fat.\r\n", i);
           fcInfo += cs;
           if (AfxMessageBox(cs, MB_ICONEXCLAMATION | MB_YESNO | MB_DEFBUTTON2, 0) == IDYES) {
             fcInfo += "Yes\r\n";
@@ -364,9 +367,20 @@ void CFat::OnFatCheck() {
   GetDlgItem(ID_CHECK)->EnableWindow(TRUE);
 }
 
+char *FatErrorCode[LASTERRORCODE+1] = {
+  "   0 = no error\r\n",
+  "   1 = Bad Attribute Value\r\n",
+  "   2 = Invalid Char in SFN\r\n",
+  "   3 = SFN Reserved section is non-zero\r\n",
+  "   4 = bad sequence number found in LFN\r\n",
+  "   5 = Deleted Entry\r\n",
+  "   6 = Bad CRC of SFN found in LFN\r\n",
+  "   7 = Found Invalid char in LFN\r\n"
+};
+
 void CFat::FatCheckRoot(CModeless &modeless, struct S_FAT_ROOT *root, const unsigned entries, CString csPath) {
   struct S_FAT_ROOT *sub;
-  unsigned cnt, i = 0;
+  unsigned cnt, i = 0, j;
   DWORD start, filesize = 0, ErrorCode;
   BOOL IsDot = FALSE;
   CString cs, name;
@@ -409,14 +423,9 @@ void CFat::FatCheckRoot(CModeless &modeless, struct S_FAT_ROOT *root, const unsi
       cs.Format("Found Bad entry with error code %u* (index %i)\r\n", ErrorCode, i);
       if (!fc_entry_error) {
         fcInfo += cs;
-        cs = "* Error Codes:\r\n"
-             "   1 = Bad Attribute Value\r\n"
-             "   2 = Invalid Char in SFN\r\n"
-             "   3 = SFN Reserved section is non-zero\r\n"
-             "   4 = bad sequence number found in LFN\r\n"
-             "   5 = Deleted Entry\r\n"
-             "   6 = Bad CRC of SFN found in LFN\r\n"
-             "   7 = Found Invalid char in LFN\r\n";
+        cs = "* Error Codes:\r\n";
+        for (j=1; j<=LASTERRORCODE; j++)
+          cs += FatErrorCode[j];
         fc_entry_error = TRUE;
       }
     } else {

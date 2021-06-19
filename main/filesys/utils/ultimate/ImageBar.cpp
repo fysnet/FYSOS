@@ -74,6 +74,7 @@
 #include "Ext2.h"
 #include "ExFat.h"
 #include "NTFS.h"
+#include "FSZ.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -401,6 +402,17 @@ void CImageBar::ImageParseVolume(const BYTE type, const DWORD64 lba, const DWORD
       dlg->m_FYSCount++;
       break;
       
+    case FS_FSZ:
+      if (dlg->m_FSZCount >= MAX_SUB_VOLUMES) {
+        AfxMessageBox("Too many FSZ Volumes...");
+        return;
+      }
+      color = dlg->FSZ[dlg->m_FSZCount].GetNewColor(dlg->m_FSZCount);
+      dlg->FSZ[dlg->m_FSZCount].m_draw_index = DrawBox(lba, lba+size-1, TotalBlocks, color, TRUE, "FSZ", &dlg->FSZ[dlg->m_FSZCount]);
+      dlg->FSZ[dlg->m_FSZCount].Start(lba, size, color, dlg->m_FSZCount, TRUE);
+      dlg->m_FSZCount++;
+      break;
+      
     default:
       color = COLOR_UNKN;
       if (dlg->m_UCount >= MAX_SUB_VOLUMES) {
@@ -584,6 +596,13 @@ int CImageBar::DetectFileSystem(const DWORD64 lba, const DWORD64 size) {
   
   // detect a FYSFS file system
   fs_type = DetectFYSFS(buffer, dlg->m_sect_size);
+  if (fs_type > -1) {
+    free(buffer);
+    return fs_type;
+  }
+  
+  // detect a FSZ file system
+  fs_type = DetectFSZ(lba);
   if (fs_type > -1) {
     free(buffer);
     return fs_type;
@@ -940,4 +959,11 @@ int CImageBar::DetectFYSFS(void *buffer, const unsigned sect_size) {
   
   // if we made it this far, we must be a FAT File System
   return FS_FYSFS;
+}
+
+int CImageBar::DetectFSZ(DWORD64 lba) {
+  CFSZ fsz;
+  fsz.m_lba = lba;
+
+  return (fsz.DetectFSZ()) ? FS_FSZ : -1;
 }

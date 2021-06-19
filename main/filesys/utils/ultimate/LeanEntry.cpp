@@ -329,6 +329,7 @@ void CLeanEntry::OnSchTimeNow() {
 
 // load and display the Inode's EAs
 void CLeanEntry::OnEas() {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE *buffer = (BYTE *) calloc(m_parent->m_block_size, 1);
   DWORD64 Size = 0, More;
   BYTE *p;
@@ -338,7 +339,7 @@ void CLeanEntry::OnEas() {
   if (m_inode.attributes & LEAN_ATTR_EAS_IN_INODE) {
     // Read in the whole Inode Sector
     void *inode_buf = malloc(m_parent->m_block_size);
-    m_parent->LeanReadBlocks(inode_buf, m_inode.extent_start[0], 1);
+    dlg->ReadBlocks(inode_buf, m_parent->m_lba, m_inode.extent_start[0], m_parent->m_block_size, 1);
     Size = (m_parent->m_block_size - sizeof(struct S_LEAN_INODE));
     memcpy(buffer, (BYTE *) inode_buf + sizeof(struct S_LEAN_INODE), (size_t) Size);
     free(inode_buf);
@@ -420,9 +421,9 @@ void CLeanEntry::OnEas() {
       if (buff_len > 0)
         * (DWORD *) p = buff_len - sizeof(DWORD);
       void *inode_buf = malloc(m_parent->m_block_size);
-      m_parent->LeanReadBlocks(inode_buf, m_inode.extent_start[0], 1);
+      dlg->ReadBlocks(inode_buf, m_parent->m_lba, m_inode.extent_start[0], m_parent->m_block_size, 1);
       memcpy((BYTE *) inode_buf + sizeof(struct S_LEAN_INODE), buffer, m_parent->m_block_size - LEAN_INODE_SIZE);
-      m_parent->LeanWriteBlocks(inode_buf, m_inode.extent_start[0], 1);
+      dlg->WriteBlocks(inode_buf, m_parent->m_lba, m_inode.extent_start[0], m_parent->m_block_size, 1);
       free(inode_buf);
       free(buffer);
     }
@@ -452,7 +453,7 @@ void CLeanEntry::OnEas() {
         m_fork.Format("%I64i", m_inode.fork); // update the Dialog member
       } else {
         void *inode_buf = malloc(m_parent->m_block_size);
-        m_parent->LeanReadBlocks(inode_buf, m_inode.fork, 1);
+        dlg->ReadBlocks(inode_buf, m_parent->m_lba, m_inode.fork, m_parent->m_block_size, 1);
         m_parent->ReadFileExtents(&extents, m_inode.fork);
         free(inode_buf);
       }
@@ -478,6 +479,7 @@ void CLeanEntry::OnEas() {
 
 // "Apply" button was pressed
 void CLeanEntry::OnOK() {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE *buffer = (BYTE *) malloc(m_parent->m_block_size);
   DWORD crc;
   
@@ -542,9 +544,9 @@ void CLeanEntry::OnOK() {
   }
   
   // write the new inode data to the disk
-  m_parent->LeanReadBlocks(buffer, m_inode_num, 1);
+  dlg->ReadBlocks(buffer, m_parent->m_lba, m_inode_num, m_parent->m_block_size, 1);
   memcpy(buffer, &m_inode, sizeof(struct S_LEAN_INODE));
-  m_parent->LeanWriteBlocks(buffer, m_inode_num, 1);
+  dlg->WriteBlocks(buffer, m_parent->m_lba, m_inode_num, m_parent->m_block_size, 1);
   free(buffer);
 
   CDialog::OnOK();

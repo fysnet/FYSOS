@@ -288,8 +288,6 @@ public:
   //}}AFX_DATA
   
   BYTE lean_calc_log_band_size(const DWORD sect_size, const DWORD64 tot_blocks);
-  void LeanReadBlocks(void *buffer, DWORD64 block, long count);
-  void LeanWriteBlocks(void *buffer, DWORD64 block, long count);
   
   void Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, BOOL IsNewTab);
   BOOL DetectLeanFS(void);

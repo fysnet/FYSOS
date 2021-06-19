@@ -81,6 +81,7 @@ DWORD *lcClusters;
 CString lcInfo;
 
 void CLean::OnLeanCheck() {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   int j;
   unsigned i, pos;
   CString cs;
@@ -119,7 +120,7 @@ void CLean::OnLeanCheck() {
   // therefore, we can rely on the fact that m_super_block_loc should be correct.
   // *** most of these checks are redundant.  We can't get to here ***
   // *** without these values being correct in the first place.    ***
-  LeanReadBlocks(super, m_super_block_loc, 1);
+  dlg->ReadBlocks(super, m_lba, m_super_block_loc, m_block_size, 1);
   
   // How about the check sum
   DWORD crc = 0, *p = (DWORD *) super;
@@ -225,7 +226,7 @@ void CLean::OnLeanCheck() {
   for (i=0; i<tot_bands; i++) {
     // read in a bitmap
     bitmap_block = (i==0) ? m_super.bitmap_start : (band_size * i);
-    LeanReadBlocks(buffer, bitmap_block, bitmap_size);
+    dlg->ReadBlocks(buffer, m_lba, bitmap_block, m_block_size, bitmap_size);
     pos = 0;
     
     while ((pos < bytes_bitmap) && (total_count > 0)) {
@@ -274,7 +275,7 @@ void CLean::OnLeanCheck() {
   
   // write back the super?
   if (super_dirty)
-    LeanWriteBlocks(super, m_super_block_loc, 1);
+    dlg->WriteBlocks(super, m_lba, m_super_block_loc, m_block_size, 1);
   
   cs.Format("\r\n  Found %i errors\r\n", lcErrorCount);
   lcInfo += cs;

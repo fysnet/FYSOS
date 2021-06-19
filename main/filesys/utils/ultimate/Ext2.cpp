@@ -282,8 +282,8 @@ void CExt2::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
   if (m_super.rev_level == EXT2_GOOD_OLD_REV)
     m_inode_size = 128;
   else
-    m_inode_size = m_super.inode_size;
-  
+    m_inode_size = (m_super.inode_size <= 256) ? m_super.inode_size : 256;  // we only support up to a 256-byte inode
+
   // Read in the group descriptor table
   GetGroupDescTable();
   
@@ -486,18 +486,19 @@ void CExt2::GetGroupInodeTable(const int group) {
   // have we already read in this one?
   if (group == m_cur_group)
     return;
-  
+
   // do we need to write the current buffer first?
   if (m_inode_dirty)
     WriteGroupInodeTable(m_cur_group);
   
-  // no read in the desired group's inode table
+  // now read in the desired group's inode table
   desc = (struct S_EXT2_GROUP_DESC *) ((BYTE *) m_desc_table + (group * size));
   m_inode_table_size = ((m_super.inodes_per_group * m_inode_size) + (dlg->m_sect_size - 1)) & ~(dlg->m_sect_size - 1);
   m_cur_group = group;
   if (m_cur_inode_table)
     free(m_cur_inode_table);
   m_cur_inode_table = malloc(m_inode_table_size);
+  
   dlg->ReadFromFile(m_cur_inode_table, m_lba + (desc->inode_table * m_sectors_per_block), m_inode_table_size / dlg->m_sect_size);
 }
 
@@ -634,10 +635,10 @@ void CExt2::Ext2PutInode(const unsigned InodeNum, struct S_EXT2_INODE *inode) {
 unsigned CExt2::Ext2GetInode(const unsigned InodeNum, struct S_EXT2_INODE *inode) {
   const unsigned group = InodeNum / m_super.inodes_per_group;
   const unsigned in_num = (InodeNum - (group * m_super.inodes_per_group));
-  
+
   GetGroupInodeTable(group);
   memcpy(inode, (BYTE *) m_cur_inode_table + (in_num * m_inode_size), m_inode_size);
-  
+
   return group;
 }
 

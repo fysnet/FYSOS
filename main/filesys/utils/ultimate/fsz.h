@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -56,19 +56,20 @@
  *             http://www.fysnet.net/osdesign_book_series.htm
  */
 
-#if !defined(AFX_FAT_H__D10F989D_088D_449D_8E72_E3E414D0E5BA__INCLUDED_)
-#define AFX_FAT_H__D10F989D_088D_449D_8E72_E3E414D0E5BA__INCLUDED_
+#if !defined(AFX_FSZ_H__D10F989D_088D_449D_8E72_E3E414D0E5BA__INCLUDED_)
+#define AFX_FSZ_H__D10F989D_088D_449D_8E72_E3E414D0E5BA__INCLUDED_
 
 #if _MSC_VER > 1000
 #pragma once
 #endif // _MSC_VER > 1000
-// Fat.h : header file
+// fsz.h : header file
 //
 
 #include "MyImageList.h"
 #include "MyTreeCtrl.h"
 #include "Modeless.h"
 
+/*
 #define FAT_ATTR_LONG_FILE 0x0F
 #define FAT_ATTR_ARCHIVE   0x20
 #define FAT_ATTR_SUB_DIR   0x10
@@ -79,72 +80,60 @@
 #define FAT_ATTR_ALL       0x3F
 
 #define FAT_DELETED_CHAR   0xE5
+*/
+
+// feature flags
+#define FSZ_SB_BIGINODE         (1<<0)  // indicates inode size is 2048 (ACL size 96 instead of 32)
+#define FSZ_SB_JOURNAL_DATA     (1<<1)  // also put file content records in journal file, not just metadata
+#define FSZ_SB_SOFTRAID         (1<<2)  // single disk when not set
+#define FSZ_SB_ACCESSDATE       (1<<3)  // store last access timestamp in i-nodes
+
 
 #pragma pack(push, 1)
 
-struct S_FAT1216_BPB {
-  BYTE   jmp[3];
-  char   oem_name[8];
-  WORD   bytes_per_sect;
-  BYTE   sect_per_clust;
-  WORD   sect_reserved;
-  BYTE   fats;
-  WORD   root_entrys;
-  WORD   sectors;
-  BYTE   descriptor;
-  WORD   sect_per_fat;
-  WORD   sect_per_trk;
-  WORD   heads;
-  DWORD  hidden_sects;
-  DWORD  sect_extnd;
-  BYTE   drive_num;  // not FAT specific
-  BYTE   resv;
-  BYTE   sig;
-  DWORD  serial;
-  char   label[11];
-  char   sys_type[8];
+// 128-bit unsigned double quadword
+#ifndef DQWORD
+  typedef struct _DQWORD {
+    DWORD64 LowPart;
+    DWORD64 HighPart;
+  } DQWORD;
+#endif
+
+struct S_FSZ_SUPER {
+  BYTE   loader[512];
+  DWORD  magic;
+  BYTE   version_major;
+  BYTE   version_minor;
+  BYTE   logsec;
+  BYTE   enctype;
+  DWORD  flags;
+  WORD   maxmounts;
+  WORD   currmounts;
+  DQWORD numsec;        // total logical sectors on volume minus 1
+  DQWORD freesec;
+  DQWORD rootdirfid;
+  DQWORD freesecfid;
+  DQWORD badsecfid;
+  DQWORD indexfid;
+  DQWORD metafid;
+  DQWORD journalfid;
+  DWORD64 journalhead;
+  DWORD64 journaltail;
+  DWORD64 journalmax;
+  BYTE   encrypt[28];
+  DWORD  enchash;
+  DWORD64 createdate;
+  DWORD64 lastmountdate;
+  DWORD64 lastunmountdate;
+  DWORD64 lastcheckdate;
+  struct S_GUID uuid;
+  BYTE   reserved[256];
+  DWORD  magic2;
+  DWORD  checksum;
+  BYTE   raidspecific[1024];
 };
 
-struct S_FAT32_BPB {
-  BYTE   jmp[3];
-  char   oem_name[8];
-  WORD   bytes_per_sect;
-  BYTE   sect_per_clust;
-  WORD   sect_reserved;
-  BYTE   fats;
-  WORD   root_entrys;
-  WORD   sectors;
-  BYTE   descriptor;
-  WORD   sect_per_fat;
-  WORD   sect_per_trk;
-  WORD   heads;
-  DWORD  hidden_sects;
-  DWORD  sect_extnd;
-  DWORD  sect_per_fat32;
-  WORD   ext_flags;      // bit 8 = write to all copies of FAT(s).  bit0:3 = which fat is active
-  WORD   fs_version;
-  DWORD  root_base_cluster; // ??????
-  WORD   fs_info_sec;
-  WORD   backup_boot_sec;
-  BYTE   reserved[12];
-  BYTE   drive_num;       // not FAT specific
-  BYTE   resv;
-  BYTE   sig;
-  DWORD  serial;
-  char   label[11];
-  char   sys_type[8];
-};
-
-struct S_FAT32_BPB_INFO {
-  DWORD  sig;               // 0x41615252 ("RRaA")
-  BYTE   resv[480];         // reserved
-  DWORD  struct_sig;        // 0x61417272 ("rrAa")
-  DWORD  free_clust_cnt;    // -1 when the count is unknown
-  DWORD  next_free_clust;   // most recent allocated cluster
-  BYTE   resv0[12];         // reserved
-  DWORD  trail_sig;         // 0xAA550000  (00 00 55 AA)
-};
-
+/*
 struct S_FAT_ROOT {
   BYTE   name[8];    // name
   BYTE   ext[3];     // ext
@@ -202,9 +191,11 @@ struct S_FAT_ITEMS {
   struct S_FAT_ROOT Entry[ROOT_ENTRY_MAX];  // A LFN can use up to 64 entries (64 * 32 = 2048 bytes)
   
 };
+*/
 
 #pragma pack(pop)
 
+/*
 // structure to hold all FAT entries (cluster numbers)
 struct S_FAT_ENTRIES {
   DWORD *entries;
@@ -212,58 +203,59 @@ struct S_FAT_ENTRIES {
   int    entry_count;
   BOOL   was_error;
 };
-
-#define LASTERRORCODE   7
-extern char *FatErrorCode[LASTERRORCODE+1];
+*/
 
 /////////////////////////////////////////////////////////////////////////////
-// CFat dialog
+// CFSZ dialog
 
-class CFat : public CPropertyPage {
-  DECLARE_DYNCREATE(CFat)
+class CFSZ : public CPropertyPage {
+  DECLARE_DYNCREATE(CFSZ)
 
 // Construction
 public:
-  CFat();
-  ~CFat();
+  CFSZ();
+  ~CFSZ();
 
 // Dialog Data
-  //{{AFX_DATA(CFat)
-  enum { IDD = IDD_FAT };
+  //{{AFX_DATA(CFSZ)
+  enum { IDD = IDD_FSZ };
   CMyTreeCtrl	m_dir_tree;
-  CString	m_jmp0;
-  CString	m_jmp1;
-  CString	m_jmp2;
-  CString	m_bytes_sect;
-  CString	m_descriptor;
-  CString	m_fat_type;
-  CString	m_fats;
-  CString	m_heads;
-  CString	m_hidden_sects;
-  CString	m_label;
-  CString	m_oem_name;
-  CString	m_clust_num;
-  CString	m_root_entries;
-  CString	m_sects_cluster;
-  CString	m_sect_fat;
-  CString	m_sect_fat32;
-  CString m_ext_flags;
-  CString	m_sect_track;
-  CString	m_sectors;
-  CString	m_sectors_ext;
-  CString	m_fs_version;
-  CString	m_backup_sector;
-  CString	m_drv_num;
-  CString	m_info_sector;
-  CString	m_reserved;
-  CString	m_sect_reserved;
-  CString	m_serial_number;
-  CString	m_fat_sig;
+  CString	m_magic;
+  CString	m_version_major;
+  CString	m_version_minor;
+  CString	m_logsec;
+  CString	m_enctype;
+  CString	m_flags;
+  CString	m_maxmounts;
+  CString	m_currmounts;
+  CString	m_numsec;
+  CString	m_freesec;
+  CString	m_freesecfid;
+  CString	m_rootfid;
+  CString	m_badsecfid;
+  CString	m_indexfid;
+  CString	m_metafid;
+  CString	m_journalfid;
+  CString	m_journalhead;
+  CString	m_journaltail;
+  CString m_journalmax;
+  CString	m_encrypt;
+  CString	m_enchash;
+  CString	m_createdate;
+  CString	m_lastmountdate;
+  CString	m_lastunmountdate;
+  CString	m_lastcheckdate;
+  CString	m_uuid;
+  CString	m_magic2;
+  CString	m_checksum;
   //}}AFX_DATA
-  
-  void Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, const int fs_type, BOOL IsNewTab);
+
+  void Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, BOOL IsNewTab);
+  DWORD crc32c_calc(void *buffer, size_t length);
+  BOOL DetectFSZ(void);
   DWORD GetNewColor(int index);
   
+  /*
   bool ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM parent, BOOL IsRoot);
   DWORD CheckRootEntry(struct S_FAT_ROOT *root);
   unsigned FatCheckLFN(struct S_FAT_LFN_ROOT *lfn, DWORD *ErrorCode);
@@ -277,10 +269,10 @@ public:
   void *ReadFile(DWORD Cluster, DWORD *Size, BOOL IsRoot);
   void WriteFile(void *buffer, struct S_FAT_ENTRIES *ClusterList, DWORD size, BOOL IsRoot);
   void ZeroCluster(DWORD Cluster);
-  
+  */
   void SendToDialog(void *ptr);
-  void ReceiveFromDialog(void *ptr);
-
+  //void ReceiveFromDialog(void *ptr);
+  /*
   void CopyFile(HTREEITEM hItem, CString csName);
   void CopyFolder(HTREEITEM hItem, CString csPath, CString csName);
   BOOL InsertFile(DWORD Cluster, CString csName, CString csPath, BOOL IsRoot);
@@ -303,46 +295,50 @@ public:
   void CreateSFN(CString csLFN, int seq, BYTE name[8], BYTE ext[3]);
   WORD CreateDate(void);
   WORD CreateTime(void);
-  
+  */
   CMyImageList m_TreeImages;
   HTREEITEM m_hRoot;
   BOOL      m_too_many;
-  
-  void *m_bpb_buffer;
-  void *m_fat_buffer;
+
+  void *m_super;
+  /*
   int   m_fat_size;  // FS_FATxx
   DWORD m_datastart;
   DWORD m_rootstart;
   DWORD m_rootsize;  // size of root in bytes
-  
+  */
   BOOL    m_isvalid;
-  int     m_index; // index into dlg->Fat[]
+  int     m_index; // index into dlg->FSZ[]
   DWORD64 m_lba;   // starting lba of this partition
   DWORD64 m_size;  // size of this partition in sectors
   DWORD   m_color; // color used in image bar
   int     m_draw_index;
   BOOL    m_hard_format;
+  DWORD   m_block_size; // must be at least 2048
+  BOOL    m_big_inode;  // 0 = Inodes are 1024 bytes in size, 1 = 2048 bytes in size
 
   BOOL    m_show_del;
   BOOL    m_del_clear;
 
-  int     m_parse_depth_limit; // used to catch a repeating '..' or '.' recursive error
+  //int     m_parse_depth_limit; // used to catch a repeating '..' or '.' recursive error
   
 // Overrides
   // ClassWizard generate virtual function overrides
-  //{{AFX_VIRTUAL(CFat)
+  //{{AFX_VIRTUAL(CFSZ)
   protected:
   virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
   //}}AFX_VIRTUAL
 
 // Implementation
 protected:
+  /*
   void FatCheckRoot(CModeless &modeless, struct S_FAT_ROOT *root, const unsigned entries, CString csPath);
   bool CheckForRecursion(DWORD cluster);
-
+  */
   // Generated message map functions
-  //{{AFX_MSG(CFat)
+  //{{AFX_MSG(CFSZ)
   virtual BOOL OnInitDialog();
+  /*
   afx_msg BOOL OnHelpInfo(HELPINFO *pHelpInfo);
   afx_msg void OnFatApply();
   afx_msg void OnFatClean();
@@ -353,6 +349,12 @@ protected:
   afx_msg void OnInsertVLabel();
   afx_msg void OnFatInsert();
   afx_msg void OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult);
+  */
+  afx_msg void OnChangeVersion();
+  afx_msg void OnChangeLogSecSize();
+  afx_msg void OnChangeHashType();
+  afx_msg void OnChangeEncryptType();
+  /*
   afx_msg void OnFatEntry();
   afx_msg void OnFysosSig();
   afx_msg void OnFat32Info();
@@ -368,6 +370,7 @@ protected:
   afx_msg void OnCollapse();
   afx_msg void OnSearch();
   afx_msg void OnErase();
+  */
   //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
 };
@@ -375,4 +378,4 @@ protected:
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.
 
-#endif // !defined(AFX_FAT_H__D10F989D_088D_449D_8E72_E3E414D0E5BA__INCLUDED_)
+#endif // !defined(AFX_FSZ_H__D10F989D_088D_449D_8E72_E3E414D0E5BA__INCLUDED_)

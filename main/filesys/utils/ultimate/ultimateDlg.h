@@ -84,10 +84,11 @@
 #include "Ext2.h"
 #include "ExFat.h"
 #include "NTFS.h"
+#include "fsz.h"
 
 #include "Unknown.h"
 
-#define MAX_DIR_PARSE_DEPTH  150    // max recursive depth we allow
+#define MAX_DIR_PARSE_DEPTH  75    // max recursive depth we allow
 
 #define MAX_SUB_VOLUMES   16
 
@@ -179,6 +180,10 @@ public:
   CExFat ExFat[MAX_SUB_VOLUMES];
   CString m_ExFatNames[MAX_SUB_VOLUMES];
   int  m_ExFatCount;
+
+  CFSZ FSZ[MAX_SUB_VOLUMES];
+  CString m_FSZNames[MAX_SUB_VOLUMES];
+  int  m_FSZCount;
   
   CUnknown Unknown[MAX_SUB_VOLUMES];
   int  m_UCount;
@@ -194,6 +199,8 @@ public:
   BOOL SetFileLength(HANDLE hFile, const DWORD64 Size);
   long ReadFromFile(void *buffer, DWORD64 lba, long count);
   void WriteToFile(void *buffer, DWORD64 lba, long count);
+  void ReadBlocks(void *buffer, DWORD64 base, DWORD64 block, DWORD block_size, long count);
+  void WriteBlocks(void *buffer, DWORD64 base, DWORD64 block, DWORD block_size, long count);
   void InsertSectors(const DWORD64 lba, const long count);
   void RemoveSectors(const DWORD64 lba, const long count);
   

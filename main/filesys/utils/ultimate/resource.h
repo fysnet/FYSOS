@@ -91,6 +91,7 @@
 #define IDD_GPT_GUID                    195
 #define IDD_VDI                         196
 #define IDD_FYSFS_FORMAT                197
+#define IDD_FSZ                         198
 #define IDC_IMAGE_BAR                   1002
 #define IDC_PAGES                       1005
 #define IDC_TABS                        1007
@@ -919,7 +920,44 @@
 #define IDC_CREATED_CHANGE2             1592
 #define IDC_LAST_CHANGE                 1592
 #define IDC_SIZE_MEGS                   1592
-#define IDC_EDIT1                       1593
+#define IDC_FSZ_MAGIC                   1593
+#define IDC_FSZ_VER_MAJ                 1594
+#define IDC_FSZ_VER_MIN                 1595
+#define IDC_FSZ_LOGSEC                  1596
+#define IDC_FSZ_ENCTYPE                 1597
+#define IDC_FSZ_FLAGS                   1598
+#define IDC_FSZ_MAXMOUNTS               1599
+#define IDC_FSZ_CURRMOUNTS              1600
+#define IDC_FSZ_NUMSEC                  1601
+#define IDC_FSZ_FREESEC                 1602
+#define IDC_FSZ_ROOTFID                 1603
+#define IDC_FSZ_FREESECFID              1604
+#define IDC_FSZ_BADSECFID               1605
+#define IDC_FSZ_INDEXFID                1606
+#define IDC_FSZ_METAFID                 1607
+#define IDC_FSZ_JOURNALFID              1608
+#define IDC_FSZ_JOURNALHEAD             1609
+#define IDC_FSZ_JOURNALTAIL             1610
+#define IDC_FSZ_JOURNALMAX              1611
+#define IDC_FSZ_ENCRYPT                 1612
+#define IDC_FSZ_ENCHASH                 1613
+#define IDC_FSZ_CREATEDATE              1614
+#define IDC_FSZ_LASTMOUNTDATE           1615
+#define IDC_FSZ_LASTUNMOUNTDATE         1616
+#define IDC_FSZ_LASTCHECKDATE           1617
+#define IDC_FSZ_UUID                    1618
+#define IDC_FSZ_MAGIC2                  1619
+#define IDC_FSZ_CHECKSUM                1620
+#define IDC_FSZ_VERSION                 1621
+#define IDC_FSZ_SECTSIZE                1622
+#define IDC_FSZ_CREATEDATE_UPDATE       1623
+#define IDC_FSZ_MOUNTED_UPDATE          1624
+#define IDC_FSZ_UNMOUNTED_UPDATE        1625
+#define IDC_FSZ_CHECKED_UPDATE          1626
+#define IDC_FSZ_UUID_CREATE             1627
+#define IDC_FSZ_SUPER_CRC_UPDATE        1628
+#define IDC_FSZ_ENCRYPT_NAME            1629
+#define IDC_FSZ_ENC_MASK_DO             1630
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
@@ -937,9 +975,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        200
+#define _APS_NEXT_RESOURCE_VALUE        201
 #define _APS_NEXT_COMMAND_VALUE         32785
-#define _APS_NEXT_CONTROL_VALUE         1594
+#define _APS_NEXT_CONTROL_VALUE         1628
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

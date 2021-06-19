@@ -97,7 +97,8 @@ public:
   int  DetectNTFS(void *buffer);
   int  DetectSFS(void *buffer, const unsigned sect_size);
   int  DetectFYSFS(void *buffer, const unsigned sect_size);
-  
+  int  DetectFSZ(DWORD64 lba);
+
 // Overrides
   // ClassWizard generated virtual function overrides
   //{{AFX_VIRTUAL(CImageBar)
