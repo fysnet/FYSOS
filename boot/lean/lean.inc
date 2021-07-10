@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2021    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: lean.inc                                                           *
@@ -27,10 +27,10 @@ comment |*******************************************************************
 *                                                                          *
 * BUILT WITH:   NewBasic Assembler                                         *
 *                 http://www.fysnet/newbasic.htm                           *
-*               NBASM ver 00.26.59                                         *
+*               NBASM ver 00.26.80                                         *
 *          Command line: nbasm lean<enter>                                 *
 *                                                                          *
-* Last Updated: 16 Apr 2017                                                *
+* Last Updated: 9 July 2021                                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
@@ -58,34 +58,39 @@ S_GUID ends
 
 
 S_LEAN_SUPER struct
-  checksum              dword    ; dword sum of all fields before this one.
+  checksum              dword    ; CRC of all fields in this structure
   magic                 dword    ; 0x4E41454C ('LEAN')
-  fs_version            word     ; 0x0004 = 0.4
+  fs_version            word     ; 0x0007 = 0.7
   pre_alloc_count       byte     ; 
-  log_sectors_per_band  byte     ; 1 << log_sectors_per_band = sectors_per_band. Valid values are 12, 13, 14, ...
+  log_blocks_per_band   byte     ; 1 << log_blocks_per_band = blocks_per_band. Valid values are 12, 13, 14, ...
   state                 dword    ; bit 0 = unmounted?, bit 1 = error?
   guid                  dup 16   ; Globally Unique IDentifier
   volume_label          dup 64   ; can be modified by the LABEL command
-  sector_count          qword    ; The total number of sectors that form a file system volume
-  free_sector_count     qword    ; The number of free sectors in the volume. A value of zero means disk full.
-  primary_super         qword    ; sector number of primary super block
-  backup_super          qword    ; sector number of backup super block
-  bitmap_start          qword    ; This is the address of the sector where the first bands bitmap starts
-  root_start            qword    ; This is the address of the sector where the root directory of the volume starts, the inode number of the root directory.
-  bad_start             qword    ; This is the address of the sector where the pseudo-file to track bad sectors starts.
-  reserved              dup 360  ; zeros
+  block_count           qword    ; The total number of blocks that form a file system volume
+  free_block_count      qword    ; The number of free blocks in the volume. A value of zero means disk full.
+  primary_super         qword    ; block number of primary super block
+  backup_super          qword    ; block number of backup super block
+  bitmap_start          qword    ; address of the block where the first bands bitmap starts
+  root_start            qword    ; address of the block where the root directory of the volume starts, the inode number of the root directory.
+  bad_start             qword    ; address of the block where the pseudo-file to track bad blocks starts.
+  journal_inode         qword    ; address of the block where the pseudo-file for the journal starts (optional).
+  log_block_size        byte     ; 1 << log_block_size = block size. Valid values are 8, 9, 10, ...
+  padding               dup 7    ; padding
+  reserved              dup 344  ; zeros
 S_LEAN_SUPER ends
 
+; this assumes that the block size is 512 bytes
+; if you adjust the block size, the 'extent_size' member needs to be adjusted as well.
 S_LEAN_INDIRECT struct
-  checksum              dword    ; dword sum of all fields before this one.
+  checksum              dword    ; CRC of all fields in this structure
   magic                 dword    ; 0x58444E49 ('INDX')
-  sector_count          qword    ; total number of sectors addressable using this indirect sector.
-  inode                 qword    ; the inode number of this file this indirect sector belongs to.
-  this_sector           qword    ; The address of the sector storing this indirect sector.
-  prev_indirect         qword    ; the address of the previous indirect sector.
-  next_indirect         qword    ; the address of the next indirect sector.
-  extent_count          dword    ; The number of valid extent specifications storing in the indirect sector.
-  resv0                 dup 3    ; reserved
+  block_count           qword    ; total number of blocks addressable using this indirect block.
+  inode                 qword    ; the inode number of this file this indirect block belongs to.
+  this_block            qword    ; The address of the block storing this indirect block.
+  prev_indirect         qword    ; the address of the previous indirect block.
+  next_indirect         qword    ; the address of the next indirect block.
+  extent_count          word     ; The number of valid extent specifications storing in the indirect block.
+  resv0                 word     ; reserved
   resv1                 dword    ; reserved
   extent_start          dup (38 * sizeof(qword)) ; array of direct extents of the file.
   extent_size           dup (38 * sizeof(dword))
@@ -104,13 +109,13 @@ S_LEAN_INODE struct
   gid                   dword    ; currently reserved, set to 0
   attributes            dword    ; see below
   file_size             qword    ; file size
-  sector_count          qword    ; 
+  block_count           qword    ; 
   acc_time              qword    ; last accessed: number of seconds elapsed since midnight of 1970-01-01
   sch_time              qword    ;              : number of seconds elapsed since midnight of 1970-01-01
   mod_time              qword    ; last modified: number of seconds elapsed since midnight of 1970-01-01
   cre_time              qword    ;       created: number of seconds elapsed since midnight of 1970-01-01
-  first_indirect        qword    ; address of the first indirect sector of the file.
-  last_indirect         qword    ; address of the last indirect sector of the file.
+  first_indirect        qword    ; address of the first indirect block of the file.
+  last_indirect         qword    ; address of the last indirect block of the file.
   fork                  qword    ; 
   extent_start          dup (6 * sizeof(qword)) ; array of direct extents of the file.
   extent_size           dup (6 * sizeof(dword))
@@ -153,5 +158,3 @@ S_BOOTBPB  struct
 S_BOOTBPB  ends
 
 .end
-
-

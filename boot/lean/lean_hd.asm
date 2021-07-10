@@ -1,5 +1,5 @@
 comment |*******************************************************************
-*  Copyright (c) 1984-2019    Forever Young Software  Benjamin David Lunt  *
+*  Copyright (c) 1984-2021    Forever Young Software  Benjamin David Lunt  *
 *                                                                          *
 *                            FYS OS version 2.0                            *
 * FILE: lean_hd.asm                                                        *
@@ -30,7 +30,7 @@ comment |*******************************************************************
 *               NBASM ver 00.26.74                                         *
 *          Command line: nbasm lean_hd<enter>                              *
 *                                                                          *
-* Last Updated: 15 Nov 2020                                                *
+* Last Updated: 9 July 2021                                                *
 *                                                                          *
 ****************************************************************************
 * Notes:                                                                   *
