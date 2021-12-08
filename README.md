@@ -55,7 +55,8 @@ The C files are built with Alex's SmallerC
     
 You use these files at your own risk.
  
-If you have any questions, please contact me at the email address shown below or visit:
+#### Latest binary or other questions
+For the latest binary of my **complete OS in action**, or if you have any questions, please contact me at the email address shown below or visit:
 
 #### http://www.fysnet.net/fysos.htm
  
