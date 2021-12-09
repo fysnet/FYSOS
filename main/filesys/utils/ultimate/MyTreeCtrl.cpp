@@ -103,8 +103,8 @@ BOOL CMyTreeCtrl::DeleteAllItems(void) {
   return CTreeCtrl::DeleteAllItems();
 }
 
-#define MAX_ITEMS_ALLOWED       10240
-#define MAX_ITEMS_ALLOWED_STR  "10240"
+#define MAX_ITEMS_ALLOWED       20480
+#define MAX_ITEMS_ALLOWED_STR  "20480"
 
 HTREEITEM CMyTreeCtrl::Insert(LPCTSTR lpszItem, DWORD Flags, int nImage, int nSelectedImage, HTREEITEM hParent) {
   HTREEITEM handle = NULL;
