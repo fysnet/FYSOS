@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2021
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -811,8 +811,8 @@ int CImageBar::DetectExt2(void *buffer, const DWORD64 Size, const unsigned sect_
   if (super->rev_level > 1)
     return -1;
   
-  // if the rev_level == 0 and the inode size != 128, error
-  if ((super->rev_level == 0) && (super->inode_size != 128))
+  // if the rev_level > 0 and the inode size != 128, error
+  if ((super->rev_level > 0) && (super->inode_size != 128))
     return -1;
 
   return FS_EXT2;
