@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -74,15 +74,15 @@
  *     or low-speed device is attached, the device will not be found by this code.
  *     Use GD_UHCI or GD_OHCI for full- and low-speed devices.
  *
- *  Last updated: 14 July 2020
+ *  Last updated: 26 Dec 2021
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
- *   gcc -Os gd_ehci.c -o gd_ehci.exe -s
+ *   gcc -Os hidparse.c -o hidparse.exe -s
  *
  *  Usage:
  *    HIDParse filename.ext
  *
- *  Where filename.ext is a binary file of the HID report descriptor returned by a device.
+ *  Where filename.ext is a binary file of the HID Report Descriptor returned by a device.
  *  The example reports are included as:
  *    Report0.bin  -- Micro Innovations three button Scroll Mouse
  *    Report1.bin  -- Micro Innovations Keypad
@@ -118,7 +118,7 @@ int main(int argc, char *argv[]) {
   int hid_report_len;
   
   printf("\nHIDParser -- Parse a HID Report Descriptor  v1.50.00\n"
-           "Forever Young Software           Copyright 1984-2020\n");
+           "Forever Young Software           Copyright 1984-2022\n");
   
   // parse the command line
   if (!parse_cmnd_line(argc, argv))
