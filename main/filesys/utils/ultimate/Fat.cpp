@@ -253,7 +253,7 @@ BOOL CFat::OnInitDialog() {
     SetDlgItemText(ID_DELETE, "Delete/Zero");
   else
     SetDlgItemText(ID_DELETE, "Delete");
-  
+
   return TRUE;
 }
 
@@ -784,10 +784,12 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
     AfxMessageBox("Recursive ParseDir() too deep.  Stopping");
     return FALSE;
   }
-  
+
   while ((i<entries) && !m_too_many) {
+    // null char markes end of list
     if (root[i].name[0] == 0x00)
       break;
+
     ErrorCode = CheckRootEntry(&root[i]);
     if (ErrorCode == FAT_BAD_LFN_DEL)
       cnt = FatGetName(&root[i], name, &attrb, &start, &filesize, NULL) - 1; // -1 so we display the deleted SFN ????
@@ -799,9 +801,9 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
       if (++ErrorCount >= ErrorMax)
         break;
     } else {
-      // retrieve the name.
-      cnt = FatGetName(&root[i], name, &attrb, &start, &filesize, &IsDot);
+      // if it is a deleted entry, display it?, and skip the entry
       if (root[i].name[0] == FAT_DELETED_CHAR) {
+        cnt = 1;
         if (IsDlgButtonChecked(IDC_SHOW_DEL)) {
           name = "(deleted entry)";
           hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, parent);
@@ -809,6 +811,8 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
           SaveItemInfo(hItem, 0, filesize, &root[i], i, cnt, 0, FALSE);
         }
       } else {
+        // retrieve the name.
+        cnt = FatGetName(&root[i], name, &attrb, &start, &filesize, &IsDot);
         if (attrb & FAT_ATTR_SUB_DIR) {
           if (attrb & FAT_ATTR_HIDDEN)
             hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER_HIDDEN, IMAGE_FOLDER_HIDDEN, parent);
@@ -912,6 +916,10 @@ void CFat::ZeroCluster(DWORD Cluster) {
 DWORD CFat::CheckRootEntry(struct S_FAT_ROOT *root) {
   unsigned i, sfn = 0;
   
+  // if the entry was deleted, simply return no error
+  if (root->name[0] == FAT_DELETED_CHAR)
+    return FAT_NO_ERROR;
+
   // first check the attribute value.
   // should be one of/a combination of
   //   FAT_ATTR_ARCHIVE   0x20
@@ -940,7 +948,7 @@ DWORD CFat::CheckRootEntry(struct S_FAT_ROOT *root) {
   }
   
   // Check that there are no invalid chars in the name
-  if ((root[sfn].name[0] != FAT_DELETED_CHAR) && (root[sfn].name[0] != 0)) {
+  if (root[sfn].name[0] != 0) {
     for (i=0; i<8; i++) {
       if (!FatIsValidChar(root[sfn].name[i]))
         return FAT_BAD_CHAR;
@@ -1007,9 +1015,10 @@ unsigned CFat::FatGetName(struct S_FAT_ROOT *root, CString &name, BYTE *attrb, D
 }
 
 unsigned CFat::FatGetLFN(struct S_FAT_LFN_ROOT *lfn, CString &name) {
-  int i, j, cnt = lfn->sequ_flags & ~0xC0;
+  int i, j;
   char *t, str[1024];
-  
+  unsigned cnt = lfn->sequ_flags & 0x3F;
+
   if (lfn->sequ_flags & 0x80)
     return cnt;
   
@@ -2172,6 +2181,7 @@ void CFat::OnFatEntry() {
       if (items->ErrorCode <= LASTERRORCODE) {
         FatEntry.m_error_code = FatErrorCode[items->ErrorCode];
         FatEntry.m_error_code.TrimLeft();
+        FatEntry.m_error_code.TrimRight();
       } else
         FatEntry.m_error_code.Format("??????");
       FatEntry.m_lfns = malloc(ROOT_ENTRY_MAX * sizeof(struct S_FAT_ROOT));
