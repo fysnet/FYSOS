@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2021
+ ;                             Copyright (c) 1984-2022
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -72,7 +72,7 @@
  ;  
  ;   Hardware Requirements:
  ;    This code uses instructions that are valid for a 386 or later 
- ;    Intel x86 or compatible CPU.
+ ;     Intel x86 or compatible CPU.
  ;
  ;  Last updated: 17 June 2021
  ;
@@ -110,12 +110,12 @@ IS_HARDDRIVE     equ  0            ; 0 = use 1.44 floppy emulation, 1 = use hard
 
 .code                              ;
 .rmode                             ; bios starts with (un)real mode
-.386P                              ; allow processor specific code for the 386
+.386                               ; allow processor specific code for the 386
            org  00h                ; 07C0:0000h
 
            jmp  short start        ; There should always be 3 bytes of code
            nop                     ;  followed by the start of the data.
-
+           
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;
 OEM_Name     db  'FYSOS2.0'    ; 8 bytes for OEM Name and Version
@@ -152,7 +152,7 @@ start:     cli                     ; don't allow interrupts
            mov  ds,ax              ;
            mov  es,ax              ;
            mov  ss,ax              ; start of stack segment (0000h)
-           mov  sp,0FFFEh          ; first push at 07C0:FFFEh (-2)
+           mov  sp,0FFFEh          ; first push at 07C0:FFFEh-2
            sti                     ; allow interrupts again
            
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -219,6 +219,8 @@ use_big_read:
            jc   short disk_read_error
            
            add  sp,16      ; remove the items from the stack
+                           ; if it errors, we won't get here.
+                           ;  (but who cares, if that happens?)
            
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 done_read:
@@ -447,19 +449,52 @@ use_big_params:
            call hexdd
            call display_CRLF
 
+           
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;
 done_params:
+
+           push dword 0    ; offset 12
+           push dword 19   ; offset 8
+           
+           push es         ; offset 4
+           push 800h
+           
+           push 01h        ; offset 2
+           
+           push 10h        ; offset 0
+           mov  si,sp
+           mov  ah,42h     ; extended read
+           mov  dl,drive   ;
+           int  13h
+           add  sp,16      ; remove the items from the stack
+           
+           mov   si,800h
+           mov   cx,256
+@@:        lodsb
+           call  hexdb
+           mov   al,20h
+           call  display_char
+           loop  @b
+
+; 42 20 00 49 00 6E 00 66-00 6F 00 0F 00 72 72 00 
+; 6D 00 61 00 74 00 69 00-6F 00 00 00 6E 00 00 00
+
+; 01 53 00 79 00 73 00 74-00 65 00 0F 00 72 6D 00
+; 20 00 56 00 6F 00 6C 00-75 00 00-00 6D 00 65 00
+
+; 53 59 53 54 45 4D 7E 31-20 20 20 16 00 A5 A0 AC   SYSTEM~1
+; D3 52 D3 52 00 00 A1 AC-D3 52 E8 00 00 00 00 00
+
            jmp  freeze
 
 drv_number_str     db  'The BIOS gives us a drive value of: ',0
-extensions_str     db  'Extensions supported: ',0
+extensions_str     db  ' Extensions supported: ',0
 small_params_type  db  ' Type: ',0
 small_params_cyls  db  ' Cylinders: ',0
 small_params_heads db  ' Heads: ',0
 small_params_spt   db  ' SPT: ',0
 small_params_total db  ' Total Sectors: ',0
-
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 %PRINT (400h-$)           ; ~200 bytes free in this area before we need
@@ -474,6 +509,17 @@ small_params_total db  ' Total Sectors: ',0
 
 ; indicate pmode code so we can pad with a value greater than 64k
 .pmode
+
+          org  (512 * 19)
+ db  42h 20h 00h 49h 00h 6Eh 00h 66h 00h 6Fh 00h 0Fh 00h 72h 72h 00h 
+ db  6Dh 00h 61h 00h 74h 00h 69h 00h 6Fh 00h 00h 00h 6Eh 00h 00h 00h
+
+ db  01h 53h 00h 79h 00h 73h 00h 74h 00h 65h 00h 0Fh 00h 72h 6Dh 00h
+ db  20h 00h 56h 00h 6Fh 00h 6Ch 00h 75h 00h 00h 00h 6Dh 00h 65h 00h
+
+ db  53h 59h 53h 54h 45h 4Dh 7Eh 31h 20h 20h 20h 16h 00h 0A5h 0A0h 0ACh  ;   SYSTEM~1
+ db  0D3h 52h 0D3h 52h 00h 00h 0A1h 0ACh 0D3h 52h 0E8h 00h 00h 00h 00h 00h
+
 
 temp_buff  dup ((2880 * 512) - $),00h
 
