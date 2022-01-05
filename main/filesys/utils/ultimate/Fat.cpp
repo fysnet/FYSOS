@@ -1163,7 +1163,7 @@ DWORD CFat::CalcDataClusters(const void *bpb, const int fat_size) {
     dword0 = bpb32->sectors;
     if (dword0 == 0)
       dword0 = bpb32->sect_extnd;
-    dword0 = dword0 - bpb32->sect_reserved - (bpb32->fats * bpb32->sect_per_fat32) / bpb32->sect_per_clust;
+    dword0 = (dword0 - bpb32->sect_reserved - (bpb32->fats * bpb32->sect_per_fat32)) / bpb32->sect_per_clust;
   } else {
     dword0 = bpb12->sectors;
     if (dword0 == 0)
@@ -1586,8 +1586,8 @@ void CFat::CreateSFN(CString csLFN, int seq, BYTE name[8], BYTE ext[3]) {
 }
 
 // 15-9 Year (0 = 1980, 119 = 2099 supported under DOS/Windows, theoretically up to 127 = 2107)
-// 8-5  Month (1–12)
-// 4-0  Day (1–31) 
+// 8-5  Month (1Â–12)
+// 4-0  Day (1Â–31) 
 WORD CFat::CreateDate(void) {
   CTime time = CTime::GetCurrentTime();
   WORD word;
