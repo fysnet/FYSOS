@@ -3,7 +3,7 @@
 These are the Windows Executables for the [Ultimate](http://www.fysnet.net/ultimate/index.htm) utility.
 
 ## Last Update:
-Current version: **00.54.16** and is dated: **2 Jan 2022** (binaries only)<br />
+Current version: **00.54.20** and is dated: **4 Jan 2022** (binaries only)<br />
 \(64-bit version may require [Updated DLLs](https://support.microsoft.com/en-gb/help/2977003/the-latest-supported-visual-c-downloads)\)<br />
 [Revision History](http://www.fysnet.net/ultimate/todo.htm)
 
