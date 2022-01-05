@@ -120,6 +120,9 @@ CFat::CFat() : CPropertyPage(CFat::IDD) {
   m_del_clear = FALSE;
   //}}AFX_DATA_INIT
   m_fat_buffer = NULL;
+  m_clusters_in_data_area = 0;
+  m_free_clusters = 0;
+  m_cluster_mismatch = FALSE;
   m_bpb_buffer = NULL;
   m_hard_format = FALSE;
 }
@@ -132,6 +135,9 @@ CFat::~CFat() {
   
   m_fat_buffer = NULL;
   m_bpb_buffer = NULL;
+  m_clusters_in_data_area = 0;
+  m_free_clusters = 0;
+  m_cluster_mismatch = FALSE;
 }
 
 void CFat::DoDataExchange(CDataExchange* pDX) {
@@ -674,11 +680,15 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   
   m_hard_format = FALSE;
   
+  if (m_bpb_buffer) free(m_bpb_buffer);
   m_bpb_buffer = malloc(MAX_SECT_SIZE);
   dlg->ReadFromFile(m_bpb_buffer, lba, 1);
   struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) m_bpb_buffer;
   struct S_FAT1216_BPB *bpb12 = (struct S_FAT1216_BPB *) m_bpb_buffer;
   
+  // number of clusters in Data area
+  m_clusters_in_data_area = CalcDataClusters(m_bpb_buffer, fs_type);
+
   m_fat_size = fs_type;
   if (fs_type == FS_FAT12)
     dlg->m_FatNames[index] = "FAT 12";
@@ -725,6 +735,7 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   // load the fat and folders
   if (m_isvalid) {
     m_fat_buffer = FatLoadFAT(m_fat_buffer);
+    m_free_clusters = CalcFreeClusters(m_fat_buffer);
     GetDlgItem(IDC_DIR_TREE)->EnableWindow(TRUE);
 
     // make sure the tree is emtpy
@@ -764,6 +775,11 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
       GetDlgItem(IDC_DIR_TREE)->SetFocus();
       m_dir_tree.SelectSetFirstVisible(m_hRoot);
     }
+
+    // display the running total of free bytes left
+    CString csFree;
+    csFree.Format("Free Space: %s (bytes)", (LPCSTR) gFormatNum((size_t) m_free_clusters * bpb12->bytes_per_sect * bpb12->sect_per_clust, FALSE, FALSE));
+    SetDlgItemText(IDC_FREE_SIZE_STR, csFree);
   }
   Invalidate(TRUE);  // redraw the tab
 }
@@ -1108,15 +1124,73 @@ void *CFat::FatLoadFAT(void *fat_buffer) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) m_bpb_buffer;
   struct S_FAT1216_BPB *bpb12 = (struct S_FAT1216_BPB *) m_bpb_buffer;
+
   if (fat_buffer) free(fat_buffer);
   if (m_fat_size == FS_FAT32) {
-    fat_buffer = malloc(bpb32->sect_per_fat32 * bpb32->bytes_per_sect);
+    fat_buffer = malloc((size_t) bpb32->sect_per_fat32 * dlg->m_sect_size);
     dlg->ReadFromFile(fat_buffer, m_lba + bpb32->sect_reserved, bpb32->sect_per_fat32);
   } else {
-    fat_buffer = malloc(bpb12->sect_per_fat * bpb12->bytes_per_sect);
+    fat_buffer = malloc((size_t) bpb12->sect_per_fat * dlg->m_sect_size);
     dlg->ReadFromFile(fat_buffer, m_lba + bpb12->sect_reserved, bpb12->sect_per_fat);
   }
+
   return fat_buffer;
+}
+
+// calculate the count of free clusters left in the data area
+DWORD CFat::CalcFreeClusters(void *fat_buffer) {
+  DWORD Free = 0, Cluster = 0;
+  Free = 0;
+  while (Cluster < m_clusters_in_data_area) {
+    if (GetNextCluster(fat_buffer, Cluster) == 0)
+      Free++;
+    Cluster++;
+  }
+  return Free;
+}
+
+// compute the number of clusters in the data area, by taking the total number of sectors,
+// subtracting the space for reserved sectors, 
+// FAT(s),
+// and root directory (FAT16/12 only),
+// and dividing (rounding down), by the number of sectors in a cluster.
+DWORD CFat::CalcDataClusters(const void *bpb, const int fat_size) {
+  struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) bpb;
+  struct S_FAT1216_BPB *bpb12 = (struct S_FAT1216_BPB *) bpb;
+  DWORD dword0, dword1;
+  
+  if (fat_size == FS_FAT32) {
+    dword0 = bpb32->sectors;
+    if (dword0 == 0)
+      dword0 = bpb32->sect_extnd;
+    dword0 = dword0 - bpb32->sect_reserved - (bpb32->fats * bpb32->sect_per_fat32) / bpb32->sect_per_clust;
+  } else {
+    dword0 = bpb12->sectors;
+    if (dword0 == 0)
+      dword0 = bpb12->sect_extnd;
+    dword0 = (bpb12->sectors - bpb12->sect_reserved - (bpb12->fats * bpb12->sect_per_fat) - ((bpb12->root_entrys * 32) / bpb12->bytes_per_sect)) / bpb12->sect_per_clust;
+  }
+
+  // Make sure we don't over do it.
+  if (fat_size == FS_FAT32)
+    dword1 = bpb32->sect_per_fat32 * bpb32->bytes_per_sect * bpb32->sect_per_clust / 4;
+  else if (fat_size == FS_FAT16)
+    dword1 = bpb32->sect_per_fat * bpb32->bytes_per_sect * bpb12->sect_per_clust / 2;
+  else
+    dword1 = (DWORD) (((DWORD) bpb12->sect_per_fat * bpb12->bytes_per_sect * bpb12->sect_per_clust) / 1.5);
+  
+  if (dword0 > dword1) {
+    if (!m_cluster_mismatch) {
+      CString cs;
+      cs.Format("Calculated Cluster count (%i) is more than bpb->sect_per_fat can hold (%i).\n"
+                "Setting to %i to match BPB.", dword0, dword1, dword1);
+      AfxMessageBox(cs);
+      m_cluster_mismatch = TRUE;
+    }
+    return dword1;
+  }
+
+  return dword0;
 }
 
 // calculate sectors needed for a FAT Table
@@ -1151,7 +1225,7 @@ int CFat::CalcSectPerFat(DWORD64 size, int spc, int sect_size, int fat_size) {
 
 DWORD CFat::GetNextCluster(void *FatBuffer, DWORD cluster) {
   BYTE *fat = (BYTE *) FatBuffer;
-  DWORD newclust;
+  DWORD newclust = 0xFFFFFFFF;
   
   switch (m_fat_size) {
     case FS_FAT12:
@@ -1172,8 +1246,6 @@ DWORD CFat::GetNextCluster(void *FatBuffer, DWORD cluster) {
       newclust = * ((DWORD *) fat) & 0x0FFFFFFF;
       if (newclust >= 0x0FFFFFF8) newclust = 0xFFFFFFFF;
       break;
-    default:
-      newclust = 0xFFFFFFFF;
   }
   
   return newclust;
@@ -1218,7 +1290,7 @@ int CFat::AllocateFAT(struct S_FAT_ENTRIES *EntryList, DWORD size) {
   EntryList->entry_size = cnt;
   EntryList->entries = (DWORD *) malloc(cnt * sizeof(DWORD));
   
-  DWORD cluster = 2;
+  DWORD cluster = 1; // FindFreeCluster() starts at the next cluster number
   for (i=0; i<cnt; i++) {
     cluster = FindFreeCluster(cluster);
     if (cluster == 0xFFFFFFFF) {
@@ -1242,7 +1314,7 @@ DWORD CFat::FindFreeCluster(DWORD Cluster) {
   DWORD newclust;
   BYTE *fat;
   
-  while (Cluster < (DWORD) (m_size / bpb->sect_per_clust)) {
+  while (Cluster < m_clusters_in_data_area) {
     Cluster++;
     fat = (BYTE *) m_fat_buffer;
     switch (m_fat_size) {
@@ -1825,7 +1897,7 @@ void CFat::OnInsertVLabel() {
 
 void CFat::OnFatInsert() {
   char szPath[MAX_PATH];
-  BOOL IsDir, IsRoot, IsRootDir, bError = FALSE;
+  BOOL IsDir, IsRoot, IsRootDir;
   CString csName, csPath;
   
   // get a file/directory from the host
@@ -1860,7 +1932,7 @@ void CFat::OnFatInsert() {
     if (IsDir)
       InsertFolder(items->Cluster, csName, csPath, IsRoot);
     else
-      bError = (InsertFile(items->Cluster, csName, csPath, IsRoot) != TRUE);
+      InsertFile(items->Cluster, csName, csPath, IsRoot);
   }
   
   // need to write the FAT back to the image file
@@ -1870,13 +1942,12 @@ void CFat::OnFatInsert() {
   Start(m_lba, m_size, m_color, m_index, m_fat_size, FALSE);
   
   wait.Restore();
-  //if (!bError)
-  //  AfxMessageBox("Files transferred.");
 }
 
 // Cluster = starting cluster of folder to insert to
 // csName = name of file to insert
 // csPath = path on host of file to insert
+// (we can use the FAT12/16 version of the BPB struct since we use the items that are in the same place in all three versions)
 BOOL CFat::InsertFile(DWORD Cluster, CString csName, CString csPath, BOOL IsRoot) {
   struct S_FAT_ENTRIES fat_entries;
   void *buffer;
@@ -1890,7 +1961,18 @@ BOOL CFat::InsertFile(DWORD Cluster, CString csName, CString csPath, BOOL IsRoot
   }
   size = (size_t) file.GetLength();
   struct S_FAT1216_BPB *bpb = (struct S_FAT1216_BPB *) m_bpb_buffer;
-  buffer = malloc(size + (bpb->sect_per_clust * bpb->bytes_per_sect));  // to prevent buffer overrun in WriteFile()
+
+  // if we don't have enough room on the image, error and return
+  DWORD clusters_needed = ((DWORD) size + (bpb->sect_per_clust * bpb->bytes_per_sect) - 1) / ((size_t) bpb->sect_per_clust * bpb->bytes_per_sect);
+  if (clusters_needed > m_free_clusters) {
+    file.Close();
+    CString cs;
+    cs.Format("Not enough room left in image. Clusters Needed = %i", clusters_needed - m_free_clusters);
+    AfxMessageBox(cs);
+    return FALSE;
+  }
+  
+  buffer = malloc((size_t) size + (bpb->sect_per_clust * bpb->bytes_per_sect));  // to prevent buffer overrun in WriteFile()
   file.Read(buffer, (UINT) size);
   file.Close();
   
@@ -1911,29 +1993,42 @@ BOOL CFat::InsertFile(DWORD Cluster, CString csName, CString csPath, BOOL IsRoot
   free(fat_entries.entries);
   free(buffer);
 
+  // update our running count of free clusters
+  m_free_clusters = CalcFreeClusters(m_fat_buffer);
+
   return TRUE;
 }
 
 // Cluster = starting cluster of folder to insert in to
 // csName = name of folder to insert
 // csPath = path on host of folder to insert
-void CFat::InsertFolder(DWORD Cluster, CString csName, CString csPath, BOOL IsRoot) {
+// (we can use the FAT12/16 version of the BPB struct since we use the items that are in the same place in all three versions)
+BOOL CFat::InsertFolder(DWORD Cluster, CString csName, CString csPath, BOOL IsRoot) {
+  struct S_FAT1216_BPB *bpb = (struct S_FAT1216_BPB *) m_bpb_buffer;
   struct S_FAT_ENTRIES fat_entries;
   const unsigned size = 8192;
   char szPath[MAX_PATH];
   
+  // if we don't have enough room on the image, error and return
+  DWORD clusters_needed = (size + ((size_t) bpb->sect_per_clust * bpb->bytes_per_sect) - 1) / ((size_t) bpb->sect_per_clust * bpb->bytes_per_sect);
+  if (clusters_needed > m_free_clusters) {
+    CString cs;
+    cs.Format("Not enough room left in image. Clusters Needed = %i", clusters_needed - m_free_clusters);
+    AfxMessageBox(cs);
+    return FALSE;
+  }
+
   // allocate the fat entries for the folder, returning a "struct S_FAT_ENTRIES"
   if (AllocateFAT(&fat_entries, size) == -1) {
     free(fat_entries.entries);
-    return;
+    return FALSE;
   }
   
   // create a root entry in the folder for the folder
   AllocateRoot(csName, Cluster, fat_entries.entries[0], 0, FAT_ATTR_SUB_DIR, IsRoot);
   
   // create the directory in our image
-  struct S_FAT1216_BPB *bpb = (struct S_FAT1216_BPB *) m_bpb_buffer;
-  void *buffer = calloc(size + (bpb->sect_per_clust * bpb->bytes_per_sect), 1);  // to prevent buffer overrun in WriteFile()
+  void *buffer = calloc((size_t) size + (bpb->sect_per_clust * bpb->bytes_per_sect), 1);  // to prevent buffer overrun in WriteFile()
   WriteFile(buffer, &fat_entries, size, FALSE);
   free(buffer);
   
@@ -1951,7 +2046,7 @@ void CFat::InsertFolder(DWORD Cluster, CString csName, CString csPath, BOOL IsRo
   
   // now scan the host for files within this folder, recursing folders if needed
   CFileFind filefind;
-  BOOL fnd = filefind.FindFile(NULL);
+  BOOL b = TRUE, fnd = filefind.FindFile(NULL);
   while (fnd) {
     fnd = filefind.FindNextFile();
     
@@ -1960,9 +2055,11 @@ void CFat::InsertFolder(DWORD Cluster, CString csName, CString csPath, BOOL IsRo
       continue;
     
     if (filefind.IsDirectory())
-      InsertFolder(fat_entries.entries[0], filefind.GetFileName(), filefind.GetFilePath(), FALSE);
+      b = InsertFolder(fat_entries.entries[0], filefind.GetFileName(), filefind.GetFilePath(), FALSE);
     else
-      InsertFile(fat_entries.entries[0], filefind.GetFileName(), filefind.GetFilePath(), FALSE);
+      b = InsertFile(fat_entries.entries[0], filefind.GetFileName(), filefind.GetFilePath(), FALSE);
+    if (!b)
+      break;
   }
   filefind.Close();
   
@@ -1970,6 +2067,8 @@ void CFat::InsertFolder(DWORD Cluster, CString csName, CString csPath, BOOL IsRo
   SetCurrentDirectory(szPath);
   
   free(fat_entries.entries);
+
+  return b;
 }
 
 // the user change the status of the "Show Deleted" Check box
@@ -2014,6 +2113,8 @@ void CFat::OnFatDelete() {
   
   // since we changed the FAT, we need to reload the fat buffer
   m_fat_buffer = FatLoadFAT(m_fat_buffer);
+  // update our running count of free clusters
+  m_free_clusters = CalcFreeClusters(m_fat_buffer);
   
   // delete the item from the tree
   if (IsDlgButtonChecked(IDC_SHOW_DEL))

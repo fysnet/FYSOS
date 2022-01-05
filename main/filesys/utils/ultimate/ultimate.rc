@@ -78,8 +78,8 @@ CAPTION "About ultimate"
 FONT 8, "MS Sans Serif"
 BEGIN
     CONTROL         IDD_SFS,IDC_STATIC,"Static",SS_BITMAP,11,10,20,20
-    LTEXT           "Ultimate   00.54.15 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
-    LTEXT           "Copyright (C)  Forever Young Software 1984-2021",IDC_STATIC,46,27,175,8
+    LTEXT           "Ultimate   00.54.20 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
+    LTEXT           "Copyright (C)  Forever Young Software 1984-2022",IDC_STATIC,46,27,175,8
     DEFPUSHBUTTON   "OK",IDOK,178,7,50,14,WS_GROUP
     LTEXT           "http://www.fysnet.net",IDC_STATIC,46,38,175,8
 END
@@ -722,6 +722,7 @@ BEGIN
     PUSHBUTTON      "+",IDC_EXPAND,142,58,10,10,WS_DISABLED
     PUSHBUTTON      "--",IDC_COLAPSE,154,58,10,10,WS_DISABLED
     PUSHBUTTON      "Update Boot",ID_UPDATE_CODE,415,55,58,14
+    CTEXT           "",IDC_FREE_SIZE_STR,142,239,146,11,SS_SUNKEN
 END
 
 IDD_FAT32_INFO DIALOG 0, 0, 262, 202

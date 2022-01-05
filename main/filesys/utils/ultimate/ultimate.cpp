@@ -609,3 +609,29 @@ BOOL power_of_two(DWORD val) {
 }
 
 /////////////////////////////////////////////////////////////////////////////
+// returns a formatted string
+//   given num = 12345678
+//   returns "12,345,678"
+CString gFormatNum(DWORD64 num, BOOL isSigned, BOOL isDecimal) {
+  CString csReturn, csNumber;
+  NUMBERFMTA fmt;
+
+  fmt.NumDigits = (isDecimal) ? 2 : 0;
+  fmt.LeadingZero = FALSE;
+  fmt.Grouping = 3;
+  fmt.lpDecimalSep = ".";
+  fmt.lpThousandSep = ",";
+  fmt.NegativeOrder = isSigned;
+
+  if (isSigned)
+    csNumber.Format("%I64d", num);
+  else
+    csNumber.Format("%I64u", num);
+
+  GetNumberFormat(LOCALE_USER_DEFAULT, 0, csNumber, &fmt, csReturn.GetBuffer(128), 127);
+  csReturn.ReleaseBuffer();
+
+  return csReturn;
+}
+
+/////////////////////////////////////////////////////////////////////////////

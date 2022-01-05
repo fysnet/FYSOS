@@ -284,11 +284,13 @@ public:
   void CopyFile(HTREEITEM hItem, CString csName);
   void CopyFolder(HTREEITEM hItem, CString csPath, CString csName);
   BOOL InsertFile(DWORD Cluster, CString csName, CString csPath, BOOL IsRoot);
-  void InsertFolder(DWORD Cluster, CString csName, CString csPath, BOOL IsRoot);
+  BOOL InsertFolder(DWORD Cluster, CString csName, CString csPath, BOOL IsRoot);
   void DeleteFolder(HTREEITEM hItem);
   void DeleteFile(HTREEITEM hItem);
   
   void *FatLoadFAT(void *fat_buffer);
+  DWORD CalcFreeClusters(void *fat_buffer);
+  DWORD CalcDataClusters(const void *bpb, const int fat_size);
   int CalcSectPerFat(DWORD64 size, int spc, int sect_size, int fat_size);
   int FatFillClusterList(struct S_FAT_ENTRIES *EntryList, DWORD StartCluster);
   int AllocateFAT(struct S_FAT_ENTRIES *EntryList, DWORD size);
@@ -310,6 +312,9 @@ public:
   
   void *m_bpb_buffer;
   void *m_fat_buffer;
+  DWORD m_clusters_in_data_area;
+  DWORD m_free_clusters;
+  BOOL  m_cluster_mismatch;
   int   m_fat_size;  // FS_FATxx
   DWORD m_datastart;
   DWORD m_rootstart;
@@ -328,6 +333,9 @@ public:
 
   int     m_parse_depth_limit; // used to catch a repeating '..' or '.' recursive error
   
+
+  CToolTipCtrl m_tip;
+
 // Overrides
   // ClassWizard generate virtual function overrides
   //{{AFX_VIRTUAL(CFat)

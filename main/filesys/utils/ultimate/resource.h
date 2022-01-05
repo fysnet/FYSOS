@@ -557,7 +557,7 @@
 #define IDC_BASE_SIZE_STR               1325
 #define IDC_OLD_FAT                     1326
 #define IDC_DUMP_STR                    1326
-#define IDC_EDIT                        1327
+#define IDC_BASE_SIZE_STR2              1327
 #define IDC_DONE                        1328
 #define IDC_DONE2                       1329
 #define IDC_COPY                        1329
@@ -958,6 +958,9 @@
 #define IDC_FSZ_SUPER_CRC_UPDATE        1628
 #define IDC_FSZ_ENCRYPT_NAME            1629
 #define IDC_FSZ_ENC_MASK_DO             1630
+#define IDC_FREE_SIZE_STR               1631
+#define IDC_EDIT                        1632
+
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
