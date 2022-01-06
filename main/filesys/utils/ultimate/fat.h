@@ -291,6 +291,7 @@ public:
   void *FatLoadFAT(void *fat_buffer);
   DWORD CalcFreeClusters(void *fat_buffer);
   DWORD CalcDataClusters(const void *bpb, const int fat_size);
+  void DisplayFreeSpace(void);
   int CalcSectPerFat(DWORD64 size, int spc, int sect_size, int fat_size);
   int FatFillClusterList(struct S_FAT_ENTRIES *EntryList, DWORD StartCluster);
   int AllocateFAT(struct S_FAT_ENTRIES *EntryList, DWORD size);

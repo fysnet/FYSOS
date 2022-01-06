@@ -777,9 +777,7 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
     }
 
     // display the running total of free bytes left
-    CString csFree;
-    csFree.Format("Free Space: %s (bytes)", (LPCSTR) gFormatNum((size_t) m_free_clusters * bpb12->bytes_per_sect * bpb12->sect_per_clust, FALSE, FALSE));
-    SetDlgItemText(IDC_FREE_SIZE_STR, csFree);
+    DisplayFreeSpace();
   }
   Invalidate(TRUE);  // redraw the tab
 }
@@ -1149,11 +1147,12 @@ DWORD CFat::CalcFreeClusters(void *fat_buffer) {
   return Free;
 }
 
-// compute the number of clusters in the data area, by taking the total number of sectors,
+// compute the number of clusters in the data area:
+// by taking the total number of sectors,
 // subtracting the space for reserved sectors, 
 // FAT(s),
 // and root directory (FAT16/12 only),
-// and dividing (rounding down), by the number of sectors in a cluster.
+// and dividing (rounding down) by the number of sectors in a cluster.
 DWORD CFat::CalcDataClusters(const void *bpb, const int fat_size) {
   struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) bpb;
   struct S_FAT1216_BPB *bpb12 = (struct S_FAT1216_BPB *) bpb;
@@ -1182,7 +1181,7 @@ DWORD CFat::CalcDataClusters(const void *bpb, const int fat_size) {
   if (dword0 > dword1) {
     if (!m_cluster_mismatch) {
       CString cs;
-      cs.Format("Calculated Cluster count (%i) is more than bpb->sect_per_fat can hold (%i).\n"
+      cs.Format("Calculated max cluster count (%i) is more than calculated by the BPB (%i). "
                 "Setting to %i to match BPB.", dword0, dword1, dword1);
       AfxMessageBox(cs);
       m_cluster_mismatch = TRUE;
@@ -1191,6 +1190,14 @@ DWORD CFat::CalcDataClusters(const void *bpb, const int fat_size) {
   }
 
   return dword0;
+}
+
+void CFat::DisplayFreeSpace(void) {
+  struct S_FAT1216_BPB *bpb12 = (struct S_FAT1216_BPB *) m_bpb_buffer;
+  CString csFree;
+  
+  csFree.Format("Free Space: %s (bytes)", (LPCSTR) gFormatNum((size_t) m_free_clusters * bpb12->bytes_per_sect * bpb12->sect_per_clust, FALSE, FALSE));
+  SetDlgItemText(IDC_FREE_SIZE_STR, csFree);
 }
 
 // calculate sectors needed for a FAT Table
@@ -1204,17 +1211,16 @@ int CFat::CalcSectPerFat(DWORD64 size, int spc, int sect_size, int fat_size) {
   switch (fat_size) {
     case FS_FAT12:
       size = size + (size / 2);  // 1 1/2 bytes per entry
-      size /= sect_size;         // divide by bytes per sector
       break;
     case FS_FAT16:
       size *= 2;                 // 2 bytes per entry
-      size /= sect_size;         // divide by bytes per sector
       break;
     case FS_FAT32:
       size *= 4;                 // 4 bytes per entry
-      size /= sect_size;         // divide by bytes per sector
       break;
   }
+  // divide by bytes per sector (rounding up to the next sector)
+  size = (size + (sect_size - 1)) / sect_size;
   
   // make sure not zero
   if (size == 0)
@@ -1586,8 +1592,8 @@ void CFat::CreateSFN(CString csLFN, int seq, BYTE name[8], BYTE ext[3]) {
 }
 
 // 15-9 Year (0 = 1980, 119 = 2099 supported under DOS/Windows, theoretically up to 127 = 2107)
-// 8-5  Month (1Â–12)
-// 4-0  Day (1Â–31) 
+// 8-5  Month (1–12)
+// 4-0  Day (1–31) 
 WORD CFat::CreateDate(void) {
   CTime time = CTime::GetCurrentTime();
   WORD word;
@@ -1821,7 +1827,20 @@ void CFat::CopyFile(HTREEITEM hItem, CString csName) {
     if (ptr) {
       CFile file;
       if (file.Open(csName, CFile::modeCreate | CFile::modeWrite | CFile::typeBinary | CFile::shareExclusive, NULL) != 0) {
+        // write the file's contents
         file.Write(ptr, items->FileSize);
+
+        // set the date/time of the new file to the date/time of the copied file
+        if (items->EntryCount > 0) {
+          // last entry is the SFN entry
+          WORD d = items->Entry[items->EntryCount - 1].date;
+          WORD t = items->Entry[items->EntryCount - 1].time;
+          FILETIME ft;
+          if (DosDateTimeToFileTime(d, t, &ft))
+            SetFileTime((HANDLE) file.m_hFile, &ft, &ft, &ft);
+        }
+        
+        // close the file
         file.Close();
       } else
         AfxMessageBox("Error Creating File...");
@@ -1839,9 +1858,13 @@ void CFat::CopyFolder(HTREEITEM hItem, CString csPath, CString csName) {
   BOOL IsDir;
   CString csFName, csFPath;
   
+  // don't copy the . and .. entries
+  if ((csName == ".") || (csName == ".."))
+    return;
+  
   // change to the directory we passed here
   SetCurrentDirectory(csPath);
-  
+
   // create the new directory
   if (CreateDirectory(csName, NULL) == 0) {
     DWORD Error = GetLastError();
@@ -2124,6 +2147,9 @@ void CFat::OnFatDelete() {
 
   // select the parent item
   m_dir_tree.Select((hParent != NULL) ? hParent : TVI_ROOT, TVGN_CARET);
+
+  // update the freespace display
+  DisplayFreeSpace();
 
   wait.Restore();
   //AfxMessageBox("File(s) deleted.");
