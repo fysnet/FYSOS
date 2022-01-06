@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -63,13 +63,13 @@
  *    about found device.
  *
  *  Assumptions/prerequisites:
- *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must be ran via a TRUE DOS environment, either real hardware or emulated.
  *   - Must have a pre-installed 32-bit DPMI.
  *   - Will produce unknown behavior if ran under existing operating system other
  *     than mentioned here.
  *   - Must have full access to said hardware.
  *
- *  Last updated: 3 Oct 2020
+ *  Last updated: 5 Jan 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os gd_xhci.c -o gd_xhci.exe -s
@@ -148,7 +148,7 @@ int main(int argc, char *argv[]) {
   struct PCI_POS pci_pos;
   
   // print header string
-  printf("\n GD_xHCI -- xHCI: Get Device Descriptor.   v1.10.52" COPYRIGHT "\n");
+  puts("\n GD_xHCI -- xHCI: Get Device Descriptor.   v1.10.52" COPYRIGHT);
   
   // setup the timer delay code
   if (!setup_timer()) {

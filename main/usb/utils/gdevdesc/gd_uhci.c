@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -63,13 +63,13 @@
  *    about found device.
  *
  *  Assumptions/prerequisites:
- *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must be ran via a TRUE DOS environment, either real hardware or emulated.
  *   - Must have a pre-installed 32-bit DPMI.
  *   - Will produce unknown behavior if ran under existing operating system other
  *     than mentioned here.
  *   - Must have full access to said hardware.
  *
- *  Last updated: 14 July 2020
+ *  Last updated: 5 Jan 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os gd_uhci.c -o gd_uhci.exe -s
@@ -104,11 +104,11 @@ int main(int argc, char *argv[]) {
   struct PCI_POS pci_pos;
   
   // print header string
-  printf("\n GD_UHCI -- UHCI: Get Device Descriptor.   v1.00.00" COPYRIGHT);
+  puts("\n GD_UHCI -- UHCI: Get Device Descriptor.   v1.00.00" COPYRIGHT);
   
   // setup the timer delay code
   if (!setup_timer()) {
-    printf("\n I didn't find a processor with the RDTSC instruction.");
+    puts(" I didn't find a processor with the RDTSC instruction.");
     return E_NO_RDTSC;
   }
   
@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
   while (get_next_cntrlr(&pci_dev, &pci_pos)) {
     if (pci_dev.p_interface == xHC_TYPE_UHCI) {
       // print that we found a controller at this 'address'
-      printf("\n  Found UHCI controller at: 0x%08X", pci_dev.base4 & ~0x3);
+      printf("  Found UHCI controller at: 0x%08X\n", pci_dev.base4 & ~0x3);
       // call the function to see if there is a device attached
       process_uhci(&pci_dev, &pci_pos);
     }
@@ -128,7 +128,6 @@ int main(int argc, char *argv[]) {
     pci_pos.func++;
   }
   
-  printf("\n");
   return 0;
 }
 
@@ -175,7 +174,7 @@ bool process_uhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   frame_mi_base.address = 0x01000000;
   frame_mi_base.size = 4096 + 4096;
   if (get_physical_mapping(&frame_mi_base, &selector) == -1) {
-    printf("\n Error 'allocating' physical memory.");
+    puts(" Error 'allocating' physical memory.");
     return FALSE;
   }
   
@@ -197,7 +196,7 @@ bool process_uhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
     if (uhci_port_reset(base, port)) {
       // is a device is attached?
       if (inpw(base+port) & 1) {
-        printf("\n\nFound device at port %i, getting descriptor...", (port - 0x10) >> 1);
+        printf(" Found device at port %i, getting descriptor...\n", (port - 0x10) >> 1);
         bool ls_device = (inpw(base+port) & (1<<8)) ? TRUE : FALSE;
         
         // get first 8 bytes of descriptor
@@ -208,21 +207,21 @@ bool process_uhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
           if (uhci_set_address(base, frame_mi_base.address, selector, dev_address, ls_device)) {
             // get all 18 bytes of descriptor
             if (uhci_get_descriptor(base, frame_mi_base.address, selector, &dev_desc, ls_device, dev_address, dev_desc.max_packet_size, dev_desc.len)) {
-              printf("\n  Found Device Descriptor:"
-                     "\n                 len: %i"
-                     "\n                type: %i"
-                     "\n             version: %01X.%02X"
-                     "\n               class: %i"
-                     "\n            subclass: %i"
-                     "\n            protocol: %i"
-                     "\n     max packet size: %i"
-                     "\n           vendor id: 0x%04X"
-                     "\n          product id: 0x%04X"
-                     "\n         release ver: %i%i.%i%i"
-                     "\n   manufacture index: %i (index to a string)"
-                     "\n       product index: %i"
-                     "\n        serial index: %i"
-                     "\n   number of configs: %i\n",
+              printf("  Found Device Descriptor:\n"
+                     "                 len: %i\n"
+                     "                type: %i\n"
+                     "             version: %01X.%02X\n"
+                     "               class: %i\n"
+                     "            subclass: %i\n"
+                     "            protocol: %i\n"
+                     "     max packet size: %i\n"
+                     "           vendor id: 0x%04X\n"
+                     "          product id: 0x%04X\n"
+                     "         release ver: %i%i.%i%i\n"
+                     "   manufacture index: %i (index to a string)\n"
+                     "       product index: %i\n"
+                     "        serial index: %i\n"
+                     "   number of configs: %i\n",
                      dev_desc.len, dev_desc.type, dev_desc.usb_ver >> 8, dev_desc.usb_ver & 0xFF, dev_desc._class, dev_desc.subclass, 
                      dev_desc.protocol, dev_desc.max_packet_size, dev_desc.vendorid, dev_desc.productid, 
                      (dev_desc.device_rel & 0xF000) >> 12, (dev_desc.device_rel & 0x0F00) >> 8,
@@ -231,11 +230,11 @@ bool process_uhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
               );
               dev_address++;
             } else
-              printf("\n Error when trying to get all %i bytes of descriptor.", dev_desc.len);
+              printf(" Error when trying to get all %i bytes of descriptor.\n", dev_desc.len);
           } else
-            printf("\n Error setting device address.");
+            puts(" Error setting device address.");
         } else
-          printf("\n Error getting first 8 bytes of descriptor.");
+          puts(" Error getting first 8 bytes of descriptor.");
       }
     }
     port += 2;  // move to next port
@@ -317,7 +316,6 @@ bool uhci_port_reset(bit16u base, bit8u port) {
 
 // set up a queue, and enough TD's to get 'size' bytes
 bool uhci_get_descriptor(const bit16u io_base, const bit32u base, const int selector, struct DEVICE_DESC *dev_desc, const bool ls_device, const int dev_address, const int packet_size, const int size) {
-  
   static bit8u setup_packet[8] = { 0x80, 0x06, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00 };
   bit8u our_buff[120];
   int i = 1, t, sz = size, timeout;
@@ -373,7 +371,7 @@ bool uhci_get_descriptor(const bit16u io_base, const bit32u base, const int sele
     mdelay(1);
   }
   if (timeout == 0) {
-    printf("\n UHCI timed out.");
+    puts(" uhci_get_descriptor:UHCI timed out...");
     _farpokel(selector, 0, 1);  // mark the first stack frame pointer invalid
     return FALSE;
   }
@@ -388,8 +386,10 @@ bool uhci_get_descriptor(const bit16u io_base, const bit32u base, const int sele
   
   // check the TD's for error
   for (t=0; t<i; t++) {
-    if (((td[t].reply & (0xFF<<16)) != 0))
+    if (((td[t].reply & (0xFF<<16)) != 0)) {
+      printf(" Found Error in TD #%i: 0x%08X\n", t, td[t].reply);
       return FALSE;
+    }
   }
   
   // copy the descriptor to the passed memory block
@@ -441,7 +441,7 @@ bool uhci_set_address(const bit16u io_base, const bit32u base, const int selecto
     mdelay(1);
   }
   if (timeout == 0) {
-    printf("\n UHCI timed out.");
+    puts(" uhci_set_address:UHCI timed out...");
     _farpokel(selector, 0, 1);  // mark the first stack frame pointer invalid
     return FALSE;
   }
@@ -455,8 +455,10 @@ bool uhci_set_address(const bit16u io_base, const bit32u base, const int selecto
   
   // check the TD's for error
   for (i=0; i<2; i++) {
-    if ((td[i].reply & (0xFF<<16)) != 0)
+    if ((td[i].reply & (0xFF<<16)) != 0) {
+      printf(" Found Error in TD #%i: 0x%08X\n", i, td[i].reply);
       return FALSE;
+    }
   }
   
   return TRUE;

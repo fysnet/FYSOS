@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -63,7 +63,7 @@
  *    about found device.
  *
  *  Assumptions/prerequisites:
- *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must be ran via a TRUE DOS environment, either real hardware or emulated.
  *   - Must have a pre-installed 32-bit DPMI.
  *   - Will produce unknown behavior if ran under existing operating system other
  *     than mentioned here.
@@ -72,7 +72,7 @@
  *     or low-speed device is attached, the device will not be found by this code.
  *     Use GD_UHCI or GD_OHCI for full- and low-speed devices.
  *
- *  Last updated: 14 July 2020
+ *  Last updated: 5 Jan 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os gd_ehci.c -o gd_ehci.exe -s
@@ -121,11 +121,11 @@ int main(int argc, char *argv[]) {
   struct PCI_POS pci_pos;
   
   // print header string
-  printf("\n GD_EHCI -- EHCI: Get Device Descriptor.   v1.10.00" COPYRIGHT);
+  puts("\n GD_EHCI -- EHCI: Get Device Descriptor.   v1.10.00" COPYRIGHT);
   
   // setup the timer delay code
   if (!setup_timer()) {
-    printf("\n I didn't find a processor with the RDTSC instruction.");
+    puts(" I didn't find a processor with the RDTSC instruction.");
     return E_NO_RDTSC;
   }
   
@@ -137,7 +137,7 @@ int main(int argc, char *argv[]) {
   while (get_next_cntrlr(&pci_dev, &pci_pos)) {
     if (pci_dev.p_interface == xHC_TYPE_EHCI) {
       // print that we found a controller at this 'address'
-      printf("\n  Found EHCI controller at: 0x%08X", pci_dev.base0 & ~0xF);
+      printf("  Found EHCI controller at: 0x%08X\n", pci_dev.base0 & ~0xF);
       // call the function to see if there is a device attached
       process_ehci(&pci_dev, &pci_pos);
     }
@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
     pci_pos.func++;
   }
   
-  printf("\n");
+  puts("");
   return 0;
 }
 
@@ -161,7 +161,7 @@ bool process_ehci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   base_mi.address = pci_dev->base0 & ~0xF;
   base_mi.size = 1024;
   if (get_physical_mapping(&base_mi, &base_selector) == -1) {
-    printf("\n Error 'allocating' physical memory.");
+    puts(" Error 'allocating' physical memory.");
     return FALSE;
   }
   
@@ -170,7 +170,7 @@ bool process_ehci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   heap_mi.address = HEAP_START;
   heap_mi.size = HEAP_SIZE;
   if (!get_physical_mapping(&heap_mi, &heap_selector)) {
-    printf("\n Error 'allocating' physical memory for our heap.");
+    puts(" Error 'allocating' physical memory for our heap.");
     __dpmi_free_physical_address_mapping(&base_mi);
     return FALSE;
   }
@@ -198,13 +198,13 @@ bool process_ehci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   
   // Turn off legacy support for Keyboard and Mice
   if (!ehci_stop_legacy(pos, hccparams)) {
-    printf("\n BIOS did not release Legacy support...");
+    puts(" BIOS did not release Legacy support...");
     return FALSE;
   }
   
   // get num_ports from EHCI's HCSPARAMS register
   num_ports = (bit8u) (hcsparams & 0x0F);  // at least 1 and no more than 15
-  printf("\n  Found %i root hub ports.", num_ports);
+  printf("  Found %i root hub ports.\n", num_ports);
   
   // allocate then initialize the async queue list (Control and Bulk TD's)
   async_base = heap_alloc(16 * EHCI_QUEUE_HEAD_SIZE, 32);
@@ -224,7 +224,7 @@ bool process_ehci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   
   // enable the asynchronous list
   if (!ehci_enable_async_list(TRUE)) {
-    printf("\n Did not enable the Ascynchronous List");
+    puts(" Did not enable the Ascynchronous List");
     return FALSE;
   }
   
@@ -290,7 +290,7 @@ bool ehci_reset_port(const int port) {
       
       return TRUE;
     } else {
-      printf("\nFound a low- or full-speed device.  Use gd_ohci or gd_uhci.");
+      puts("Found a low- or full-speed device.  Use gd_ohci or gd_uhci.");
       // disable and power off the port
       ehci_write_op_reg(HCPortStatusOff, 0);
       mdelay(10);
@@ -336,21 +336,21 @@ bool ehci_get_descriptor(const int port) {
     return FALSE;
   
   // print the descriptor
-  printf("\n  Found Device Descriptor:"
-         "\n                 len: %i"
-         "\n                type: %i"
-         "\n             version: %01X.%02X"
-         "\n               class: %i"
-         "\n            subclass: %i"
-         "\n            protocol: %i"
-         "\n     max packet size: %i"
-         "\n           vendor id: 0x%04X"
-         "\n          product id: 0x%04X"
-         "\n         release ver: %i%i.%i%i"
-         "\n   manufacture index: %i (index to a string)"
-         "\n       product index: %i"
-         "\n        serial index: %i"
-         "\n   number of configs: %i",
+  printf("  Found Device Descriptor:\n"
+         "                 len: %i\n"
+         "                type: %i\n"
+         "             version: %01X.%02X\n"
+         "               class: %i\n"
+         "            subclass: %i\n"
+         "            protocol: %i\n"
+         "     max packet size: %i\n"
+         "           vendor id: 0x%04X\n"
+         "          product id: 0x%04X\n"
+         "         release ver: %i%i.%i%i\n"
+         "   manufacture index: %i (index to a string)\n"
+         "       product index: %i\n"
+         "        serial index: %i\n"
+         "   number of configs: %i\n",
          dev_desc.len, dev_desc.type, dev_desc.usb_ver >> 8, dev_desc.usb_ver & 0xFF, dev_desc._class, dev_desc.subclass, 
          dev_desc.protocol, dev_desc.max_packet_size, dev_desc.vendorid, dev_desc.productid, 
          (dev_desc.device_rel & 0xF000) >> 12, (dev_desc.device_rel & 0x0F00) >> 8,
@@ -378,7 +378,7 @@ bit32u heap_alloc(bit32u size, const bit32u alignment) {
   
   // check to see if we are out of bounds
   if (((cur_heap_ptr + size) - 1) >= HEAP_SIZE) {
-    printf("\n Error in allocating memory within our heap");
+    puts(" Error in allocating memory within our heap");
     exit(-1);
   }
   
@@ -672,7 +672,7 @@ int ehci_wait_interrupt(bit32u addr, const bit32u timeout, bool *spd) {
         else if (status & (1<<2))
           ret = ERROR_TIME_OUT;
         else {
-          printf("\n 0) USB EHCI wait interrupt qtd->status = 0x%08X", status);
+          printf(" 0) USB EHCI wait interrupt qtd->status = 0x%08X\n", status);
           ret = ERROR_UNKNOWN;
         }
         return ret;
@@ -696,7 +696,7 @@ int ehci_wait_interrupt(bit32u addr, const bit32u timeout, bool *spd) {
   }
   
   if (ret == -1) {
-    printf("\n USB EHCI Interrupt wait timed out.");
+    puts(" USB EHCI Interrupt wait timed out.");
     ret = ERROR_TIME_OUT;
   }
   

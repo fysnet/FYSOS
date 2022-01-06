@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -57,12 +57,12 @@
  */
 
 /*
- *  Last updated: 14 July 2020
+ *  Last updated: 5 Jan 2022
  */
 
 #define E_NO_RDTSC -1   // no rdtsc instruction found
 
-#define COPYRIGHT "\n Forever Young Software        (C)opyright 1984-2020\n"
+#define COPYRIGHT " Forever Young Software        (C)opyright 1984-2022\n"
 
 // we allocate physical memory for some items
 #define HEAP_START       0x01000000           // at 16 meg must be a multiple of a meg
@@ -110,7 +110,7 @@ bool get_next_cntrlr(struct PCI_DEV *device, struct PCI_POS *pos) {
         if (pci_read_word(pos->bus, pos->dev, pos->func, 0x00) != 0xFFFF) {
           type = pci_read_word(pos->bus, pos->dev, pos->func, (2<<2)+2);
           if (type == 0x0C03) {
-            printf("\n PCI: Found a USB controller entry: Bus = %i, device = %i, function = %i ", pos->bus, pos->dev, pos->func);
+            printf(" PCI: Found a USB controller entry: Bus = %i, device = %i, function = %i \n", pos->bus, pos->dev, pos->func);
             // read in the 256 bytes (64 dwords)
             for (i=0; i<64; i++)
               pcidata[i] = pci_read_dword(pos->bus, pos->dev, pos->func, (i<<2));
@@ -207,21 +207,21 @@ void ndelay(const bit32u n) {
  
 // delay for a specified number of microseconds. 
 //  n = number of microseconds to delay. 
-void udelay(const bit32u n) {
-  _delay(((bit64u) n * cpu_hz) / (bit64u) 1000000); 
-} 
+void udelay(const bit32u u) {
+  _delay(((bit64u) u * cpu_hz) / (bit64u) 1000000); 
+}
 
 // delay for a specified number of milliseconds. 
 //  m = number of milliseconds to delay. 
 void mdelay(const bit32u m) {
   _delay(((bit64u) m * cpu_hz) / (bit64u) 1000);
-} 
+}
 
 // delay for a specified number of seconds. 
 //  s = number of seconds to delay. 
 void delay(const bit32u s) {
   _delay((bit64u) s * cpu_hz); 
-} 
+}
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////

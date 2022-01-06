@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -63,13 +63,13 @@
  *    about found device.
  *
  *  Assumptions/prerequisites:
- *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must be ran via a TRUE DOS environment, either real hardware or emulated.
  *   - Must have a pre-installed 32-bit DPMI.
  *   - Will produce unknown behavior if ran under existing operating system other
  *     than mentioned here.
  *   - Must have full access to said hardware.
  *
- *  Last updated: 14 July 2020
+ *  Last updated: 5 Jan 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os gd_ohci.c -o gd_ohci.exe -s
@@ -106,11 +106,11 @@ int main(int argc, char *argv[]) {
   struct PCI_POS pci_pos;
   
   // print header string
-  printf("\n GD_OHCI -- OHCI: Get Device Descriptor.   v1.10.00" COPYRIGHT);
+  puts("\n GD_OHCI -- OHCI: Get Device Descriptor.   v1.10.00" COPYRIGHT);
   
   // setup the timer delay code
   if (!setup_timer()) {
-    printf("\n I didn't find a processor with the RDTSC instruction.");
+    puts(" I didn't find a processor with the RDTSC instruction.");
     return E_NO_RDTSC;
   }
   
@@ -122,7 +122,7 @@ int main(int argc, char *argv[]) {
   while (get_next_cntrlr(&pci_dev, &pci_pos)) {
     if (pci_dev.p_interface == xHC_TYPE_OHCI) {
       // print that we found a controller at this 'address'
-      printf("\n  Found OHCI controller at: 0x%08X", pci_dev.base0 & ~0xF);
+      printf("  Found OHCI controller at: 0x%08X\n", pci_dev.base0 & ~0xF);
       // call the function to see if there is a device attached
       process_ohci(&pci_dev, &pci_pos);
     }
@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
     pci_pos.func++;
   }
   
-  printf("\n");
+  puts("");
   return 0;
 }
 
@@ -149,7 +149,7 @@ bool process_ohci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   opregs_mi.address = pci_dev->base0 & ~0xF;
   opregs_mi.size = 1024;
   if (get_physical_mapping(&opregs_mi, &opregs_selector) == -1) {
-    printf("\n Error 'allocating' physical memory.");
+    puts(" Error 'allocating' physical memory.");
     return FALSE;
   }
   
@@ -181,7 +181,7 @@ bool process_ohci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   hcca_mi.address = 0x00200000;  // 2 meg
   hcca_mi.size = 131072;   // 128k
   if (get_physical_mapping(&hcca_mi, &hcca_selector) == -1) {
-    printf("\n Error 'allocating' physical memory.");
+    puts(" Error 'allocating' physical memory.");
     return FALSE;
   }
   
@@ -207,7 +207,7 @@ bool process_ohci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   
   // get the number of downstream ports
   ndp = (bit8u) (ohci_read_op_reg(OHCRhDescriptorA) & 0x000000FF);
-  printf("\n  Found %i root hub ports.", ndp);
+  printf("  Found %i root hub ports.\n", ndp);
   
   // write the offset of our HCCA
   ohci_write_op_reg(OHCHCCA, (bit32u) hcca_mi.address);
@@ -263,7 +263,7 @@ bool process_ohci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
         ohci_set_address(&our_frame, hcca_mi.address, dev_address, ls_device);
         good_ret = ohci_request_desc(&our_frame, &hcca_mi, hcca_selector, opregs_selector, 0);
         if (!good_ret) {
-          printf("\n Error when trying to set device address to %i", dev_address);
+          printf(" Error when trying to set device address to %i\n", dev_address);
           continue;
         }
         
@@ -272,21 +272,21 @@ bool process_ohci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
         good_ret = ohci_request_desc(&our_frame, &hcca_mi, hcca_selector, opregs_selector, desc_len);
         if (good_ret) {
           memcpy(&dev_desc, our_frame.packet, sizeof(struct DEVICE_DESC));
-          printf("\n  Found Device Descriptor:"
-                 "\n                 len: %i"
-                 "\n                type: %i"
-                 "\n             version: %01X.%02X"
-                 "\n               class: %i"
-                 "\n            subclass: %i"
-                 "\n            protocol: %i"
-                 "\n     max packet size: %i"
-                 "\n           vendor id: 0x%04X"
-                 "\n          product id: 0x%04X"
-                 "\n         release ver: %i%i.%i%i"
-                 "\n   manufacture index: %i (index to a string)"
-                 "\n       product index: %i"
-                 "\n        serial index: %i"
-                 "\n   number of configs: %i",
+          printf("  Found Device Descriptor:\n"
+                 "                 len: %i\n"
+                 "                type: %i\n"
+                 "             version: %01X.%02X\n"
+                 "               class: %i\n"
+                 "            subclass: %i\n"
+                 "            protocol: %i\n"
+                 "     max packet size: %i\n"
+                 "           vendor id: 0x%04X\n"
+                 "          product id: 0x%04X\n"
+                 "         release ver: %i%i.%i%i\n"
+                 "   manufacture index: %i (index to a string)\n"
+                 "       product index: %i\n"
+                 "        serial index: %i\n"
+                 "   number of configs: %i\n",
                  dev_desc.len, dev_desc.type, dev_desc.usb_ver >> 8, dev_desc.usb_ver & 0xFF, dev_desc._class, dev_desc.subclass, 
                  dev_desc.protocol, dev_desc.max_packet_size, dev_desc.vendorid, dev_desc.productid, 
                  (dev_desc.device_rel & 0xF000) >> 12, (dev_desc.device_rel & 0x0F00) >> 8,
@@ -294,7 +294,7 @@ bool process_ohci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
                  dev_desc.manuf_indx, dev_desc.prod_indx, dev_desc.serial_indx, dev_desc.configs
           );
         } else {
-          printf("\n Error when trying to get all %i bytes of descriptor.", desc_len);
+          printf(" Error when trying to get all %i bytes of descriptor.\n", desc_len);
           continue;
         }
         
@@ -322,7 +322,7 @@ bool ohci_reset_port(int port, int opregs_selector) {
       break;
   }
   if (timeout == 0) {
-    printf("\n Port did not reset after 30mS.");
+    puts(" Port did not reset after 30mS.");
     return FALSE;
   }
   mdelay(USB_TRSTRCY);  // hold for USB_TRSTRCY ms (reset recovery time)
@@ -423,7 +423,7 @@ bool ohci_request_desc(struct OHCI_FRAME *our_frame, __dpmi_meminfo *hcca_mi, in
       break;
   }
   if (timeout == 0) {
-    printf("\n Bit 1 in the HCInterruptStatus register never was set.");
+    puts(" Bit 1 in the HCInterruptStatus register never was set.");
     return FALSE;
   }
   
@@ -447,7 +447,7 @@ bool ohci_request_desc(struct OHCI_FRAME *our_frame, __dpmi_meminfo *hcca_mi, in
   for (i=0; i<cnt; i++) {
     if ((our_frame->our_tds[i].flags & 0xF0000000) != 0) {
       good_ret = FALSE;
-      printf("\n our_tds[%i].cc != 0  (%i)", i, (our_frame->our_tds[i].flags & 0xF0000000) >> 28);
+      printf(" our_tds[%i].cc != 0  (%i)\n", i, (our_frame->our_tds[i].flags & 0xF0000000) >> 28);
       break;
     }
   }
