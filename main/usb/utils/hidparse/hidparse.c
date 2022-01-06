@@ -65,7 +65,7 @@
  *    developers section.
  *
  *  Assumptions/prerequisites:
- *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must be ran via a TRUE DOS environment, either real hardware or emulated.
  *   - Must have a pre-installed 32-bit DPMI.
  *   - Will produce unknown behavior if ran under existing operating system other
  *     than mentioned here.
@@ -74,7 +74,7 @@
  *     or low-speed device is attached, the device will not be found by this code.
  *     Use GD_UHCI or GD_OHCI for full- and low-speed devices.
  *
- *  Last updated: 26 Dec 2021
+ *  Last updated: 5 Jan 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os hidparse.c -o hidparse.exe -s
