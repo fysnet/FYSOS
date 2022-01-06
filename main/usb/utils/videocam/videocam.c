@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -60,7 +60,7 @@
  *  VIDEOCAM.EXE
  *
  *  Assumptions/prerequisites:
- *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must be ran via a TRUE DOS environment, either real hardware or emulated.
  *   - Must have a pre-installed 32-bit DPMI.
  *   - Will produce unknown behavior if ran under existing operating system other
  *     than mentioned here.
@@ -72,7 +72,7 @@
  *       in to external hubs)
  *   - all memory above 1meg is available for use with this code
  *
- *  Last updated: 14 July 2020
+ *  Last updated: 5 Jan 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os videocam.c -o videocam.exe -s
@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
   
   // print header string
   printf("\n VIDEOCAM -- EHCI: Get Video Camera Feed.   v1.00.00"
-         "\n Forever Young Software        (C)opyright 1984-2014\n");
+         "\n Forever Young Software        (C)opyright 1984-2022\n");
   
   // setup the timer delay code
   if (!setup_timer()) {
