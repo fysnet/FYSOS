@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -62,7 +62,7 @@
  *    with the specification matching a UHCI, OHCI, EHCI, or xHCI.
  *
  *  Assumptions/prerequisites:
- *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
+ *   - Must be ran via a TRUE DOS environment, either real hardware or emulated.
  *   - Must have a pre-installed 32-bit DPMI.
  *   - Will produce unknown behavior if ran under existing operating system other
  *     than mentioned here.
@@ -72,7 +72,7 @@
  *   - Does write to PCI BAR register(s), though preserving them upon exit.
  *      (should have no affect on function, though depends on SMM operation)
  *
- *  Last updated: 13 July 2020
+ *  Last updated: 5 Jan 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os detcntlr.c -o detcntlr.exe -s
@@ -94,19 +94,20 @@
 
 #include "detcntlr.h"
 
-bit32u pci_mem_range(bit8u bus, bit8u dev, bit8u func, bit8u port);
+bit32u pci_mem_range(const bit8u bus, const bit8u dev, const bit8u func, const bit8u port);
+
+struct PCI_DEV data;
+char  type[6][10] = { "", "(UHCI)", "(OHCI)", "(EHCI)", "(xHCI)", "(Unknown)" };
 
 int main(int argc, char *argv[]) {
   int i, index;
   bit8u pci_bus, pci_dev, pci_func;
-  struct PCI_DEV data;
   bit32u *pcidata = (bit32u *) &data;
-  char  type[6][10] = { "", "(UHCI)", "(OHCI)", "(EHCI)", "(xHCI)", "(Unknown)" };
   bit32u base = 0, size = 0;
   bool prt_type = FALSE;
   
-  printf("\nDetect USB Controllers on a PCI Bus. v1.00.00"
-         "\nForever Young Software -- Copyright 1984-2020\n");
+  printf("Detect USB Controllers on a PCI Bus.     v1.00.00\n"
+         "Forever Young Software   --   Copyright 1984-2022\n");
   
   // check to see if the user added the "/type" parameter.  If so, set the flag
   if ((argc > 1) && (strcmp(argv[1], "/type") == 0))
@@ -122,13 +123,13 @@ int main(int argc, char *argv[]) {
           
           // read in the 256 bytes (64 dwords)
           for (i=0; i<64; i++)
-            pcidata[i] = pci_read_dword(pci_bus, pci_dev, pci_func, (i<<2));
+            pcidata[i] = pci_read_dword(pci_bus, pci_dev, pci_func, i * 4);
           
           // if the class == 0x0C and the subclass == 0x03, we have a USB controller.
           if ((data._class == 0x0C) && (data.sub_class == 0x03)) {
             // we use the upper nibble of the protocol interface field
             // it should be 0, 1, 2, or 3
-            index = (data.p_interface >> 4);
+            index = ((data.p_interface & 0xF0) >> 4);
             // check to be sure not more than 3.  If so, give '4' for (unknown) string.
             if (index > 3)
               index = 4;
@@ -150,17 +151,18 @@ int main(int argc, char *argv[]) {
               index++;
             
             // print the info
-            printf("\n Found a USB compatible device entry. %s", type[index]);
-            printf("\n Bus = %2i, device = %2i, function = %i, IO Base: 0x%08X, IRQ: %i, size = %i\n",
+            printf(" Found a USB compatible device entry. %s\n", type[index]);
+            printf(" Bus = %2i, device = %2i, function = %i, IO Base: 0x%08X, IRQ: %i, size = %i\n",
                    pci_bus, pci_dev, pci_func, base, data.irq, size);
           }
           
           // if bit 7 of the header type (of the first function of the device) is set,
           //  then this is a multi-function device.
           //  else, skip checking the rest of the functions.
-          if (pci_func == 0)
+          if (pci_func == 0) {
             if ((pci_read_byte(pci_bus, pci_dev, pci_func, 0x0E) & 0x80) == 0)
-              pci_func = PCI_MAX_FUNC;
+              break;
+          }
           
         } else {
           // if first func of dev and is 0xFFFF, no more func's on this dev
