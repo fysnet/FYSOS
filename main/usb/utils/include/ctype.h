@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -69,9 +69,9 @@
 #endif
 #define NULL ((bit32u) 0x00000000)
 
-#if defined(DJGPP)
+//#if defined(DJGPP)
   typedef unsigned  char      bool;
-#endif
+//#endif
 
 // size of memory operands
 typedef   signed  char      bit8s;
@@ -80,10 +80,9 @@ typedef   signed short      bit16s;
 typedef unsigned short      bit16u;
 typedef   signed  long      bit32s;
 typedef unsigned  long      bit32u;
-typedef   signed long long  bit64s;
-typedef unsigned long long  bit64u;
-
-
-
+//#if defined(DJGPP)
+  typedef   signed long long  bit64s;
+  typedef unsigned long long  bit64u;
+//#endif
 
 #endif // FYSOS_CTYPE

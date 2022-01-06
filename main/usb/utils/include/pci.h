@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -109,6 +109,8 @@ struct PCI_DEV {
 
 #pragma pack(pop)
 
+#if defined(DJGPP)
+
 // in port byte (8-bit)
 __inline__ bit8u inpb(const bit16u port) {
   bit8u rv;
@@ -160,89 +162,101 @@ __inline__ void outpd(const bit16u port, const bit32u data) {
       "a" (data));
 }
 
-// port is the byte offset from 0x00
-bit8u pci_read_byte(const int bus, const int dev, const int func, const int port) {
-  const int shift = ((port & 3) * 8);
+#else
+
+#define inpb _inpb
+#define inpw _inpw
+#define inpd _inpd
+#define outpb _outpb
+#define outpw _outpw
+#define outpd _outpd
+
+#endif
+
+
+// 'offset' is the byte offset from 0x00
+bit8u pci_read_byte(const int bus, const int dev, const int func, const int offset) {
+  const int shift = ((offset & 3) * 8);
   const bit32u val = 0x80000000 |
     (bus << 16) |
     (dev << 11) |
     (func << 8) |
-    (port & 0xFC);
+    (offset & 0xFC);
   outpd(PCI_ADDR, val);
   return (inpd(PCI_DATA) >> shift) & 0xFF;
 }
 
-// port is the byte offset from 0x00
-bit16u pci_read_word(const int bus, const int dev, const int func, const int port) {
-  if ((port & 3) <= 2) {
-    const int shift = ((port & 3) * 8);
+// 'offset' is the byte offset from 0x00
+bit16u pci_read_word(const int bus, const int dev, const int func, const int offset) {
+  if ((offset & 3) <= 2) {
+    const int shift = ((offset & 3) * 8);
     const bit32u val = 0x80000000 |
       (bus << 16) |
       (dev << 11) |
       (func << 8) |
-      (port & 0xFC);
+      (offset & 0xFC);
     outpd(PCI_ADDR, val);
     return (inpd(PCI_DATA) >> shift) & 0xFFFF;
   } else
-    return (pci_read_byte(bus, dev, func, port + 1) << 8) | pci_read_byte(bus, dev, func, port);
+    return (pci_read_byte(bus, dev, func, offset + 1) << 8) | pci_read_byte(bus, dev, func, offset);
 }
 
-// port is the byte offset from 0x00
-bit32u pci_read_dword(const int bus, const int dev, const int func, const int port) {
-  if ((port & 3) == 0) {
+// 'offset' is the byte offset from 0x00
+bit32u pci_read_dword(const int bus, const int dev, const int func, const int offset) {
+  if ((offset & 3) == 0) {
     const bit32u val = 0x80000000 |
       (bus << 16) |
       (dev << 11) |
       (func << 8) |
-      (port & 0xFC);
+      (offset & 0xFC);
     outpd(PCI_ADDR, val);
     return inpd(PCI_DATA);
   } else
-    return (pci_read_word(bus, dev, func, port + 2) << 16) | pci_read_word(bus, dev, func, port);
+    return (pci_read_word(bus, dev, func, offset + 2) << 16) | pci_read_word(bus, dev, func, offset);
 }
 
-// port is the byte offset from 0x00
-void pci_write_byte(const int bus, const int dev, const int func, const int port, const bit8u value) {
-  const int shift = ((port & 3) * 8);
+// 'offset' is the byte offset from 0x00
+void pci_write_byte(const int bus, const int dev, const int func, const int offset, const bit8u value) {
+  const int shift = ((offset & 3) * 8);
   const bit32u val = 0x80000000 |
     (bus << 16) |
     (dev << 11) |
     (func << 8) |
-    (port & 0xFC);
+    (offset & 0xFC);
   outpd(PCI_ADDR, val);
   outpd(PCI_DATA, (inpd(PCI_DATA) & ~(0xFF << shift)) | (value << shift));
 }
 
-// port is the byte offset from 0x00
-void pci_write_word(const int bus, const int dev, const int func, const int port, const bit16u value) {
-  if ((port & 3) <= 2) {
-    const int shift = ((port & 3) * 8);
+// 'offset' is the byte offset from 0x00
+void pci_write_word(const int bus, const int dev, const int func, const int offset, const bit16u value) {
+  if ((offset & 3) <= 2) {
+    const int shift = ((offset & 3) * 8);
     const bit32u val = 0x80000000 |
       (bus << 16) |
       (dev << 11) |
       (func << 8) |
-      (port & 0xFC);
+      (offset & 0xFC);
     outpd(PCI_ADDR, val);
     outpd(PCI_DATA, (inpd(PCI_DATA) & ~(0xFFFF << shift)) | (value << shift));
   } else {
-    pci_write_byte(bus, dev, func, port + 0, (bit8u) (value & 0xFF));
-    pci_write_byte(bus, dev, func, port + 1, (bit8u) (value >> 8));
+    pci_write_byte(bus, dev, func, offset + 0, (bit8u) (value & 0xFF));
+    pci_write_byte(bus, dev, func, offset + 1, (bit8u) (value >> 8));
   }
 }
 
-// port is the byte offset from 0x00
-void pci_write_dword(const int bus, const int dev, const int func, const int port, const bit32u value) {
-  if ((port & 3) == 0) {
+// 'offset' is the byte offset from 0x00
+void pci_write_dword(const int bus, const int dev, const int func, const int offset, const bit32u value) {
+  if ((offset & 3) == 0) {
     const bit32u val = 0x80000000 |
       (bus << 16) |
       (dev << 11) |
       (func << 8) |
-      (port & 0xFC);
+      (offset & 0xFC);
     outpd(PCI_ADDR, val);
     outpd(PCI_DATA, value);
   } else {
-    pci_write_word(bus, dev, func, port + 0, (bit16u) (value & 0xFFFF));
-    pci_write_word(bus, dev, func, port + 2, (bit16u) (value >> 16));
+    pci_write_word(bus, dev, func, offset + 0, (bit16u) (value & 0xFFFF));
+    pci_write_word(bus, dev, func, offset + 2, (bit16u) (value >> 16));
   }
 }
 
@@ -262,7 +276,7 @@ void pci_write_dword(const int bus, const int dev, const int func, const int por
    0FFFFFFFFh to both registers, reads them back, and combines the result into a 64-bit value.
    Size calculation is done on the 64-bit value.
 */
-bit32u pci_mem_range(const bit8u bus, const bit8u dev, const bit8u func, const bit8u port) {
+bit32u pci_mem_range(const bit8u bus, const bit8u dev, const bit8u func, const bit8u offset) {
   bit32u org0, org1, cmnd;
   bit64u range;
   
@@ -271,24 +285,24 @@ bit32u pci_mem_range(const bit8u bus, const bit8u dev, const bit8u func, const b
   pci_write_word(bus, dev, func, 0x04, cmnd & ~0x07);
   
   // read the original value(s)
-  org0 = pci_read_dword(bus, dev, func, port);
+  org0 = pci_read_dword(bus, dev, func, offset);
   if ((org0 & 0x07) == 0x04)  // 64 bit and mem I/O
-    org1 = pci_read_dword(bus, dev, func, port+4);
+    org1 = pci_read_dword(bus, dev, func, offset + 4);
   
   // write 0xFFFFFFFF
-  pci_write_dword(bus, dev, func, port, 0xFFFFFFFF);
+  pci_write_dword(bus, dev, func, offset, 0xFFFFFFFF);
   if ((org0 & 0x07) == 0x04)  // 64 bit and mem I/O
-    pci_write_dword(bus, dev, func, port+4, 0xFFFFFFFF);
+    pci_write_dword(bus, dev, func, offset + 4, 0xFFFFFFFF);
   
   // read it back.
-  range = pci_read_dword(bus, dev, func, port);
+  range = pci_read_dword(bus, dev, func, offset);
   if ((org0 & 0x07) == 0x04)  // 64 bit and mem I/O
-    range |= ((bit64u) pci_read_dword(bus, dev, func, port+4) << 32);
+    range |= ((bit64u) pci_read_dword(bus, dev, func, offset + 4) << 32);
   
   // write back the original value
-  pci_write_dword(bus, dev, func, port, org0);
+  pci_write_dword(bus, dev, func, offset, org0);
   if ((org0 & 0x07) == 0x04)  // 64 bit and mem I/O
-    pci_write_dword(bus, dev, func, port+4, org1);
+    pci_write_dword(bus, dev, func, offset + 4, org1);
   
   // restore the command register
   pci_write_word(bus, dev, func, 0x04, cmnd);
