@@ -1138,7 +1138,7 @@ void *CFat::FatLoadFAT(void *fat_buffer) {
 // calculate the count of free clusters left in the data area
 DWORD CFat::CalcFreeClusters(void *fat_buffer) {
   DWORD Free = 0, Cluster = 0;
-  Free = 0;
+
   while (Cluster < m_clusters_in_data_area) {
     if (GetNextCluster(fat_buffer, Cluster) == 0)
       Free++;
@@ -1990,7 +1990,7 @@ BOOL CFat::InsertFile(DWORD Cluster, CString csName, CString csPath, BOOL IsRoot
   if (clusters_needed > m_free_clusters) {
     file.Close();
     CString cs;
-    cs.Format("Not enough room left in image. Clusters Needed = %i", clusters_needed - m_free_clusters);
+    cs.Format("Not enough room left in image. Clusters needed = %i", clusters_needed - m_free_clusters);
     AfxMessageBox(cs);
     return FALSE;
   }

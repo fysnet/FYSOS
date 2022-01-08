@@ -309,11 +309,13 @@ public:
   
   void CopyFile(HTREEITEM hItem, CString csName);
   void CopyFolder(HTREEITEM hItem, CString csPath, CString csName);
-  void InsertFile(DWORD64 Inode, CString csName, CString csPath);
-  void InsertFolder(DWORD64 Inode, CString csName, CString csPath);
+  BOOL InsertFile(DWORD64 Inode, CString csName, CString csPath);
+  BOOL InsertFolder(DWORD64 Inode, CString csName, CString csPath);
   void DeleteFile(HTREEITEM hItem);
   void DeleteFolder(HTREEITEM hItem);
   
+  DWORD CalcFreeBlocks(void);
+  void DisplayFreeSpace(void);
   DWORD64 GetFreeBlock(DWORD64 Start, BOOL MarkIt);
   void MarkBlock(DWORD64 Block, BOOL MarkIt);
   int AppendToExtents(struct S_LEAN_BLOCKS *Extents, DWORD64 Size, DWORD64 Start, BOOL MarkIt);
@@ -336,6 +338,7 @@ public:
   
   struct S_LEAN_SUPER m_super;
   DWORD   m_super_block_loc;  // zero based block of super block within this partition
+  DWORD   m_free_block_cnt;
   
   BOOL    m_isvalid;
   int     m_index; // index into dlg->Lean[]
@@ -381,6 +384,7 @@ protected:
   afx_msg void OnLeanCrcUpdate();
   afx_msg void OnLeanMagicUpdate();
   afx_msg void OnLeanCurrentState();
+  afx_msg void OnLeanFreeUpdate();
   afx_msg void OnKillfocusLeanGuid();
   afx_msg void OnGuidCreate();
   afx_msg void OnShowDeleted();

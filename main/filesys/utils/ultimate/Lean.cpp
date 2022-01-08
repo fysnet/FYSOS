@@ -118,9 +118,11 @@ CLean::CLean() : CPropertyPage(CLean::IDD) {
   m_ESs_in_Inode = FALSE;
   //}}AFX_DATA_INIT
   m_hard_format = FALSE;
+  m_free_block_cnt = 0;
 }
 
 CLean::~CLean(){
+  m_free_block_cnt = 0;
 }
 
 void CLean::DoDataExchange(CDataExchange* pDX) {
@@ -186,6 +188,7 @@ BEGIN_MESSAGE_MAP(CLean, CPropertyPage)
   ON_BN_CLICKED(IDC_LEAN_CRC_UPDATE, OnLeanCrcUpdate)
   ON_BN_CLICKED(IDC_LEAN_MAGIC_UPDATE, OnLeanMagicUpdate)
   ON_BN_CLICKED(IDC_LEAN_CURRENT_STATE, OnLeanCurrentState)
+  ON_BN_CLICKED(IDC_FREE_BLOCKS_UPDATE, OnLeanFreeUpdate)
   ON_EN_KILLFOCUS(IDC_LEAN_GUID, OnKillfocusLeanGuid)
   ON_BN_CLICKED(IDC_GUID_CREATE, OnGuidCreate)
   ON_BN_CLICKED(ID_DELETE, OnLeanDelete)
@@ -609,6 +612,8 @@ void CLean::OnUpdateCode() {
     
     // write it
     dlg->WriteBlocks(existing, m_lba, 0, m_block_size, m_super_block_loc);
+
+    AfxMessageBox("Update Successful...");
   }
   
   free(existing);
@@ -651,6 +656,12 @@ void CLean::OnLeanCurrentState() {
     cs.Format("0x%08X", dlg.m_attrib);
     SetDlgItemText(IDC_LEAN_CUR_STATE, cs);
   }
+}
+
+void CLean::OnLeanFreeUpdate() {
+  m_super.free_block_count = m_free_block_cnt;
+  m_free_blocks.Format("%I64i", m_super.free_block_count);
+  SetDlgItemText(IDC_LEAN_FREE_BLOCKS, m_free_blocks);
 }
 
 void CLean::OnChangeLeanJournal() {
@@ -753,6 +764,8 @@ void CLean::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
   GetDlgItem(ID_SEARCH)->EnableWindow(FALSE);
   
   if (m_isvalid) {
+    m_free_block_cnt = CalcFreeBlocks();
+
     GetDlgItem(IDC_DIR_TREE)->EnableWindow(TRUE);
     // make sure the tree is emtpy
     m_dir_tree.DeleteAllItems();
@@ -781,6 +794,9 @@ void CLean::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
       GetDlgItem(IDC_DIR_TREE)->SetFocus();
       m_dir_tree.SelectSetFirstVisible(m_hRoot);
     }
+    
+    // display the running total of free bytes left
+    DisplayFreeSpace();
   }
   Invalidate(TRUE);  // redraw the tab
 }
@@ -1400,7 +1416,7 @@ void CLean::OnLeanInsert() {
 // Inode = starting inode of folder to insert to
 // csName = name of file to insert
 // csPath = path on host of file to insert
-void CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
+BOOL CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
   struct S_LEAN_BLOCKS extents;
   void *buffer;
   DWORD64 Size, TotSize;
@@ -1410,9 +1426,20 @@ void CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
   // open and get size of file to insert
   if (file.Open(csPath, CFile::modeRead | CFile::typeBinary | CFile::shareDenyWrite, NULL) == 0) {
     AfxMessageBox("Error Opening File...");
-    return;
+    return FALSE;
   }
   Size = file.GetLength();  // TODO: use long version
+
+  // if we don't have enough room on the image, error and return
+  DWORD blocks_needed = (DWORD) ((Size + m_block_size - 1) / (size_t) m_block_size);
+  if (blocks_needed > m_free_block_cnt) {
+    file.Close();
+    CString cs;
+    cs.Format("Not enough room left in image. Blocks needed = %i", blocks_needed - m_free_block_cnt);
+    AfxMessageBox(cs);
+    return FALSE;
+  }
+
   buffer = malloc((size_t) Size + m_block_size);  // to prevent buffer overrun in WriteFile()
   file.Read(buffer, (UINT) Size);
   file.Close();
@@ -1424,7 +1451,7 @@ void CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
   if (AppendToExtents(&extents, TotSize, 0, TRUE) == -1) {
     FreeExtentBuffer(&extents);
     free(buffer);
-    return;
+    return FALSE;
   }
   
   // create a root entry in the folder
@@ -1432,7 +1459,7 @@ void CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
   if (r == -1) {
     FreeExtentBuffer(&extents);
     free(buffer);
-    return;
+    return FALSE;
   }
   
   // create an Inode at extents.extent_start[0]
@@ -1444,12 +1471,17 @@ void CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
   // free the buffers
   FreeExtentBuffer(&extents);
   free(buffer);
+  
+  // update our running count of free clusters
+  m_free_block_cnt = CalcFreeBlocks();
+
+  return TRUE;
 }
 
 // Inode = starting Inode of folder to insert in to
 // csName = name of folder to insert
 // csPath = path on host of folder to insert
-void CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
+BOOL CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
   struct S_LEAN_BLOCKS extents;
   char szPath[MAX_PATH];
   DWORD Attrib = IsDlgButtonChecked(IDC_EAS_IN_INODE) ? LEAN_ATTR_EAS_IN_INODE : 0;  // Allow user to specify if EAS_IN_INODE or not on new creation.
@@ -1458,14 +1490,14 @@ void CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
   AllocateExtentBuffer(&extents, LEAN_INODE_EXTENT_CNT);
   if (AppendToExtents(&extents, (m_super.pre_alloc_count + 1) * m_block_size, 0, TRUE) == -1) {
     FreeExtentBuffer(&extents);
-    return;
+    return FALSE;
   }
   
   // create a root entry in the folder for the folder
   int r = AllocateRoot(csName, Inode, extents.extent_start[0], LEAN_FT_DIR);
   if (r == -1) {
     FreeExtentBuffer(&extents);
-    return;
+    return FALSE;
   }
 
   // create an Inode at extents.extent_start[0]
@@ -1475,14 +1507,14 @@ void CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
   CString csDots = ".";
   if (AllocateRoot(csDots, extents.extent_start[0], extents.extent_start[0], LEAN_FT_DIR) != 1) {
     FreeExtentBuffer(&extents);
-    return;
+    return FALSE;
   }
   IncrementLinkCount(extents.extent_start[0]);
 
   csDots = "..";
   if (AllocateRoot(csDots, extents.extent_start[0], Inode, LEAN_FT_DIR) != 1) {
     FreeExtentBuffer(&extents);
-    return;
+    return FALSE;
   }
   IncrementLinkCount(Inode);
 
@@ -1494,7 +1526,7 @@ void CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
   
   // now scan the host for files within this folder, recursing folders if needed
   CFileFind filefind;
-  BOOL fnd = filefind.FindFile(NULL);
+  BOOL b = TRUE, fnd = filefind.FindFile(NULL);
   while (fnd) {
     fnd = filefind.FindNextFile();
     
@@ -1503,9 +1535,9 @@ void CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
       continue;
     
     if (filefind.IsDirectory())
-      InsertFolder(extents.extent_start[0], filefind.GetFileName(), filefind.GetFilePath());
+      b = InsertFolder(extents.extent_start[0], filefind.GetFileName(), filefind.GetFilePath());
     else
-      InsertFile(extents.extent_start[0], filefind.GetFileName(), filefind.GetFilePath());
+      b = InsertFile(extents.extent_start[0], filefind.GetFileName(), filefind.GetFilePath());
   }
   filefind.Close();
   
@@ -1514,6 +1546,8 @@ void CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
   
   // restore the current directory
   SetCurrentDirectory(szPath);
+
+  return b;
 }
 
 // the user change the status of the "Show Deleted" Check box
@@ -1565,6 +1599,12 @@ void CLean::OnLeanDelete() {
 
   // select the parent item
   m_dir_tree.Select((hParent != NULL) ? hParent : TVI_ROOT, TVGN_CARET);
+  
+  // update our running count of free clusters
+  m_free_block_cnt = CalcFreeBlocks();
+  
+  // update the freespace display
+  DisplayFreeSpace();
   
   wait.Restore();
   //AfxMessageBox("File(s) deleted.");
@@ -1642,6 +1682,50 @@ void CLean::DeleteFile(HTREEITEM hItem) {
 
 void CLean::OnSearch() {
   m_dir_tree.Search();
+}
+
+void CLean::DisplayFreeSpace(void) {
+  CString csFree;
+  
+  csFree.Format("Free Space: %s (bytes)", (LPCSTR) gFormatNum((size_t) m_free_block_cnt * (1ULL << m_super.log_block_size), FALSE, FALSE));
+  SetDlgItemText(IDC_FREE_SIZE_STR, csFree);
+}
+
+// calculate the count of free clusters left in the data area
+DWORD CLean::CalcFreeBlocks(void) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  DWORD Free = 0, Cluster = 0;
+  BYTE *bitmap = NULL;
+  DWORD64 bitmap_block, cur_block = 0;
+
+  const unsigned band_size = (1ULL << m_super.log_blocks_per_band); // blocks per band
+  const unsigned bitmap_size = (unsigned) (band_size >> 12);     // blocks per bitmap
+  const unsigned tot_bands = (unsigned) ((m_tot_blocks + (band_size - 1)) / band_size);
+
+  // create the buffer
+  bitmap = (BYTE *) malloc(bitmap_size * m_block_size);
+
+  for (unsigned band=0; band<tot_bands; band++) {
+    bitmap_block = (band==0) ? m_super.bitmap_start : (band * band_size);
+    dlg->ReadBlocks(bitmap, m_lba, bitmap_block, m_block_size, bitmap_size);
+
+    for (unsigned block=0; block<band_size; block++) {
+      unsigned byte = block / 8;
+      unsigned bit = block % 8;
+      if (!(bitmap[byte] & (1 << bit)))
+        Free++;
+      // make sure we don't go past the last block in the volume
+      cur_block++;
+      if (cur_block >= m_tot_blocks) {
+        band = tot_bands;  // so we exit the outer for() loop as well.
+        break;
+      }
+    }
+  }
+
+  free(bitmap);
+
+  return Free;
 }
 
 // S_LEAN_BLOCKS is a list of extents.  Does not know about indirects or anything.

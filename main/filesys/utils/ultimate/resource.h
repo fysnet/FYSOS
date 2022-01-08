@@ -391,6 +391,8 @@
 #define IDC_FAT32_ENTRY_RESV            1201
 #define IDC_BLOCK_SIZE                  1201
 #define IDC_RESERVED_DISP2              1201
+#define IDC_LEAN_CURRENT_STATE2         1201
+#define IDC_FREE_BLOCKS_UPDATE          1201
 #define IDC_FAT32_ENTRY_TENTH           1202
 #define IDC_PATH_TABLE_SIZE             1202
 #define IDC_FAT32_ENTRY_TIME            1203
@@ -960,7 +962,6 @@
 #define IDC_FSZ_ENC_MASK_DO             1630
 #define IDC_FREE_SIZE_STR               1631
 #define IDC_EDIT                        1632
-
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775

@@ -78,7 +78,7 @@ CAPTION "About ultimate"
 FONT 8, "MS Sans Serif"
 BEGIN
     CONTROL         IDD_SFS,IDC_STATIC,"Static",SS_BITMAP,11,10,20,20
-    LTEXT           "Ultimate   00.54.20 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
+    LTEXT           "Ultimate   00.54.22 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
     LTEXT           "Copyright (C)  Forever Young Software 1984-2022",IDC_STATIC,46,27,175,8
     DEFPUSHBUTTON   "OK",IDOK,178,7,50,14,WS_GROUP
     LTEXT           "http://www.fysnet.net",IDC_STATIC,46,38,175,8
@@ -289,7 +289,6 @@ BEGIN
     RTEXT           "GUID:",IDC_STATIC,161,9,25,11
     RTEXT           "Label:",IDC_STATIC,161,24,25,11
     RTEXT           "Block Count:",IDC_STATIC,1,93,47,11
-    RTEXT           "Free Blocks:",IDC_STATIC,1,107,47,11
     RTEXT           "Primary Block:",IDC_STATIC,1,121,47,11
     RTEXT           "Backup Block:",IDC_STATIC,1,135,47,11
     RTEXT           "Bitmap Inode:",IDC_STATIC,1,149,47,11
@@ -310,6 +309,8 @@ BEGIN
     CONTROL         "",IDC_DEL_CLEAR,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,454,130,11,8
     RTEXT           "Block Size:",IDC_STATIC,4,206,61,11
     CTEXT           "0",IDC_LEAN_BLOCK_SIZE_DISP,105,204,29,10,SS_SUNKEN
+    CTEXT           "",IDC_FREE_SIZE_STR,142,239,146,11,SS_SUNKEN
+    PUSHBUTTON      "Free Blocks:",IDC_FREE_BLOCKS_UPDATE,5,107,44,10,BS_RIGHT
 END
 
 IDD_FAT_ENTRY DIALOGEX 0, 0, 364, 161
