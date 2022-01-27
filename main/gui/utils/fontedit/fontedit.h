@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -53,26 +53,19 @@
  * of a discussion within one or more of the books mentioned above.
  * 
  * For more information, please visit:
- *             http://www.fysnet.net/osdesign_book_series.htm
+ *             https://www.fysnet.net/osdesign_book_series.htm
  */
 
 /*
- *  Last updated: 13 July 2020
+ *  Last updated: 25 Jan 2022
  */
 
 #pragma pack(push, 1)
 
-// this is our versioning/type values
-#define FILE_VERSION  0x10   // 1.0
-#define FILE_TYPE     0x00   // 0 = bitmap type  (the only one currently allowed)
-#define TYPE_VERSION  0x10   // 1.0
-
-
-
 #ifdef _WIN64
-  #define VERSION_INFO "Font Edit\nVersion 1.14.53 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2020\n\nhttp://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.50.00 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #else
-  #define VERSION_INFO "Font Edit\nVersion 1.14.53 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2020\n\nhttp://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.50.00 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #endif
 
 #define APP_WIDTH       700
@@ -92,7 +85,7 @@
 #define GRIDSTART  175
 #define BUTTONSRT  22
 
-#define TEXTBOXW  125
+#define TEXTBOXW  135
 #define TEXTBOXH  25   // should not be more than BOXSIZE
 
 #define SLIDERW   100
@@ -103,32 +96,30 @@
 #define DIAG_VALUE(x)   (((x) == INT_MIN) ? 0 : abs(x))
 #define DIAG_ENABLED(x)  ((x) > -1)
 
-// type zero font matrix structure
+// font matrix structure
 struct FONT_INFO {
-  bit16u index;   // Indicies in data of each character
+  bit32u index;   // Indicies in data of each character
   bit8u  width;   // Width of character
-  bit8u  flags;   // bit 0 = drop 2 pixel(s) (ex: g,q,p,y, and other chars that need to be drawn 2 pixel(s) lower)
   char   deltax;  // +/- offset to print char 
   char   deltay;  // +/- offset to print char (allows for drop chars, etc)
   char   deltaw;  // +/- offset to combine with width above when moving to the next char
-  bit8u  resv;    // reserved
+  bit8u  resv[4]; // reserved
 };
 
+#define MAX_NAME_LEN  32
+
 struct FONT {
-  bit8u  sig[4];       // 'FONT'
+  bit8u  sig[4];       // 'Font'
   bit8u  height;       // height of char set
   bit8u  max_width;    // width of widest char in set
-  bit16u start;        // starting asciiz value (first entry in font == this ascii value)
-  bit16u count;        // count of chars in set ( 0 < count <= 256 )
+  bit16u info_start;   // zero based offset to the first FONT_INFO block
+  bit32s start;        // starting value (first entry in font == this value) (*** Signed, though must always be positive ***)
+  bit32s count;        // count of chars in set ( 0 < count <= 0x10FFFF ) (*** Signed, though must always be positive ***)
   bit32u datalen;      // len of the data section in bytes
   bit32u total_size;   // total size of this file in bytes
   bit32u flags;        // bit 0 = fixed width font, remaining bits are reserved
-  bit8u  version;      // version of font file (4-bit major : 4-bit minor) (1.0 currently allowed)
-  bit8u  type;         // type of font included in this file (0 = bitmap.  The only type allowed at this point)
-  bit8u  type_vers;    // version of font type used (4-bit major : 4-bit minor) (1.0 currently allowed)
-  bit8u  resv[11];     // reserved
-  char   name[16];     // 15 chars, 1 null
-  bit8u  gui_resv[44]; // reserved for the use of the GUI (three 64-bit pointers, plus other reserved room)
+  char   name[MAX_NAME_LEN]; // utf-8 null terminated
+  bit8u  resv[36];     // reserved and preserved
   //struct FONT_INFO info[];  // char info
   //bit8u data[];     // char data
 };
@@ -139,6 +130,7 @@ struct FONT {
 HWND CreateButton(HWND, DWORD, const char *, const int, const int);
 HWND CreateTrackBar(HWND, const int, const int);
 
+void SetTitleStr(const HWND);
 void DisableItems(HMENU);
 void EnableItems(HMENU, struct FONT *);
 void DrawTextBox(HDC, DWORD, const int, const int, const int, const int, const char *);
@@ -146,7 +138,7 @@ int  LoadCurChar(HWND, struct FONT *, const int);
 void SaveCurChar(struct FONT *, const int);
 struct FONT *ConvertFont(HWND, struct FONT *, const int, const int, const int, const int, const char *);
 void DumpFont(HWND, struct FONT *);
-void FontMoveData(struct FONT *, bit32u, int);
+void FontMoveData(struct FONT *, int, int);
 
 LRESULT CALLBACK WindowProcedure(HWND, UINT, WPARAM, LPARAM);
 BOOL OpenFileDialog(HWND, LPTSTR, LPTSTR);

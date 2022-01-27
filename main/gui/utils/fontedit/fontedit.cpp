@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -53,7 +53,7 @@
  * of a discussion within one or more of the books mentioned above.
  * 
  * For more information, please visit:
- *             http://www.fysnet.net/osdesign_book_series.htm
+ *             https://www.fysnet.net/osdesign_book_series.htm
  */
 
 /*
@@ -74,7 +74,7 @@
  *   When using the Visual Studio IDE, do not edit the resource.rc file within
  *    the IDE's editor.  It will add items that will break this build.
  *
- *  Last updated: 13 July 2020
+ *  Last updated: 25 Jan 2022
  *
  *   This code was built with Visual Studio 6.0 (for 32-bit Windows XP)
  *    and Visual Studio 2019 (for 64-bit Windows 10)
@@ -100,7 +100,7 @@ OPENFILENAME ofn;
 char szFileName[512];
 char szClassName[] = "Font Editor";
 char szStr[512];
-char szFontName[24] = "";
+char szFontName[MAX_NAME_LEN] = "";
 
 HMENU menu;
 MENUINFO mi;
@@ -123,6 +123,7 @@ int clipx, clipy, clipw;
 bool isdirty = FALSE;
 bool drawgrid = FALSE;
 bool drawnumbers = TRUE;
+bool hexcodes = TRUE;
 
 HWND hButtonPrev, hButtonNext, hButtonFirst, hButtonLast;
 HWND hButtonUp, hButtonDown, hButtonLeft, hButtonRight;
@@ -222,6 +223,8 @@ int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance, LPSTR lpszA
 LRESULT CALLBACK GotoDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
   HWND hwnd;
   RECT rcOwner;
+  char szStr[256];
+  int  max = tstart + tending;
   
   switch (message) {
     case WM_INITDIALOG:
@@ -229,7 +232,12 @@ LRESULT CALLBACK GotoDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
       hwnd = GetWindow(hDlg, GW_OWNER);
       GetWindowRect(hwnd, &rcOwner);
       SetWindowPos(hDlg, HWND_TOP, rcOwner.left + 35, rcOwner.top + 65, 0, 0, SWP_NOSIZE);
-      SetDlgItemInt(hDlg, IDC_INDEX, index, FALSE);
+      if (hexcodes) sprintf(szStr, "0x%06X", index);
+      else          sprintf(szStr, "%i", index);
+      SetDlgItemText(hDlg, IDC_INDEX, szStr);
+      if (hexcodes) sprintf(szStr, "Min: 0x%06X, Max: 0x%06X", tstart, max);
+      else          sprintf(szStr, "Min: %i, Max: %i", tstart, max);
+      SetDlgItemText(hDlg, IDC_MAX_STR, szStr);
       // select the text
       hwnd = GetDlgItem(hDlg, IDC_INDEX);
       SendMessage(hwnd, EM_SETSEL, 0, -1);
@@ -238,8 +246,10 @@ LRESULT CALLBACK GotoDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
     case WM_COMMAND:
       switch(LOWORD(wParam)) {
         case IDOK:
-          index = GetDlgItemInt(hDlg, IDC_INDEX, NULL, FALSE);
-          EndDialog(hDlg, IDOK);
+          GetDlgItemText(hDlg, IDC_INDEX, szStr, 256);
+          index = (int) strtol(szStr, NULL, 0);  // will convert "0x" to hex, "O" to Octol, else decimal
+          if ((index >= tstart) && (index <= max))
+            EndDialog(hDlg, IDOK);
           return TRUE;
           
         case IDCANCEL:
@@ -285,7 +295,7 @@ LRESULT CALLBACK SizeDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
           tstart = GetDlgItemInt(hDlg, IDC_START, NULL, FALSE);
           tending = GetDlgItemInt(hDlg, IDC_ENDING, NULL, FALSE);
           tfixed = (SendMessage(GetDlgItem(hDlg, IDC_FIXED), BM_GETCHECK, 0, 0) == BST_CHECKED);
-          GetDlgItemText(hDlg, IDC_FONT_NAME, szFontName, 16);
+          GetDlgItemText(hDlg, IDC_FONT_NAME, szFontName, MAX_NAME_LEN);
           EndDialog(hDlg, IDOK);
           return TRUE;
           
@@ -311,7 +321,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
   
   // only calculate it if font is allocated
   if (font) {
-    info = (struct FONT_INFO *) ((bit8u *) font + sizeof(struct FONT));
+    info = (struct FONT_INFO *) ((bit8u *) font + font->info_start);
     data = (bit8u *) ((bit8u *) info + (sizeof(struct FONT_INFO) * font->count));
   }
   
@@ -320,6 +330,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
       // get pointer to our Menu
       menu = GetMenu(hwnd);
       CheckMenuItem(menu, ID_VIEW_SHOW_NUMS, drawnumbers ? MF_CHECKED : MF_UNCHECKED);
+      CheckMenuItem(menu, ID_VIEW_HEX_CODES, hexcodes ? MF_CHECKED : MF_UNCHECKED);
       
       // set the color of the background of the menu
       hbrush = CreateSolidBrush(GetSysColor(COLOR_MENUBAR));
@@ -451,7 +462,9 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             return 0;
           
           strcpy(szFileName, "");
-          SetWindowText(hwnd, szClassName);
+          
+          // set the title of the window
+          SetTitleStr(hwnd);
           
           // initialize the font data
           curw = tcurw;
@@ -487,12 +500,16 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           
           result = OpenFileDialog(hwnd, szFileName, (TCHAR *) "Open a Font File.");
           if (result) {
-            sprintf(szStr, "%s -- %s", szClassName, szFileName);
-            SetWindowText(hwnd, szStr);
+            // set the title of the window
+            SetTitleStr(hwnd);
+
             font = OpenFile(hwnd, font);
             if (font == NULL) {
               MessageBox(hwnd, "Error Loading File", "Warning!!!", MB_ICONEXCLAMATION | MB_OK);
               drawgrid = FALSE;
+              strcpy(szFileName, "");
+              tfixed = FALSE;
+              SetTitleStr(hwnd); // update the title of the window
               DisableItems(menu);
               InvalidateRect(hwnd, NULL, TRUE);
               return 0;
@@ -501,8 +518,14 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             curw = LoadCurChar(hwnd, font, 0);
             curh = font->height;
             drawgrid = TRUE;
+            tfixed = (font->flags & 1) > 0;
+            tstart = font->start;
+            tending = font->count - 1;
             EnableItems(menu, font);
             EnableMenuItem(menu, ID_FILE_SAVE, MF_ENABLED);
+
+            // update the title of the window
+            SetTitleStr(hwnd);
             
             InvalidateRect(hwnd, NULL, TRUE);
             isdirty = FALSE;
@@ -519,8 +542,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           result = SaveFileDialog(hwnd, szFileName, (TCHAR *) "Save the Font File.", (TCHAR *) "Font Files (*.fnt)\0*.fnt\0\0");
           if (result) {
             SaveFile(hwnd, font);
-            sprintf(szStr, "%s -- %s", szClassName, szFileName);
-            SetWindowText(hwnd, szStr);
+            // update the title of the window
+            SetTitleStr(hwnd);
             EnableMenuItem(menu, ID_FILE_SAVE, MF_ENABLED);
           }
           return 0;
@@ -580,17 +603,22 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           return 0;
           
         case ID_EDIT_GOTO:
-          index = font->start;
+          index = font->start + cur_char;
           ret = DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_GOTO), hwnd, (DLGPROC) GotoDialogProc);
           SetFocus(hwnd); // make sure our main window has focus
           if (ret == IDCANCEL)
             return 0;
           
           index -= font->start;
-          if ((index >= 0) && (index < (int) font->count)) {
+          if ((index >= 0) && (index < font->count)) {
             SaveCurChar(font, cur_char);
             cur_char = index;
             curw = LoadCurChar(hwnd, font, cur_char);
+            
+            // enable/disable Prev/Next depending on where we are in the font
+            EnableWindow(hButtonPrev, cur_char > 0);
+            EnableWindow(hButtonNext, cur_char < (font->count - 1));
+
             InvalidateRect(hwnd, NULL, TRUE);
             // we need to set the focus to the hwnd so it will still catch the keypresses
             SetFocus(hwnd);
@@ -603,7 +631,13 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           CheckMenuItem(menu, ID_VIEW_SHOW_NUMS, drawnumbers ? MF_CHECKED : MF_UNCHECKED);
           InvalidateRect(hwnd, NULL, TRUE);
           break;
-          
+        
+        case ID_VIEW_HEX_CODES:
+          hexcodes ^= 1;
+          CheckMenuItem(menu, ID_VIEW_HEX_CODES, hexcodes ? MF_CHECKED : MF_UNCHECKED);
+          InvalidateRect(hwnd, NULL, TRUE);
+          break;
+
         case IDC_CONV_CUR:
           SaveCurChar(font, cur_char);
           tstart = DIAG_DISABLE(font->start);
@@ -624,8 +658,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             font = ConvertFont(hwnd, font, tcurh, tcurw, tfixed, tending, szFontName);
             SaveFile(hwnd, font);
             curw = LoadCurChar(hwnd, font, cur_char);
-            sprintf(szStr, "%s -- %s", szClassName, szFileName);
-            SetWindowText(hwnd, szStr);
+            // update the title of the window
+            SetTitleStr(hwnd);
             InvalidateRect(hwnd, NULL, TRUE);
           }
           break;
@@ -644,7 +678,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           if (ret == IDCANCEL)
             return 0;
           
-          strcpy(font->name, szFontName);
+          memset(font->name, 0, MAX_NAME_LEN);
+          strncpy(font->name, szFontName, MAX_NAME_LEN - 1);
           isdirty = TRUE;
           break;
           
@@ -673,7 +708,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 curw = LoadCurChar(hwnd, font, cur_char);
               }
             } else if (lParam == (LPARAM) hButtonNext) {
-              if (cur_char < (int) (font->count - 1)) {
+              if (cur_char < (font->count - 1)) {
                 SaveCurChar(font, cur_char);
                 cur_char++;
                 curw = LoadCurChar(hwnd, font, cur_char);
@@ -760,7 +795,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                   if (y - y1) {
                     FontMoveData(font, cur_char + 1, -(y - y1));
                     // decrement the index of each char after in the font
-                    for (x=cur_char+1; x<(int) font->count; x++)
+                    for (x=cur_char+1; x<font->count; x++)
                       info[x].index -= (y - y1);
                   }
                   isdirty = TRUE;
@@ -786,7 +821,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                   if (y1 - y) {
                     FontMoveData(font, cur_char + 1, (y1 - y));
                     // increment the index of each char after in the font
-                    for (x=cur_char+1; x<(int) font->count; x++)
+                    for (x=cur_char+1; x<font->count; x++)
                       info[x].index += (y1 - y);
                   }
                   isdirty = TRUE;
@@ -814,7 +849,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
       // draw the grid?
       if (drawgrid) {
         // draw the box to hold the current char number, etc.
-        sprintf(szStr, "Current char:  %i", cur_char + font->start);
+        if (hexcodes) sprintf(szStr, "Current: 0x%06X", cur_char + font->start);
+        else          sprintf(szStr, "Current:  %i", cur_char + font->start);
         DrawTextBox(hdc, WHITENESS, BUTTONSRT, 10, TEXTBOXW, TEXTBOXH, szStr);
         
         // draw the border
@@ -926,6 +962,18 @@ void DrawTextBox(HDC hdc, DWORD fill, const int x, const int y, const int w, con
   DeleteObject(black);
 }
 
+void SetTitleStr(const HWND hwnd) {
+
+  if (strlen(szFileName) > 0)
+    sprintf(szStr, "%s -- %s", szClassName, szFileName);
+  else
+    sprintf(szStr, "%s", szClassName);
+  
+  if (tfixed)
+    strcat(szStr, " (fixed width)");
+  
+  SetWindowText(hwnd, szStr);
+}
 
 void DisableItems(HMENU menu) {
   EnableMenuItem(menu, ID_FILE_SAVE, MF_GRAYED);
@@ -935,6 +983,7 @@ void DisableItems(HMENU menu) {
   EnableMenuItem(menu, ID_EDIT_CLEAR, MF_GRAYED);
   EnableMenuItem(menu, ID_EDIT_GOTO, MF_GRAYED);
   EnableMenuItem(menu, ID_VIEW_SHOW_NUMS, MF_GRAYED);
+  EnableMenuItem(menu, ID_VIEW_HEX_CODES, MF_GRAYED);
   EnableMenuItem(menu, IDC_CONV_CUR, MF_GRAYED);
   EnableMenuItem(menu, IDC_NAME_CUR, MF_GRAYED);
   EnableMenuItem(menu, IDC_DUMP, MF_GRAYED);
@@ -968,6 +1017,7 @@ void EnableItems(HMENU menu, struct FONT *font) {
   EnableMenuItem(menu, ID_EDIT_CLEAR, MF_ENABLED);
   EnableMenuItem(menu, ID_EDIT_GOTO, MF_ENABLED);
   EnableMenuItem(menu, ID_VIEW_SHOW_NUMS, MF_ENABLED);
+  EnableMenuItem(menu, ID_VIEW_HEX_CODES, MF_ENABLED);
   EnableMenuItem(menu, IDC_CONV_CUR, MF_ENABLED);
   EnableMenuItem(menu, IDC_NAME_CUR, MF_ENABLED);
   EnableMenuItem(menu, IDC_DUMP, MF_ENABLED);
@@ -1061,7 +1111,7 @@ HWND CreateTrackBar(HWND hwnd, const int w, const int h) {
   return Slider;
 }
 
-BOOL OpenFileDialog(HWND hwnd, LPTSTR pFileName ,LPTSTR pTitleName) {
+BOOL OpenFileDialog(HWND hwnd, LPTSTR pFileName, LPTSTR pTitleName) {
   ZeroMemory(&ofn, sizeof(ofn));
   
   ofn.lStructSize = sizeof(OPENFILENAME);
@@ -1107,6 +1157,7 @@ BOOL SaveFileDialog(HWND hwnd, LPTSTR pFileName, LPTSTR pTitleName, LPTSTR pFilt
 }
 
 // width and height are in pixels
+// called when creating a new font file
 struct FONT *InitFontData(struct FONT *font, const int width, const int height, const int start, const int count, const int fixed, const char *name) {
   int i, w;
   
@@ -1124,26 +1175,26 @@ struct FONT *InitFontData(struct FONT *font, const int width, const int height, 
     info[i].width = width;
   }
   
-  memcpy(font->sig, "FONT", 4);
+  memcpy(font->sig, "Font", 4);
   font->height = height;
-  font->count = count;
   font->max_width = width;
+  font->info_start = sizeof(struct FONT);
+  font->start = start;
+  font->count = count;
   font->datalen = (w * count);
   font->total_size = sz;
-  font->start = start;
   font->flags = (fixed) ? FLAGS_FIXED_WIDTH : 0;
-  font->version = FILE_VERSION;
-  font->type = FILE_TYPE;
-  font->type_vers = TYPE_VERSION;
-  strcpy(font->name, name);
+  strncpy(font->name, name, MAX_NAME_LEN-1);
+  font->name[MAX_NAME_LEN-1] = '\0';
   
   return font;
 }
 
 void SaveFile(HWND hwnd, struct FONT *font) {
-  bit32u i, w;
+  int i;
+  bit32u w;
   FILE *fp;
-  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + sizeof(struct FONT));
+  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + font->info_start);
   
   // open the file (truncating it if already exists)
   if ((fp = fopen(szFileName, "w+b")) == NULL)
@@ -1153,7 +1204,7 @@ void SaveFile(HWND hwnd, struct FONT *font) {
   //  this size before we write it.
   w = ((((info[font->count - 1].width * font->height) + 7) & ~7) / 8); // bytes needed to store the whole char
   font->datalen = (info[font->count - 1].index + w);
-  font->total_size = sizeof(struct FONT) + (sizeof(struct FONT_INFO) * font->count) + font->datalen;
+  font->total_size = font->info_start + (sizeof(struct FONT_INFO) * font->count) + font->datalen;
   
   // also run through it to catch the widest char
   w = 0;
@@ -1190,42 +1241,15 @@ struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
     return NULL;
   }
   
-  if (memcmp(font->sig, "FONT", 4)) {
+  // check for the old format
+  if (memcmp(font->sig, "FONT", 4) == 0) {
+    MessageBox(hwnd, "Found old format.\nUse CONV to convert to new format and then try again.", "Error", MB_OK);
+    fclose(fp);
+    return NULL;
+  }
+  
+  if (memcmp(font->sig, "Font", 4)) {
     MessageBox(hwnd, "File Signature Error", "Error", MB_OK);
-    fclose(fp);
-    return NULL;
-  }
-
-  
-  
-  // TODO:
-  // just in case someone created a font before we added these version fields, 
-  //   automatically adjust these fields when opening
-  // This is highly unlikely that anyone did, but we do it anyway.
-  //  We can remove these later, because as soon as someone saves a font, these fields are updated.
-  font->version = FILE_VERSION;
-  font->type = FILE_TYPE;
-  font->type_vers = TYPE_VERSION;
-  
-  
-  
-  // check to file version.  We currently only support version 1.0
-  if (font->version != FILE_VERSION) {
-    MessageBox(hwnd, "Incorrect File Version Found", "Error", MB_OK);
-    fclose(fp);
-    return NULL;
-  }
-
-  // check to file type.  We currently only support type 0
-  if (font->type != FILE_TYPE) {
-    MessageBox(hwnd, "Incorrect File Type Found", "Error", MB_OK);
-    fclose(fp);
-    return NULL;
-  }
-  
-  // check to type version.  We currently only support version 1.0 of type 0
-  if (font->type_vers != TYPE_VERSION) {
-    MessageBox(hwnd, "Incorrect Type Version Found", "Error", MB_OK);
     fclose(fp);
     return NULL;
   }
@@ -1248,7 +1272,7 @@ bit8u GetBit(bit8u *p, const int i) {
 int LoadCurChar(HWND hwnd, struct FONT *font, const int ch) {
   int x, y, i;
   bit8u *p;
-  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + sizeof(struct FONT));
+  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + font->info_start);
   bit8u *data = (bit8u *) ((bit8u *) info + (sizeof(struct FONT_INFO) * font->count));
   
   i = 0;
@@ -1291,7 +1315,7 @@ void PutBit(bit8u *p, const int i, const char val) {
 void SaveCurChar(struct FONT *font, const int ch) {
   bit32u x, y, i;
   bit8u *p;
-  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + sizeof(struct FONT));
+  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + font->info_start);
   bit8u *data = (bit8u *) ((bit8u *) info + (sizeof(struct FONT_INFO) * font->count));
 
   i = 0;
@@ -1315,8 +1339,8 @@ void SaveCurChar(struct FONT *font, const int ch) {
 //    info[ch].flags &= ~INFO_IS_DROPPED;
 }
 
-void FontMoveData(struct FONT *font, bit32u ch, int delta) {
-  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + sizeof(struct FONT));
+void FontMoveData(struct FONT *font, int ch, int delta) {
+  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + font->info_start);
   bit8u *data = (bit8u *) ((bit8u *) info + (sizeof(struct FONT_INFO) * font->count));
   
   if (ch < font->count) {
@@ -1328,25 +1352,23 @@ void FontMoveData(struct FONT *font, bit32u ch, int delta) {
 struct FONT *ConvertFont(HWND hwnd, struct FONT *font, const int height, const int width, const int fixed, const int ending, const char *name) {
   int i, j, w, sz, dw = 0, dh = 0;
   int nCount = ending + 1 - font->start;
-  int n = (nCount < font->count) ? nCount : (int) font->count;
+  int n = (nCount < font->count) ? nCount : font->count;
   
   w = ((((width * height) + 7) & ~7) / 8); // bytes needed to store the whole char
   sz = sizeof(struct FONT) + ((sizeof(struct FONT_INFO) + w) * nCount);
   struct FONT *nFont = (struct FONT *) calloc(sz + 4096, 1); // plus 4096 to compensate for widening characters
   struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) nFont + sizeof(struct FONT));
   
-  memcpy(nFont->sig, "FONT", 4);
+  memcpy(nFont->sig, "Font", 4);
   nFont->height = height;
   nFont->max_width = width;
+  nFont->info_start = sizeof(struct FONT);
+  nFont->start = font->start;
   nFont->count = nCount;
   nFont->datalen = (w * height * nCount);
   nFont->total_size = sz;
-  nFont->start = font->start;
   nFont->flags = (fixed) ? FLAGS_FIXED_WIDTH : 0;
-  nFont->version = FILE_VERSION;
-  nFont->type = FILE_TYPE;
-  nFont->type_vers = TYPE_VERSION;
-  strcpy(nFont->name, name);
+  strncpy(nFont->name, name, MAX_NAME_LEN - 1);
   
   if (width < curw)
     dw = ((curw - width) + 1) / 2;
@@ -1368,7 +1390,6 @@ struct FONT *ConvertFont(HWND hwnd, struct FONT *font, const int height, const i
         grid[y][x] = back[y][x] = 0;
     info[i].width = width;
     info[i].index = (w * i);
-    info[i].flags = 0;
     SaveCurChar(nFont, i);
     info[i].deltaw = 0;
     info[i].deltax = 0;
@@ -1384,10 +1405,11 @@ struct FONT *ConvertFont(HWND hwnd, struct FONT *font, const int height, const i
 
 void DumpFont(HWND hwnd, struct FONT *font) {
   FILE *fp;
-  bit32u i, j, k, l;
+  int i;
+  bit32u j, k, l;
   bit8u *p;
   
-  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + sizeof(struct FONT));
+  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + font->info_start);
   bit8u *data = (bit8u *) ((bit8u *) info + (sizeof(struct FONT_INFO) * font->count));
   
   strcpy(szStr, "");
@@ -1397,42 +1419,41 @@ void DumpFont(HWND hwnd, struct FONT *font) {
       return;
     
     // the font structure
+    fprintf(fp, "/* Depending on your compiler, you may need to tweek this code */\r\n");
     fprintf(fp, "struct FONT font%ix%i = {\r\n  {\r\n", font->max_width, font->height);
     
-    fprintf(fp, "    '");
+    fprintf(fp, "      '");
     for (i=0; i<4; i++)
       fprintf(fp, "%c", font->sig[i]);
     fprintf(fp, "',\r\n");
-    fprintf(fp, "     % 5i,        // height of font in pixels\r\n"
-                "     % 5i,        // max_width\r\n"
-                "     % 5i,        // start\r\n"
-                "     % 5i,        // count of chars in set\r\n"
-                "     % 5i,        // data len\r\n"
-                "     % 5i,        // total size\r\n"
-                "     0x%08X,   // flags\r\n"
-                "     0x%02X,         // version\r\n"
-                "     0x%02X,         // type\r\n"
-                "     0x%02X,         // type version\r\n"
-                "     { 0, },       // reserved\r\n"
-                "     '%s'      // name\r\n"
-                "     { 0, },       // reserved\r\n },\r\n",
-                font->height, font->max_width, font->start, font->count, font->datalen, font->total_size, font->flags, font->version, font->type, font->type_vers, font->name);
+    fprintf(fp, "       % 5i,        // height of font in pixels\r\n"
+                "       % 5i,        // max_width\r\n"
+                "  % 10i,       // start\r\n"
+                "  % 10i,       // count of chars in set\r\n"
+                "  % 10i,       // data len\r\n"
+                "  % 10i,       // total size\r\n"
+                "      0x%08X,   // flags\r\n"
+                "      '%s',  // name\r\n"
+                "       { 0, },      // reserved\r\n },\r\n",
+                font->height, font->max_width, font->start, font->count, font->datalen, font->total_size, font->flags, font->name);
     
     // dump the font info
     fprintf(fp, "\r\n/* Font Info */\r\n   {\r\n");
     for (i=0; i<font->count; i++) {
-      fprintf(fp, "     /* character %i */\r\n  ", i);
-      if (i < ((bit32u) font->count - 1))
-        fprintf(fp, "    { % 5i, % 3i, 0x%02X, % 2i, % 2i, % 2i, 0 },\r\n", info[i].index, info[i].width, info[i].flags, info[i].deltax, info[i].deltay, info[i].deltaw);
+      if (hexcodes) fprintf(fp, "     /* character 0x%06X */\r\n  ", i);
+      else          fprintf(fp, "     /* character %i */\r\n  ", i);
+      if (i < (font->count - 1))
+        fprintf(fp, "    { % 10i, % 3i, % 2i, % 2i, % 2i, { 0, } },\r\n", info[i].index, info[i].width, info[i].deltax, info[i].deltay, info[i].deltaw);
       else
-        fprintf(fp, "    { % 5i, % 3i, 0x%02X, % 2i, % 2i, % 2i, 0 }\r\n", info[i].index, info[i].width, info[i].flags, info[i].deltax, info[i].deltay, info[i].deltaw);
+        fprintf(fp, "    { % 10i, % 3i, % 2i, % 2i, % 2i, { 0, } }\r\n", info[i].index, info[i].width, info[i].deltax, info[i].deltay, info[i].deltaw);
     }
     fprintf(fp, "    },\r\n");
     
     // dump the data
     fprintf(fp, "\r\n/* Data */\r\n  {\r\n");
     for (i=0; i<font->count; i++) {
-      fprintf(fp, "    /* character %i */\r\n  ", i);
+      if (hexcodes) fprintf(fp, "     /* character 0x%06X */\r\n  ", i);
+      else          fprintf(fp, "     /* character %i */\r\n  ", i);
       p = (bit8u *) (data + info[i].index);
       k = ((font->height * info[i].width) + 7) / 8;
       for (j=0; j<k; j++) {
@@ -1451,39 +1472,9 @@ void DumpFont(HWND hwnd, struct FONT *font) {
       }
       fprintf(fp, "*/\r\n");
     }
-    fprintf(fp, "  }\r\n};\r\n\r\n");
-
-    /*
-    // dump the data
-    for (i=0; i<font->count; i++) {
-      fprintf(fp, "\r\n ; character %i\r\n", i);
-      p = (bit8u *) (data + info[i].index);
-      l = 0;
-      for (j=0; j<font->height; j++) {
-        fprintf(fp, "   db  ");
-        for (k=0; k<info[i].width; k++)
-          fprintf(fp, "%i", (GetBit(p, l++)) ? 1 : 0);
-        fprintf(fp, "b\r\n");
-      }
-    }
-    */
-
-    
+    fprintf(fp, "  }\r\n};\r\n");
 
     fclose(fp);
   } else
     MessageBox(hwnd, "Was not able to create dump file...", "Error", MB_OK);
 }
-
-
-/*
-
-  !"#$%&'()*+,-./
-  0123456789
-  :;<=>?@
-  ABCDEFGHIJKLMNOPQRSTUVWXYZ
-  [\]^_'
-  abcdefghijklmnopqrstuvwxyz
-  {|}~
-
-*/

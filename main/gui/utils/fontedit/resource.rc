@@ -40,6 +40,7 @@ BEGIN
     POPUP "&View"
     BEGIN
         MENUITEM "&Show Grid Numbers",          ID_VIEW_SHOW_NUMS, GRAYED
+        MENUITEM "&Show Hexidecimal",           ID_VIEW_HEX_CODES, GRAYED
     END
     POPUP "&Utilities"
     BEGIN
@@ -94,19 +95,22 @@ BEGIN
                     15,7,39,10,WS_EX_RIGHT | WS_EX_STATICEDGE
     RTEXT           "Average width. (ex: 8):",IDC_STATIC,57,7,94,13
     RTEXT           "     And fixed height. (8 -> 24):",IDC_STATIC,11,22,140,13
-    RTEXT           "     Starting ASCII Number. (ex: 0):",IDC_STATIC,7,37,144,13
-    RTEXT           "Ending ASCII Number. (ex: 127):",IDC_STATIC,7,52,144,13
+    RTEXT           "     Starting Code Number. (ex: 0):",IDC_STATIC,7,37,144,13
+    RTEXT           "Ending Code Number. (ex: 127):",IDC_STATIC,7,52,144,13
     RTEXT           "Name of Font: ",IDC_STATIC,7,67,80,13
 END
 
-IDD_GOTO DIALOG DISCARDABLE  0, 0, 120, 50
+IDD_GOTO DIALOG DISCARDABLE  0, 0, 175, 59
+STYLE WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Please enter index"
 FONT 8, "Courier New"
 BEGIN
-    EDITTEXT        IDC_INDEX,88,5,28,12,ES_AUTOHSCROLL | ES_NUMBER | ES_RIGHT
-    DEFPUSHBUTTON   "Okay",IDOK,70,25,35,14
-    PUSHBUTTON      "Cancel",IDCANCEL,20,25,35,14
+    EDITTEXT        IDC_INDEX,84,5,50,12,ES_RIGHT | ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "Okay",IDOK,100,38,35,14
+    PUSHBUTTON      "Cancel",IDCANCEL,50,38,35,14
     RTEXT           "Index. (ex: 128):",IDC_STATIC,2,7,80,13
+    EDITTEXT        IDC_MAX_STR,13,21,150,13,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_READONLY | NOT WS_TABSTOP
 END
 
 /////////////////////////////////////////////////////////////////////////////

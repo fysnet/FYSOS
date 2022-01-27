@@ -25,26 +25,17 @@
 #define ID_EDIT_PASTE                   1009
 #define ID_EDIT_GOTO                    1010
 #define ID_VIEW_SHOW_NUMS               1011
-#define IDC_CONV_CUR                    1012
-#define IDC_NAME_CUR                    1013
-#define IDC_DUMP                        1014
-#define IDC_ABOUT                       1015
-#define IDC_WIDTH                       1016
-#define IDC_HEIGHT                      1017
-#define IDC_START                       1018
-#define IDC_ENDING                      1019
-#define IDC_FONT_NAME                   1020
-#define IDC_INDEX                       1021
-#define IDC_FIXED                       1022
+#define ID_VIEW_HEX_CODES               1012
+#define IDC_CONV_CUR                    1013
+#define IDC_NAME_CUR                    1014
+#define IDC_DUMP                        1015
+#define IDC_ABOUT                       1016
+#define IDC_WIDTH                       1017
+#define IDC_HEIGHT                      1018
+#define IDC_START                       1019
+#define IDC_ENDING                      1020
+#define IDC_FONT_NAME                   1021
+#define IDC_INDEX                       1022
+#define IDC_FIXED                       1023
+#define IDC_MAX_STR                     1024
 #define IDC_STATIC                      -1
-
-// Next default values for new objects
-// 
-#ifdef APSTUDIO_INVOKED
-#ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        102
-#define _APS_NEXT_COMMAND_VALUE         1019
-#define _APS_NEXT_CONTROL_VALUE         1101
-#define _APS_NEXT_SYMED_VALUE           201
-#endif
-#endif
