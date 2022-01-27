@@ -1,8 +1,14 @@
-#### This is the source code to the [Font Editor](http://www.fysnet.net/fontedit/index.htm).
+#### This is the source code to the [Font Editor](https://www.fysnet.net/fontedit/index.htm).
 
 It is for Windows only, but can be compiled for 32-bit or 64-bit versions.
+(Please let me know if you have compiled it for another platform)
 
-#### A note:
+#### A few notes:
 If you load the resource.rc file into the Visual Studio IDE, the IDE will alter
 the file and break the build.  If you must edit the resource.rc file, make sure and use
 a text editor, not the Visual Studio IDE editor.
+
+This version of the Font file will break the [GUI Demo code](https://github.com/fysnet/FYSOS/tree/master/main/gui/source/gui_demo) included for this book.  If you use the GUI Demo code and this new Font file version, you will need to modify the GUI Demo code to use this new font version file.  I will see if I can get around to updating the source code to match.
+
+Thank you,
+Ben
