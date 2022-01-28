@@ -74,7 +74,7 @@
  *   When using the Visual Studio IDE, do not edit the resource.rc file within
  *    the IDE's editor.  It will add items that will break this build.
  *
- *  Last updated: 25 Jan 2022
+ *  Last updated: 28 Jan 2022
  *
  *   This code was built with Visual Studio 6.0 (for 32-bit Windows XP)
  *    and Visual Studio 2019 (for 64-bit Windows 10)
@@ -99,7 +99,6 @@
 OPENFILENAME ofn;
 char szFileName[512];
 char szClassName[] = "Font Editor";
-char szStr[512];
 char szFontName[MAX_NAME_LEN] = "";
 
 HMENU menu;
@@ -325,6 +324,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
   static struct FONT *font = NULL;
   struct FONT_INFO *info;
   bit8u *data;
+  char szStr[256];
   
   PAINTSTRUCT ps;
   static int x, y, x1, y1;
@@ -473,6 +473,18 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           
           if (ret == IDCANCEL)
             return 0;
+
+          // check the limits
+          if ((tcurw < MINW) || (tcurw > MAXW) ||
+              (tcurh < MINH) || (tcurh > MAXH) ||
+              (((tending + 1) - tstart) > MAX_COUNT)) {
+            sprintf(szStr, "Outside of limits. \r\n"
+                           " Width: 1 -> %i\r\n"
+                           "Height: 5 -> %i\r\n"
+                           " Count: 1 -> %i\r\n", MAXW, MAXH, MAX_COUNT);
+            MessageBox(hwnd, szStr, "Warning!!!", MB_ICONEXCLAMATION);
+            return 0;
+          }
           
           strcpy(szFileName, "");
           
@@ -665,6 +677,18 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           
           if (ret == IDCANCEL)
             return 0;
+
+          // check the limits
+          if ((tcurw < MINW) || (tcurw > MAXW) ||
+              (tcurh < MINH) || (tcurh > MAXH) ||
+              (((tending + 1) - tstart) > MAX_COUNT)) {
+            sprintf(szStr, "Outside of limits. \r\n"
+                           " Width: 1 -> %i\r\n"
+                           "Height: 5 -> %i\r\n"
+                           " Count: 1 -> %i\r\n", MAXW, MAXH, MAX_COUNT);
+            MessageBox(hwnd, szStr, "Warning!!!", MB_ICONEXCLAMATION);
+            return 0;
+          }
           
           result = SaveFileDialog(hwnd, szFileName, (TCHAR *) "Save the converted Font File.", (TCHAR *) "Font Files (*.fnt)\0*.fnt\0\0");
           if (result) {
@@ -976,7 +1000,8 @@ void DrawTextBox(HDC hdc, DWORD fill, const int x, const int y, const int w, con
 }
 
 void SetTitleStr(const HWND hwnd) {
-
+  char szStr[512];
+  
   if (strlen(szFileName) > 0)
     sprintf(szStr, "%s -- %s", szClassName, szFileName);
   else
@@ -1173,14 +1198,15 @@ BOOL SaveFileDialog(HWND hwnd, LPTSTR pFileName, LPTSTR pTitleName, LPTSTR pFilt
 // called when creating a new font file
 struct FONT *InitFontData(struct FONT *font, const int width, const int height, const int start, const int count, const int fixed, const char *name) {
   int i, w;
+  size_t sz;
   
   // if font already allocated, free it first
   if (font)
     free(font);
   
   w = ((((width * height) + 7) & ~7) / 8); // bytes needed per char to store the whole char
-  int sz = sizeof(struct FONT) + ((sizeof(struct FONT_INFO) + w) * count);
-  font = (struct FONT *) calloc(sz + 4096, 1); // plus 4096 to compensate for widening characters
+  sz = sizeof(struct FONT) + ((sizeof(struct FONT_INFO) + w) * count);
+  font = (struct FONT *) calloc(sz + MAX_EXTRA_MEM, 1); // plus MAX_EXTRA_MEM to compensate for widening characters
   struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + sizeof(struct FONT));
   
   for (i=0; i<count; i++) {
@@ -1195,7 +1221,7 @@ struct FONT *InitFontData(struct FONT *font, const int width, const int height, 
   font->start = start;
   font->count = count;
   font->datalen = (w * count);
-  font->total_size = sz;
+  font->total_size = (bit32u) sz;
   font->flags = (fixed) ? FLAGS_FIXED_WIDTH : 0;
   strncpy(font->name, name, MAX_NAME_LEN-1);
   font->name[MAX_NAME_LEN-1] = '\0';
@@ -1234,7 +1260,7 @@ void SaveFile(HWND hwnd, struct FONT *font) {
 
 struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
   FILE *fp;
-  int sz;
+  size_t sz;
   
   // Open the file.
   if ((fp = fopen(szFileName, "r+b")) == NULL)
@@ -1247,7 +1273,7 @@ struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
   sz = ftell(fp);
   rewind(fp);
   
-  font = (struct FONT *) malloc(sz + 4096); // plus 4096 to compensate for widening characters
+  font = (struct FONT *) malloc(sz + MAX_EXTRA_MEM); // plus MAX_EXTRA_MEM to compensate for widening characters
   
   if (fread(font, 1, sz, fp) != sz) {
     fclose(fp);
@@ -1363,13 +1389,14 @@ void FontMoveData(struct FONT *font, int ch, int delta) {
 }
 
 struct FONT *ConvertFont(HWND hwnd, struct FONT *font, const int height, const int width, const int fixed, const int ending, const char *name) {
-  int i, j, w, sz, dw = 0, dh = 0;
+  int i, j, w, dw = 0, dh = 0;
   int nCount = ending + 1 - font->start;
   int n = (nCount < font->count) ? nCount : font->count;
+  size_t sz;
   
   w = ((((width * height) + 7) & ~7) / 8); // bytes needed to store the whole char
   sz = sizeof(struct FONT) + ((sizeof(struct FONT_INFO) + w) * nCount);
-  struct FONT *nFont = (struct FONT *) calloc(sz + 4096, 1); // plus 4096 to compensate for widening characters
+  struct FONT *nFont = (struct FONT *) calloc(sz + MAX_EXTRA_MEM, 1); // plus MAX_EXTRA_MEM to compensate for widening characters
   struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) nFont + sizeof(struct FONT));
   
   memcpy(nFont->sig, "Font", 4);
@@ -1379,7 +1406,7 @@ struct FONT *ConvertFont(HWND hwnd, struct FONT *font, const int height, const i
   nFont->start = font->start;
   nFont->count = nCount;
   nFont->datalen = (w * height * nCount);
-  nFont->total_size = sz;
+  nFont->total_size = (bit32u) sz;
   nFont->flags = (fixed) ? FLAGS_FIXED_WIDTH : 0;
   strncpy(nFont->name, name, MAX_NAME_LEN - 1);
   
@@ -1421,6 +1448,7 @@ void DumpFont(HWND hwnd, struct FONT *font) {
   int i;
   bit32u j, k, l;
   bit8u *p;
+  char szStr[512];
   
   struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + font->info_start);
   bit8u *data = (bit8u *) ((bit8u *) info + (sizeof(struct FONT_INFO) * font->count));

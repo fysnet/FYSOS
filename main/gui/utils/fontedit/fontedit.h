@@ -57,15 +57,15 @@
  */
 
 /*
- *  Last updated: 25 Jan 2022
+ *  Last updated: 28 Jan 2022
  */
 
 #pragma pack(push, 1)
 
 #ifdef _WIN64
-  #define VERSION_INFO "Font Edit\nVersion 1.50.01 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.50.03 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #else
-  #define VERSION_INFO "Font Edit\nVersion 1.50.01 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.50.03 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #endif
 
 #define APP_WIDTH       700
@@ -74,9 +74,25 @@
 #define APP_HEIGHT_TALL 800
 #define APP_GET_HEIGHT ((font->height >= 20) ? APP_HEIGHT_TALL : APP_HEIGHT)
 
-// max height and width of our font
+// max height and width of our font (app only, specs allow much more)
+#define MINW   1
+#define MINH   5
 #define MAXW  24
 #define MAXH  24
+
+// max count of chars we allow (app only, specs allow much more)
+#define MAX_COUNT 1024
+
+// We currently don't have any way to know if we need to extend the memory used for the bitmap
+//  when the user widens a char.  Therefore, we do the following:
+// We allocate an extra amount of memory for the char bitmap array, so that when the user
+//  widens a char, we still have enough memory to store the larger bitmap.
+// However, we need to be sure and allocate enough extra.
+//  The extreme case would be if the user created a MINW x MAXH x MAX_COUNT set, then 
+//  widened each character to MAXW.  Therefore, the extra needs to be the following:
+//   extra_bits = (((MAXW - MINW) * MAXH) * MAX_COUNT);  // in bits
+// With the current settings above, this amounts to just over 64k of RAM.  Peanuts....
+#define MAX_EXTRA_MEM (((((MAXW - MINW) * MAXH) * MAX_COUNT) >> 3) + 64)  // 64 extra beyond just to make sure
 
 #define FLAGS_FIXED_WIDTH  (1 << 0)
 
