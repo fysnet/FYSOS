@@ -265,6 +265,7 @@ LRESULT CALLBACK GotoDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
 LRESULT CALLBACK SizeDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
   HWND hOwner;
   RECT rcOwner;
+  char szStr[256];
   
   switch (message) {
     case WM_INITDIALOG:
@@ -275,8 +276,15 @@ LRESULT CALLBACK SizeDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
       
       SetDlgItemInt(hDlg, IDC_WIDTH, DIAG_VALUE(tcurw), FALSE);
       SetDlgItemInt(hDlg, IDC_HEIGHT, DIAG_VALUE(tcurh), FALSE);
-      SetDlgItemInt(hDlg, IDC_START, DIAG_VALUE(tstart), FALSE);
-      SetDlgItemInt(hDlg, IDC_ENDING, DIAG_VALUE(tending), FALSE);
+      if (hexcodes) {
+        sprintf(szStr, "0x%06X", DIAG_VALUE(tstart));
+        SetDlgItemText(hDlg, IDC_START, szStr);
+        sprintf(szStr, "0x%06X", DIAG_VALUE(tending));
+        SetDlgItemText(hDlg, IDC_ENDING, szStr);
+      } else {
+        SetDlgItemInt(hDlg, IDC_START, DIAG_VALUE(tstart), FALSE);
+        SetDlgItemInt(hDlg, IDC_ENDING, DIAG_VALUE(tending), FALSE);
+      }
       if (tfixed)
         SendMessage(GetDlgItem(hDlg, IDC_FIXED), BM_SETCHECK, BST_CHECKED, 0);
       EnableWindow(GetDlgItem(hDlg, IDC_WIDTH), DIAG_ENABLED(tcurw));
@@ -290,11 +298,15 @@ LRESULT CALLBACK SizeDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
     case WM_COMMAND:
       switch(LOWORD(wParam)) {
         case IDOK:
-          tcurw = GetDlgItemInt(hDlg, IDC_WIDTH, NULL, FALSE);
-          tcurh = GetDlgItemInt(hDlg, IDC_HEIGHT, NULL, FALSE);
-          tstart = GetDlgItemInt(hDlg, IDC_START, NULL, FALSE);
-          tending = GetDlgItemInt(hDlg, IDC_ENDING, NULL, FALSE);
           tfixed = (SendMessage(GetDlgItem(hDlg, IDC_FIXED), BM_GETCHECK, 0, 0) == BST_CHECKED);
+          GetDlgItemText(hDlg, IDC_WIDTH, szStr, 256);
+          tcurw = (int) strtol(szStr, NULL, 0);  // will convert "0x" to hex, "O" to Octol, else decimal
+          GetDlgItemText(hDlg, IDC_HEIGHT, szStr, 256);
+          tcurh = (int) strtol(szStr, NULL, 0);  // will convert "0x" to hex, "O" to Octol, else decimal
+          GetDlgItemText(hDlg, IDC_START, szStr, 256);
+          tstart = (int) strtol(szStr, NULL, 0);  // will convert "0x" to hex, "O" to Octol, else decimal
+          GetDlgItemText(hDlg, IDC_ENDING, szStr, 256);
+          tending = (int) strtol(szStr, NULL, 0);  // will convert "0x" to hex, "O" to Octol, else decimal
           GetDlgItemText(hDlg, IDC_FONT_NAME, szFontName, MAX_NAME_LEN);
           EndDialog(hDlg, IDOK);
           return TRUE;
@@ -331,6 +343,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
       menu = GetMenu(hwnd);
       CheckMenuItem(menu, ID_VIEW_SHOW_NUMS, drawnumbers ? MF_CHECKED : MF_UNCHECKED);
       CheckMenuItem(menu, ID_VIEW_HEX_CODES, hexcodes ? MF_CHECKED : MF_UNCHECKED);
+      EnableMenuItem(menu, ID_VIEW_HEX_CODES, MF_ENABLED);
       
       // set the color of the background of the menu
       hbrush = CreateSolidBrush(GetSysColor(COLOR_MENUBAR));
@@ -983,7 +996,7 @@ void DisableItems(HMENU menu) {
   EnableMenuItem(menu, ID_EDIT_CLEAR, MF_GRAYED);
   EnableMenuItem(menu, ID_EDIT_GOTO, MF_GRAYED);
   EnableMenuItem(menu, ID_VIEW_SHOW_NUMS, MF_GRAYED);
-  EnableMenuItem(menu, ID_VIEW_HEX_CODES, MF_GRAYED);
+  //EnableMenuItem(menu, ID_VIEW_HEX_CODES, MF_GRAYED);
   EnableMenuItem(menu, IDC_CONV_CUR, MF_GRAYED);
   EnableMenuItem(menu, IDC_NAME_CUR, MF_GRAYED);
   EnableMenuItem(menu, IDC_DUMP, MF_GRAYED);
@@ -1017,7 +1030,7 @@ void EnableItems(HMENU menu, struct FONT *font) {
   EnableMenuItem(menu, ID_EDIT_CLEAR, MF_ENABLED);
   EnableMenuItem(menu, ID_EDIT_GOTO, MF_ENABLED);
   EnableMenuItem(menu, ID_VIEW_SHOW_NUMS, MF_ENABLED);
-  EnableMenuItem(menu, ID_VIEW_HEX_CODES, MF_ENABLED);
+  //EnableMenuItem(menu, ID_VIEW_HEX_CODES, MF_ENABLED);
   EnableMenuItem(menu, IDC_CONV_CUR, MF_ENABLED);
   EnableMenuItem(menu, IDC_NAME_CUR, MF_ENABLED);
   EnableMenuItem(menu, IDC_DUMP, MF_ENABLED);
