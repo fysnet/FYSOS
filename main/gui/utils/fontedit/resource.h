@@ -38,4 +38,6 @@
 #define IDC_INDEX                       1022
 #define IDC_FIXED                       1023
 #define IDC_MAX_STR                     1024
+#define IDC_PSF_FONT                    1025
+#define IDC_VIEW_INFO                   1026
 #define IDC_STATIC                      -1

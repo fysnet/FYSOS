@@ -74,7 +74,7 @@
  *   When using the Visual Studio IDE, do not edit the resource.rc file within
  *    the IDE's editor.  It will add items that will break this build.
  *
- *  Last updated: 28 Jan 2022
+ *  Last updated: 29 Jan 2022
  *
  *   This code was built with Visual Studio 6.0 (for 32-bit Windows XP)
  *    and Visual Studio 2019 (for 64-bit Windows 10)
@@ -325,6 +325,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
   struct FONT_INFO *info;
   bit8u *data;
   char szStr[256];
+  char szExt[64];
   
   PAINTSTRUCT ps;
   static int x, y, x1, y1;
@@ -343,7 +344,6 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
       menu = GetMenu(hwnd);
       CheckMenuItem(menu, ID_VIEW_SHOW_NUMS, drawnumbers ? MF_CHECKED : MF_UNCHECKED);
       CheckMenuItem(menu, ID_VIEW_HEX_CODES, hexcodes ? MF_CHECKED : MF_UNCHECKED);
-      EnableMenuItem(menu, ID_VIEW_HEX_CODES, MF_ENABLED);
       
       // set the color of the background of the menu
       hbrush = CreateSolidBrush(GetSysColor(COLOR_MENUBAR));
@@ -478,10 +478,10 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           if ((tcurw < MINW) || (tcurw > MAXW) ||
               (tcurh < MINH) || (tcurh > MAXH) ||
               (((tending + 1) - tstart) > MAX_COUNT)) {
-            sprintf(szStr, "Outside of limits. \r\n"
-                           " Width: 1 -> %i\r\n"
-                           "Height: 5 -> %i\r\n"
-                           " Count: 1 -> %i\r\n", MAXW, MAXH, MAX_COUNT);
+            sprintf(szStr, "Outside of limits. \n"
+                           " Width: 1 -> %i\n"
+                           "Height: 5 -> %i\n"
+                           " Count: 1 -> %i\n", MAXW, MAXH, MAX_COUNT);
             MessageBox(hwnd, szStr, "Warning!!!", MB_ICONEXCLAMATION);
             return 0;
           }
@@ -511,6 +511,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           return 0;
           
         case ID_FILE_OPEN:
+        case IDC_PSF_FONT:
           if (drawgrid)
             SaveCurChar(font, cur_char);
           
@@ -523,12 +524,19 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             }
           strcpy(szFileName, "");
           
-          result = OpenFileDialog(hwnd, szFileName, (TCHAR *) "Open a Font File.");
+          if (LOWORD(wParam) == ID_FILE_OPEN) {
+            strcpy(szStr, "Open a Font File.");
+            memcpy(szExt, "Font Files (*.fnt)\0*.fnt\0\0", 27);
+          } else {
+            strcpy(szStr, "Open a PSF Font File.");
+            memcpy(szExt, "PSF Font Files (*.psf*)\0*.psf*\0\0", 33);
+          }
+          result = OpenFileDialog(hwnd, szFileName, (TCHAR *) szStr, (TCHAR *) szExt);
           if (result) {
-            // set the title of the window
-            SetTitleStr(hwnd);
-
-            font = OpenFile(hwnd, font);
+            if (LOWORD(wParam) == ID_FILE_OPEN)
+              font = OpenFile(hwnd, font);
+            else
+              font = OpenFilePSF(hwnd, font);
             if (font == NULL) {
               MessageBox(hwnd, "Error Loading File", "Warning!!!", MB_ICONEXCLAMATION | MB_OK);
               drawgrid = FALSE;
@@ -547,13 +555,20 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             tstart = font->start;
             tending = font->count - 1;
             EnableItems(menu, font);
-            EnableMenuItem(menu, ID_FILE_SAVE, MF_ENABLED);
+
+            if (LOWORD(wParam) == IDC_PSF_FONT) {
+              EnableMenuItem(menu, ID_FILE_SAVE, MF_GRAYED);
+              isdirty = TRUE;
+              strcpy(szFileName, "untitled.fnt");
+            } else {
+              EnableMenuItem(menu, ID_FILE_SAVE, MF_ENABLED);
+              isdirty = FALSE;
+            }
 
             // update the title of the window
             SetTitleStr(hwnd);
             
             InvalidateRect(hwnd, NULL, TRUE);
-            isdirty = FALSE;
           }
           return 0;
           
@@ -663,6 +678,26 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           InvalidateRect(hwnd, NULL, TRUE);
           break;
 
+        case IDC_VIEW_INFO:
+          sprintf(szStr, "  Font Name:  %s\n"
+                         "   Starting: 0x%06X (%i)\n"
+                         "     Ending: 0x%06X (%i)\n"
+                         "      Count: %u\n"
+                         "      Width: %u %s\n"
+                         "     Height: %u\n"
+                         " Info Start: %u\n"
+                         " Bitmap Length: %u (bytes)\n", 
+            font->name,
+            font->start, font->start, 
+            font->start + font->count - 1, font->start + font->count - 1, 
+            font->count,
+            font->max_width, (font->flags & 1) ? "(fixed)" : "", 
+            font->height,
+            font->info_start, 
+            font->datalen);
+          MessageBox(hwnd, szStr, szFileName, MB_ICONINFORMATION | MB_OK);
+          break;
+
         case IDC_CONV_CUR:
           SaveCurChar(font, cur_char);
           tstart = DIAG_DISABLE(font->start);
@@ -682,10 +717,10 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           if ((tcurw < MINW) || (tcurw > MAXW) ||
               (tcurh < MINH) || (tcurh > MAXH) ||
               (((tending + 1) - tstart) > MAX_COUNT)) {
-            sprintf(szStr, "Outside of limits. \r\n"
-                           " Width: 1 -> %i\r\n"
-                           "Height: 5 -> %i\r\n"
-                           " Count: 1 -> %i\r\n", MAXW, MAXH, MAX_COUNT);
+            sprintf(szStr, "Outside of limits. \n"
+                           " Width: 1 -> %i\n"
+                           "Height: 5 -> %i\n"
+                           " Count: 1 -> %i\n", MAXW, MAXH, MAX_COUNT);
             MessageBox(hwnd, szStr, "Warning!!!", MB_ICONEXCLAMATION);
             return 0;
           }
@@ -1021,7 +1056,7 @@ void DisableItems(HMENU menu) {
   EnableMenuItem(menu, ID_EDIT_CLEAR, MF_GRAYED);
   EnableMenuItem(menu, ID_EDIT_GOTO, MF_GRAYED);
   EnableMenuItem(menu, ID_VIEW_SHOW_NUMS, MF_GRAYED);
-  //EnableMenuItem(menu, ID_VIEW_HEX_CODES, MF_GRAYED);
+  EnableMenuItem(menu, IDC_VIEW_INFO, MF_GRAYED);
   EnableMenuItem(menu, IDC_CONV_CUR, MF_GRAYED);
   EnableMenuItem(menu, IDC_NAME_CUR, MF_GRAYED);
   EnableMenuItem(menu, IDC_DUMP, MF_GRAYED);
@@ -1055,7 +1090,7 @@ void EnableItems(HMENU menu, struct FONT *font) {
   EnableMenuItem(menu, ID_EDIT_CLEAR, MF_ENABLED);
   EnableMenuItem(menu, ID_EDIT_GOTO, MF_ENABLED);
   EnableMenuItem(menu, ID_VIEW_SHOW_NUMS, MF_ENABLED);
-  //EnableMenuItem(menu, ID_VIEW_HEX_CODES, MF_ENABLED);
+  EnableMenuItem(menu, IDC_VIEW_INFO, MF_ENABLED);
   EnableMenuItem(menu, IDC_CONV_CUR, MF_ENABLED);
   EnableMenuItem(menu, IDC_NAME_CUR, MF_ENABLED);
   EnableMenuItem(menu, IDC_DUMP, MF_ENABLED);
@@ -1149,7 +1184,7 @@ HWND CreateTrackBar(HWND hwnd, const int w, const int h) {
   return Slider;
 }
 
-BOOL OpenFileDialog(HWND hwnd, LPTSTR pFileName, LPTSTR pTitleName) {
+BOOL OpenFileDialog(HWND hwnd, LPTSTR pFileName, LPTSTR pTitleName, LPTSTR pFilter) {
   ZeroMemory(&ofn, sizeof(ofn));
   
   ofn.lStructSize = sizeof(OPENFILENAME);
@@ -1163,7 +1198,7 @@ BOOL OpenFileDialog(HWND hwnd, LPTSTR pFileName, LPTSTR pTitleName) {
   ofn.lpstrFileTitle = NULL;
   ofn.lpstrTitle = pTitleName;
   ofn.Flags = OFN_EXPLORER|OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST;
-  ofn.lpstrFilter = TEXT("Font Files (*.fnt)\0*.fnt\0\0");
+  ofn.lpstrFilter = pFilter;
   
   ofn.nMaxFile = 500;
   ofn.nMaxFileTitle = MAX_PATH;
@@ -1298,6 +1333,135 @@ struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
   return font;
 }
 
+// try to open a Linux PSFv1 or PSFv2 font file, then convert it to our format
+struct FONT *OpenFilePSF(HWND hwnd, struct FONT *font) {
+  bit8u header[32];
+  struct PSFv1_FONT *psfv1 = (struct PSFv1_FONT *) header;
+  struct PSFv2_FONT *psfv2 = (struct PSFv2_FONT *) header;
+  FILE *fp;
+  size_t sz;
+  int i, count, width, height, charsize, bytes_per_char, version;
+  
+  // Open the file.
+  if ((fp = fopen(szFileName, "r+b")) == NULL)
+    return NULL;
+  
+  if (font)
+    free(font);
+
+  // read in 32 bytes to get either header format
+  if (fread(&header, 1, sizeof(struct PSFv2_FONT), fp) != sizeof(struct PSFv2_FONT)) {
+    fclose(fp);
+    return NULL;
+  }
+
+  // check the sig to see which (if any) version it is
+  if ((header[0] == PSF1_MAGIC0) && (header[1] == PSF1_MAGIC1)) {
+    version = 1;
+    width = 8;
+    bytes_per_char =   // number of bytes per glyph
+      charsize =  
+      height = psfv1->charsize;
+    count = (psfv1->mode & PSF1_MODE512) ? 512 : 256;
+    // backup to the start of the bitmap
+    fseek(fp, 4, SEEK_SET);
+  } else if ((header[0] == PSF2_MAGIC0) && (header[1] == PSF2_MAGIC1) &&
+             (header[2] == PSF2_MAGIC2) && (header[3] == PSF2_MAGIC3)) {
+    version = 2;
+    width = psfv2->width;
+    height = psfv2->height;
+    count = (psfv2->length < MAX_EXTRA_MEM) ? psfv2->length : MAX_EXTRA_MEM;
+    charsize = psfv2->charsize; // number of bytes per glyph
+    bytes_per_char = ((width * height) + 7) / 8;
+    if (psfv2->headersize > 32)
+      fseek(fp, psfv2->headersize, SEEK_SET);
+  } else {
+    fclose(fp);
+    return NULL;
+  }
+
+  // check the limits
+  if ((height > MAXH) || (width > MAXW)) {
+    MessageBox(hwnd, "Font width and/or height is out of limits.", "Error", MB_OK);
+    return NULL;
+  }
+
+  // calculate the size of the memory we need and allocate it.
+  sz = sizeof(struct FONT) + (count * sizeof(struct FONT_INFO)) + (count * charsize);
+  font = (struct FONT *) calloc(sz + MAX_EXTRA_MEM, 1); // plus MAX_EXTRA_MEM to compensate for widening characters
+  if (font == NULL)
+    return NULL;
+
+  // ask if we want it to be a fixed width font
+  int fixed = MessageBox(hwnd, "Set as a fixed width font?", "fixed?", MB_ICONQUESTION | MB_YESNO);
+
+  // initialize the font header
+  memcpy(font->sig, "Font", 4);
+  font->height = height;
+  font->max_width = width;
+  font->info_start = sizeof(struct FONT);
+  font->start = 0;
+  font->count = count;
+  font->datalen = count * charsize; // len of the data section in bytes
+  bit32u total_size = (bit32u) sz;  // total size of this file in bytes
+  font->flags = (fixed == IDYES) ? 1 : 0;   // bit 0 = fixed width font, remaining bits are reserved
+  strcpy(font->name, "PSF Font");
+
+  // now read in the font information
+  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + sizeof(struct FONT));
+  bit8u *bitmap = (bit8u *) ((bit8u *) info + (count * sizeof(struct FONT_INFO)));
+
+  // version 1 has the same bitmap format as we do. height number of bytes per char.
+  // if version 2 has a width that is 8, 16, 24, 32, etc., we can use this too
+  if ((version == 1) || ((width % 8) == 0)) {
+    for (i=0; i<count; i++) {
+      info[i].index = i * bytes_per_char;
+      info[i].width = width;
+    }
+    fread(bitmap, 1, count * bytes_per_char, fp);
+
+  // if the font is a PSFv2, there might be padding at the end of each horizontal bitstream
+  } else { 
+    bit8u *buffer = (bit8u *) malloc(charsize);
+    for (i=0; i<count; i++) {
+      info[i].index = i * bytes_per_char;
+      info[i].width = width;
+      fread(buffer, 1, charsize, fp);
+      CompressBitmap(buffer, bitmap, width, height);
+      bitmap += bytes_per_char;
+    }
+    free(buffer);
+  }
+
+  fclose(fp);
+  
+  return font;
+}
+
+// A PSFv2 bitmap uses a multiple of 8 bits per horizontal line.
+// For example, if the width of the char is 10, the bitmap will use
+//  two bytes per horizontal line.  The all of the first byte and
+//  only the first two bits of the second byte are valid.
+// The next horizontal line starts at the next byte offset.
+// Our format has a contiguous set of bits with only the last few
+//  bits in the last byte (optionally) not used.
+// Therefore, we need to get rid of the non-used bits from the
+//  PSFv2 bitmap, and store a contiguous set of bits in the targ buffer.
+void CompressBitmap(bit8u *src, bit8u *targ, const int width, const int height) {
+  int w, h, s = 0, t = 0;
+  
+  for (h=0; h<height; h++) {
+    for (w=0; w<width; w++)
+      SetBit(targ, t++, GetBit(src, s + w));
+    // move to the next line
+    s += (width + 7) & ~7;
+  }
+
+  // clear any remaining bits in the last byte
+  while (t & 7)
+    SetBit(targ, t++, 0);
+}
+
 // returns the bit value of the bit 'i' away from 'p'
 // i = 0 = bit 7 of first byte
 bit8u GetBit(bit8u *p, const int i) {
@@ -1305,6 +1469,18 @@ bit8u GetBit(bit8u *p, const int i) {
   int bit = (i % 8);
   
   return (p[byte] & (0x80 >> bit)) ? 1 : 0;  
+}
+
+// set the bit value of the bit 'i' away from 'p'
+// i = 0 = bit 7 of first byte
+void SetBit(bit8u *p, const int i, const bit8u value) {
+  int byte = (i / 8);
+  int bit = (i % 8);
+  
+  if (value)
+    p[byte] |= (0x80 >> bit);
+  else
+    p[byte] &= ~(0x80 >> bit);
 }
 
 // convert font data to grid data
@@ -1339,17 +1515,6 @@ int LoadCurChar(HWND hwnd, struct FONT *font, const int ch) {
   return info[ch].width;
 }
 
-// stores the bit value of the bit 'i' away from 'p'
-// i = 0 = bit 7 of first byte
-void PutBit(bit8u *p, const int i, const char val) {
-  int byte = (i / 8);
-  int bit = (i % 8);
-  
-  p[byte] &= ~(0x80 >> bit);  // first clear it
-  if (val)
-    p[byte] |=  (0x80 >> bit);  // then set it (if val)
-}
-
 // convert grid data to font data
 void SaveCurChar(struct FONT *font, const int ch) {
   bit32u x, y, i;
@@ -1361,11 +1526,11 @@ void SaveCurChar(struct FONT *font, const int ch) {
   p = (bit8u *) (data + info[ch].index);
   for (y=0; y<font->height; y++)
     for (x=0; x < info[ch].width; x++)
-      PutBit(p, i++, grid[y][x]);
+      SetBit(p, i++, grid[y][x]);
   
   // make sure that last part of the last byte is zeros
   while (i & 7)
-    PutBit(p, i++, 0);
+    SetBit(p, i++, 0);
   
   info[ch].deltax = (char) ((int) SendMessage(hSliderX, TBM_GETPOS, 0, 0));
   info[ch].deltay = (char) ((int) SendMessage(hSliderY, TBM_GETPOS, 0, 0));

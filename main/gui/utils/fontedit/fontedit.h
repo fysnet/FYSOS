@@ -57,15 +57,15 @@
  */
 
 /*
- *  Last updated: 28 Jan 2022
+ *  Last updated: 29 Jan 2022
  */
 
 #pragma pack(push, 1)
 
 #ifdef _WIN64
-  #define VERSION_INFO "Font Edit\nVersion 1.50.03 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.52.00 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #else
-  #define VERSION_INFO "Font Edit\nVersion 1.50.03 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.52.00 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #endif
 
 #define APP_WIDTH       700
@@ -136,8 +136,36 @@ struct FONT {
   bit32u flags;        // bit 0 = fixed width font, remaining bits are reserved
   char   name[MAX_NAME_LEN]; // utf-8 null terminated
   bit8u  resv[36];     // reserved and preserved
-  //struct FONT_INFO info[];  // char info
-  //bit8u data[];     // char data
+};
+
+#define PSF1_MAGIC0     0x36
+#define PSF1_MAGIC1     0x04
+
+#define PSF1_MODE512    0x01
+#define PSF1_MODEHASTAB 0x02
+#define PSF1_MODEHASSEQ 0x04
+#define PSF1_MAXMODE    0x05
+
+struct PSFv1_FONT {
+  bit8u  magic[2];     //  0x36 0x04
+  bit8u  mode;         //  mode byte
+  bit8u  charsize;     //  heigth of a char (width is fixed at 8)
+};
+
+#define PSF2_MAGIC0     0x72
+#define PSF2_MAGIC1     0xB5
+#define PSF2_MAGIC2     0x4A
+#define PSF2_MAGIC3     0x86
+
+struct PSFv2_FONT {
+  bit8u  magic[4];
+  bit32u version;
+  bit32u headersize;    // offset of bitmaps in file
+  bit32u flags;
+  bit32u length;        // number of glyphs
+  bit32u charsize;      // number of bytes for each character
+  bit32u height;        // max height of glyphs
+  bit32u width;         // max width of glyphs
 };
 
 #pragma pack(pop)
@@ -157,9 +185,15 @@ void DumpFont(HWND, struct FONT *);
 void FontMoveData(struct FONT *, int, int);
 
 LRESULT CALLBACK WindowProcedure(HWND, UINT, WPARAM, LPARAM);
-BOOL OpenFileDialog(HWND, LPTSTR, LPTSTR);
+BOOL OpenFileDialog(HWND, LPTSTR, LPTSTR, LPTSTR);
 BOOL SaveFileDialog(HWND, LPTSTR, LPTSTR, LPTSTR);
 
 struct FONT *InitFontData(struct FONT *, const int, const int, const int, const int, const int, const char *);
 void SaveFile(HWND, struct FONT *);
 struct FONT *OpenFile(HWND, struct FONT *);
+struct FONT *OpenFilePSF(HWND, struct FONT *);
+
+void CompressBitmap(bit8u *, bit8u *, const int, const int);
+bit8u GetBit(bit8u *p, const int i);
+void SetBit(bit8u *p, const int i, const bit8u value);
+
