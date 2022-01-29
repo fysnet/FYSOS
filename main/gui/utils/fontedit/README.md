@@ -10,5 +10,7 @@ This version of the Font file will break the [GUI Demo code](https://github.com/
 
 If you load the resource.rc file into the Visual Studio IDE, the IDE will alter the file and break the build.  If you must edit the resource.rc file, make sure and use a text editor, not the Visual Studio IDE editor.
 
+You can now load Linux PSF Font files, which get converted to this app's Font format.
+
 Thank you,
 Ben
