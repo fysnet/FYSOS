@@ -57,15 +57,15 @@
  */
 
 /*
- *  Last updated: 30 Jan 2022
+ *  Last updated: 31 Jan 2022
  */
 
 #pragma pack(push, 1)
 
 #ifdef _WIN64
-  #define VERSION_INFO "Font Edit\nVersion 1.54.00 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.54.01 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #else
-  #define VERSION_INFO "Font Edit\nVersion 1.54.00 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.54.01 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #endif
 
 #define FTYPE_FONT   1

@@ -74,7 +74,7 @@
  *   When using the Visual Studio IDE, do not edit the resource.rc file within
  *    the IDE's editor.  It will add items that will break this build.
  *
- *  Last updated: 30 Jan 2022
+ *  Last updated: 31 Jan 2022
  *
  *   This code was built with Visual Studio 6.0 (for 32-bit Windows XP)
  *    and Visual Studio 2019 (for 64-bit Windows 10)
@@ -1299,10 +1299,10 @@ void SaveFile(HWND hwnd, struct FONT *font) {
   font->max_width = (bit8u) w;
 
   if ((ftype == FTYPE_PSFv1) && (w != 8)) {
-    if (MessageBox(hwnd, "Width is not 8.  Save as PSF v2?", NULL, MB_YESNO) == IDNO)
-      return;
-    ftype = FTYPE_PSFv2;
-    fmode = (hashtable && (hashtablesz > 0)) ? 1 : 0;
+    if (MessageBox(hwnd, "Width is not 8.  Save as PSF v2?", NULL, MB_YESNO) == IDYES) {
+      ftype = FTYPE_PSFv2;
+      fmode = (hashtable && (hashtablesz > 0)) ? 1 : 0;
+    }
   }
 
   // what format are we using?
