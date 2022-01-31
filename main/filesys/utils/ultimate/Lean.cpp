@@ -181,6 +181,7 @@ BEGIN_MESSAGE_MAP(CLean, CPropertyPage)
   ON_EN_CHANGE(IDC_LEAN_BLOCKS_BAND, OnChangeLeanBlockBand)
   ON_EN_CHANGE(IDC_LEAN_BLOCK_SIZE, OnChangeLeanBlockSize)
   ON_BN_CLICKED(ID_COPY, OnLeanCopy)
+  ON_BN_CLICKED(ID_VIEW, OnLeanView)
   ON_BN_CLICKED(ID_INSERT, OnLeanInsert)
   ON_NOTIFY(TVN_SELCHANGED, IDC_DIR_TREE, OnSelchangedDirTree)
   ON_BN_CLICKED(ID_ENTRY, OnLeanEntry)
@@ -245,6 +246,7 @@ void CLean::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
 
   GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
   GetDlgItem(ID_COPY)->EnableWindow((hItem != NULL) && items->CanCopy);
+  GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & ITEM_IS_FILE));
   GetDlgItem(ID_INSERT)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));
   GetDlgItem(ID_DELETE)->EnableWindow(hItem != NULL);
   
@@ -282,7 +284,9 @@ void CLean::OnLeanApply() {
 }
 
 void CLean::OnLeanClean() {
-  int r = AfxMessageBox("This will erase the volume, leaving the SuperBlock as is.\r\n"
+  //int r = AfxMessageBox("This will erase the volume, leaving the SuperBlock as is.\r\n"
+  //                      "Is this what you wish to do?", MB_YESNO, NULL);
+  int r = AfxMessageBox("This will erase the volume, doing a format on the volume.\r\n"
                         "Is this what you wish to do?", MB_YESNO, NULL);
   if (r != IDYES)
     return;
@@ -461,9 +465,9 @@ bool CLean::Format(const BOOL AskForBoot) {
   root->block_count = (super->pre_alloc_count + 1);
   CTime now = CTime::GetCurrentTime();
   root->acc_time = 
-  root->cre_time =
-  root->sch_time =
-  root->mod_time = ((INT64) now.GetTime()) * 1000000;  // uS from 1 Jan 1970
+    root->cre_time =
+    root->sch_time =
+    root->mod_time = ((INT64) now.GetTime()) * 1000000;  // uS from 1 Jan 1970
   root->first_indirect = 0;
   root->last_indirect = 0;
   root->fork = 0;
@@ -759,6 +763,7 @@ void CLean::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
   
   GetDlgItem(ID_ENTRY)->EnableWindow(FALSE);
   GetDlgItem(ID_COPY)->EnableWindow(FALSE);
+  GetDlgItem(ID_VIEW)->EnableWindow(FALSE);
   GetDlgItem(ID_INSERT)->EnableWindow(FALSE);
   GetDlgItem(ID_DELETE)->EnableWindow(FALSE);
   GetDlgItem(ID_SEARCH)->EnableWindow(FALSE);
@@ -780,7 +785,7 @@ void CLean::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
     root = (struct S_LEAN_DIRENTRY *) ReadFile(m_super.root_start, &root_size);
     if (root) {
       CWaitCursor wait; // display a wait cursor
-      SaveItemInfo(m_hRoot, m_super.root_start, root_size, 0, FALSE);
+      SaveItemInfo(m_hRoot, m_super.root_start, root_size, ITEM_IS_FOLDER, 0, FALSE);
       m_too_many = FALSE;
       ParseDir(root, root_size, m_hRoot);
       m_dir_tree.Expand(m_hRoot, TVE_EXPAND);
@@ -824,7 +829,7 @@ void CLean::ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM 
         hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
         sub = (struct S_LEAN_DIRENTRY *) ReadFile(cur->inode, &filesize);
-        SaveItemInfo(hItem, cur->inode, filesize, (DWORD) ((BYTE *) cur - (BYTE *) root), !IsDot);
+        SaveItemInfo(hItem, cur->inode, filesize, ITEM_IS_FOLDER, (DWORD) ((BYTE *) cur - (BYTE *) root), !IsDot);
         if (!IsDot && sub) {
           ParseDir(sub, filesize, hItem);
           free(sub);
@@ -833,19 +838,19 @@ void CLean::ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM 
       case LEAN_FT_REG: // File type: regular file
         hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, cur->inode, 0, (DWORD) ((BYTE *) cur - (BYTE *) root), TRUE);
+        SaveItemInfo(hItem, cur->inode, 0, ITEM_IS_FILE, (DWORD) ((BYTE *) cur - (BYTE *) root), TRUE);
         break;
       case LEAN_FT_LNK: // File type: symbolic link
         name += " (Link)";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FORK, IMAGE_FORKED, IMAGE_FORKED, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, cur->inode, 0, (DWORD) ((BYTE *) cur - (BYTE *) root), FALSE);
+        SaveItemInfo(hItem, cur->inode, 0, 0, (DWORD) ((BYTE *) cur - (BYTE *) root), FALSE);
         break;
       case LEAN_FT_FRK: // File type: fork
         name += " (Fork)";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FORK, IMAGE_FORKED, IMAGE_FORKED, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, cur->inode, 0, (DWORD) ((BYTE *) cur - (BYTE *) root), FALSE);
+        SaveItemInfo(hItem, cur->inode, 0, 0, (DWORD) ((BYTE *) cur - (BYTE *) root), FALSE);
         break;
       case LEAN_FT_MT:  // File type: Empty
         break;
@@ -1013,7 +1018,7 @@ void CLean::WriteFile(void *buffer, struct S_LEAN_BLOCKS *extents, DWORD64 Size)
   // update the inode's Timestamps
   CTime time = CTime::GetCurrentTime();
   inode->acc_time = 
-  inode->mod_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
+    inode->mod_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
   
   // update the inode's check sum and write it back
   inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
@@ -1255,13 +1260,14 @@ void CLean::ReceiveFromDialog(struct S_LEAN_SUPER *super) {
   super->journal = convert64(m_journal_lba);
 }
 
-void CLean::SaveItemInfo(HTREEITEM hItem, DWORD64 Inode, DWORD64 FileSize, DWORD Offset, BOOL CanCopy) {
+void CLean::SaveItemInfo(HTREEITEM hItem, DWORD64 Inode, DWORD64 FileSize, DWORD flags, DWORD Offset, BOOL CanCopy) {
   struct S_LEAN_ITEMS *items = (struct S_LEAN_ITEMS *) m_dir_tree.GetDataStruct(hItem);
   if (items) {
     items->Inode = Inode;
     items->FileSize = FileSize;
     items->Offset = Offset;
     items->CanCopy = CanCopy;
+    items->Flags = flags;
   }
 }
 
@@ -1370,6 +1376,39 @@ void CLean::CopyFolder(HTREEITEM hItem, CString csPath, CString csName) {
   SetCurrentDirectory(szCurPath);
 }
 
+void CLean::OnLeanView() {
+  char szPath[MAX_PATH];
+  char szName[MAX_PATH];
+  CString csPath, csName;
+  BOOL IsDir = FALSE;
+  
+  // get the path from the tree control
+  HTREEITEM hItem = m_dir_tree.GetFullPath(NULL, &IsDir, csName, csPath, TRUE);
+  if (!hItem)
+    return;
+
+  CWaitCursor wait;
+  
+  if (IsDir)  // we shouldn't have found this
+    return;
+
+  if ((GetTempPath(MAX_PATH, szPath) == 0) ||
+      (GetTempFileName(szPath, "ULT", 0, szName) == 0)) {
+    AfxMessageBox("Error creating temp file...");
+    return;
+  }
+
+  // copy the file to the temp file
+  csPath = szName;
+  CopyFile(hItem, csPath);
+
+  // open the file using the default/specified app
+  csName = AfxGetApp()->GetProfileString("Settings", "DefaultViewerPath", "notepad.exe");
+  ShellExecute(NULL, _T("open"), csName, szName, _T(""), SW_SHOWNORMAL);
+  
+  wait.Restore();
+}
+
 void CLean::OnLeanInsert() {
   char szPath[MAX_PATH];
   BOOL IsDir;
@@ -1440,7 +1479,7 @@ BOOL CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
     return FALSE;
   }
 
-  buffer = malloc((size_t) Size + m_block_size);  // to prevent buffer overrun in WriteFile()
+  buffer = calloc((size_t) Size + m_block_size, 1);  // to prevent buffer overrun in WriteFile()
   file.Read(buffer, (UINT) Size);
   file.Close();
   
@@ -1461,7 +1500,7 @@ BOOL CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
     free(buffer);
     return FALSE;
   }
-  
+
   // create an Inode at extents.extent_start[0]
   BuildInode(&extents, Size, LEAN_ATTR_IFREG | Attrib);
   
@@ -2159,10 +2198,10 @@ void CLean::BuildInode(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD Attrib
     } else
       inode->block_count = 1;
   }
-  inode->acc_time = now;
-  inode->sch_time = now;
-  inode->mod_time = now;
-  inode->cre_time = now;
+  inode->acc_time = 
+    inode->sch_time = 
+    inode->mod_time = 
+    inode->cre_time = now;
   inode->first_indirect = 0;
   inode->last_indirect = 0;
   inode->fork = 0;

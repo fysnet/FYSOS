@@ -175,7 +175,7 @@ struct S_SFS_ITEMS {
   int   index;       // index number into index_block
   BOOL  CanCopy;        // the entry is not a deleted/invalid/other that we can copy out to the host
   BYTE  entry[SFS_ENTRY_SIZE];
-  
+  DWORD Flags;
 };
 
 #pragma pack(pop)
@@ -210,7 +210,7 @@ public:
   
   void ParseDir(const BYTE *index, const int entries);
   HTREEITEM GetName(CString &name, void *entry, BOOL IsDir, BOOL *Error);
-  void SaveItemInfo(HTREEITEM hItem, const BYTE *Entry, int Index, BOOL CanCopy);
+  void SaveItemInfo(HTREEITEM hItem, const BYTE *Entry, int Index, DWORD flags, BOOL CanCopy);
   void *ReadFile(HTREEITEM hItem, DWORD *FileSize);
   void WriteFile(void *buffer, DWORD64 Block, DWORD FileSize);
   void ZeroFile(DWORD64 Start, DWORD64 End);
@@ -269,15 +269,13 @@ protected:
   afx_msg void OnSFSClean();
   afx_msg void OnSFSFormat();
   afx_msg void OnSFSCheck();
-  afx_msg void OnSFSCopy();
-  afx_msg void OnSFSInsert();
   afx_msg void OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult);
-  afx_msg void OnSFSEntry();
   afx_msg void OnChangeSfsBlockSize();
   afx_msg void OnChangeSfsVersion();
   afx_msg void OnCrcUpdate();
   afx_msg void OnChangeSfsTimestamp();
   afx_msg void OnSfsCopy();
+  afx_msg void OnSfsView();
   afx_msg void OnSfsEntry();
   afx_msg void OnSfsInsert();
   afx_msg void OnFysosSig();

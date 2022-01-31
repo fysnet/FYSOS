@@ -199,8 +199,8 @@ struct S_FAT_ITEMS {
   BOOL  CanCopy;        // the entry is not a deleted/invalid/other that we can copy out to the host
   int   Index;          // index in root directory of first entry (LFN(s) or SFN)
   int   EntryCount;
+  DWORD Flags;
   struct S_FAT_ROOT Entry[ROOT_ENTRY_MAX];  // A LFN can use up to 64 entries (64 * 32 = 2048 bytes)
-  
 };
 
 #pragma pack(pop)
@@ -272,7 +272,7 @@ public:
   BOOL  FatIsValidChar(const char ch);
   DWORD GetNextCluster(void *FatBuffer, DWORD cluster);
   bool FatFormat(const BOOL AskForBoot);
-  void SaveItemInfo(HTREEITEM hItem, DWORD Cluster, DWORD FileSize, struct S_FAT_ROOT *Entry, int Index, int count, DWORD ErrorCode, BOOL CanCopy);
+  void SaveItemInfo(HTREEITEM hItem, DWORD Cluster, DWORD FileSize, struct S_FAT_ROOT *Entry, int Index, int count, DWORD flags, DWORD ErrorCode, BOOL CanCopy);
   
   void *ReadFile(DWORD Cluster, DWORD *Size, BOOL IsRoot);
   void WriteFile(void *buffer, struct S_FAT_ENTRIES *ClusterList, DWORD size, BOOL IsRoot);
@@ -359,6 +359,7 @@ protected:
   afx_msg void OnFatCheck();
   afx_msg void OnUpdateCode();
   afx_msg void OnFatCopy();
+  afx_msg void OnFatView();
   afx_msg void OnInsertVLabel();
   afx_msg void OnFatInsert();
   afx_msg void OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult);

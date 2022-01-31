@@ -143,6 +143,7 @@ BEGIN_MESSAGE_MAP(CISOPrimary, CPropertyPage)
   ON_NOTIFY(TVN_SELCHANGED, IDC_DIR_TREE, OnSelchangedDirTree)
   ON_BN_CLICKED(ID_ENTRY, OnEntry)
   ON_BN_CLICKED(ID_COPY, OnCopy)
+  ON_BN_CLICKED(ID_VIEW, OnView)
   ON_BN_CLICKED(ID_INSERT, OnInsert)
   ON_BN_CLICKED(ID_SEARCH, OnSearch)
   ON_BN_CLICKED(ID_ISO_CHECK, OnISOCheck)
@@ -179,6 +180,7 @@ void CISOPrimary::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
 
   GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
   GetDlgItem(ID_COPY)->EnableWindow((hItem != NULL) && items->CanCopy);
+  GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & ITEM_IS_FILE));
   GetDlgItem(ID_INSERT)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));
   GetDlgItem(ID_DELETE)->EnableWindow(FALSE);
   
@@ -252,7 +254,7 @@ void CISOPrimary::DoRoot(void) {
   struct S_ISO_ROOT *root;
   root = (struct S_ISO_ROOT *) ReadFile(pvd->root.extent_loc, pvd->root.data_len, pvd->root.flags, TRUE);
   if (root) {
-    SaveItemInfo(m_hRoot, &pvd->root, 0, FALSE);
+    SaveItemInfo(m_hRoot, &pvd->root, ITEM_IS_FOLDER, 0, FALSE);
     CWaitCursor wait; // display a wait cursor
     m_parse_depth_limit = 0;  // start new
     ParseDir(root, pvd->root.data_len, m_hRoot, TRUE);
@@ -330,7 +332,7 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
     if (ErrorCode != ISO_NO_ERROR) {
       hItem = m_dir_tree.Insert("Invalid Entry", ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, parent);
       if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
-      SaveItemInfo(hItem, r, 0, FALSE);
+      SaveItemInfo(hItem, r, 0, 0, FALSE);
       if (++ErrorCount >= ErrorMax)
         break;
     } else {
@@ -339,12 +341,12 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
         name = ".";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
         if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
-        SaveItemInfo(hItem, r, 0, FALSE);
+        SaveItemInfo(hItem, r, ITEM_IS_FOLDER, 0, FALSE);
       } else if ((r->fi_len == 1) && (r->ident[0] == 1)) {
         name = "..";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
         if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
-        SaveItemInfo(hItem, r, 0, FALSE);
+        SaveItemInfo(hItem, r, ITEM_IS_FOLDER, 0, FALSE);
       } else {
         // stop at ';'
         bool b = FALSE;
@@ -363,7 +365,7 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
         if (r->flags & ISO_ROOT_FLAGS_DIR) {
           hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
           if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
-          SaveItemInfo(hItem, r, 0, TRUE);
+          SaveItemInfo(hItem, r, ITEM_IS_FOLDER, 0, TRUE);
           sub = (struct S_ISO_ROOT *) ReadFile(r->extent_loc, r->data_len, r->flags, FALSE);
           if (sub) {
             if (!ParseDir(sub, r->data_len, hItem, FALSE)) {
@@ -376,7 +378,7 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
         } else {
           hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
           if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
-          SaveItemInfo(hItem, r, 0, TRUE);
+          SaveItemInfo(hItem, r, ITEM_IS_FILE, 0, TRUE);
         }
       }
     }
@@ -404,12 +406,12 @@ void *CISOPrimary::ReadFile(DWORD extent, DWORD size, BYTE Flags, BOOL IsRoot) {
   return ptr;
 }
 
-void CISOPrimary::SaveItemInfo(HTREEITEM hItem, struct S_ISO_ROOT *root, DWORD ErrorCode, BOOL CanCopy) {
+void CISOPrimary::SaveItemInfo(HTREEITEM hItem, struct S_ISO_ROOT *root, DWORD flags, DWORD ErrorCode, BOOL CanCopy) {
   struct S_ISO_ITEMS *items = (struct S_ISO_ITEMS *) m_dir_tree.GetDataStruct(hItem);
   if (items) {
     items->CanCopy = CanCopy;
+    items->Flags = flags;
     memcpy(items->RootEntry, root, root->len);
-    
   }
 }
 
@@ -523,6 +525,39 @@ void CISOPrimary::CopyFolder(HTREEITEM hItem, CString csPath, CString csName) {
   
   // restore the current directory
   SetCurrentDirectory(szCurPath);
+}
+
+void CISOPrimary::OnView() {
+  char szPath[MAX_PATH];
+  char szName[MAX_PATH];
+  CString csPath, csName;
+  BOOL IsDir = FALSE;
+  
+  // get the path from the tree control
+  HTREEITEM hItem = m_dir_tree.GetFullPath(NULL, &IsDir, csName, csPath, TRUE);
+  if (!hItem)
+    return;
+  
+  CWaitCursor wait;
+  
+  if (IsDir)  // we shouldn't have found this
+    return;
+
+  if ((GetTempPath(MAX_PATH, szPath) == 0) ||
+      (GetTempFileName(szPath, "ULT", 0, szName) == 0)) {
+    AfxMessageBox("Error creating temp file...");
+    return;
+  }
+
+  // copy the file to the temp file
+  csPath = szName;
+  CopyFile(hItem, csPath);
+
+  // open the file using the default/specified app
+  csName = AfxGetApp()->GetProfileString("Settings", "DefaultViewerPath", "notepad.exe");
+  ShellExecute(NULL, _T("open"), csName, szName, _T(""), SW_SHOWNORMAL);
+  
+  wait.Restore();
 }
 
 void CISOPrimary::OnInsert() {

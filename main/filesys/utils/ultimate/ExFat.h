@@ -222,7 +222,7 @@ struct S_EXFAT_ITEMS {
   DWORD Cluster;        //
   DWORD EntryOffset;    // byte offset from start of root to first entry of this file
   DWORD ErrorCode;
-  BYTE  Flags;
+  DWORD Flags;          // low byte for "view", next byte for read/write
   BOOL  CanCopy;        // the entry is not a deleted/invalid/other that we can copy out to the host
 };
 
@@ -286,7 +286,7 @@ public:
   
   void SendToDialog(struct S_EXFAT_VBR *vbr);
   void ReceiveFromDialog(struct S_EXFAT_VBR *vbr);
-  void SaveItemInfo(HTREEITEM hItem, HTREEITEM hParent, DWORD Cluster, DWORD64 FileSize, BYTE flags, DWORD EntryOffset, DWORD ErrorCode, BOOL CanCopy);
+  void SaveItemInfo(HTREEITEM hItem, HTREEITEM hParent, DWORD Cluster, DWORD64 FileSize, DWORD flags, DWORD EntryOffset, DWORD ErrorCode, BOOL CanCopy);
   
   void CopyFile(HTREEITEM hItem, CString csName);
   void CopyFolder(HTREEITEM hItem, CString csPath, CString csName);
@@ -343,6 +343,7 @@ protected:
   afx_msg void OnExFatFormat();
   afx_msg void OnExFatCheck();
   afx_msg void OnExFatCopy();
+  afx_msg void OnExFatView();
   afx_msg void OnExFatInsert();
   afx_msg void OnExFatEntry();
   afx_msg void OnFysosSig();

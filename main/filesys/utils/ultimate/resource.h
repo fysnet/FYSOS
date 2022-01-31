@@ -328,7 +328,9 @@
 #define IDC_EMBR_BOOT_SIG               1176
 #define IDC_HELP_PATH                   1176
 #define IDC_EMBR_DUMP                   1177
+#define IDC_VIEWER_PATH                 1177
 #define IDC_EMBR_PAGES                  1178
+#define IDC_VIEWER_PATH2                1178
 #define ID_EMBR_APPLY                   1179
 #define IDC_EMBR_SIG0                   1180
 #define IDC_EMBRE_START_LBA             1180
@@ -391,7 +393,6 @@
 #define IDC_FAT32_ENTRY_RESV            1201
 #define IDC_BLOCK_SIZE                  1201
 #define IDC_RESERVED_DISP2              1201
-#define IDC_LEAN_CURRENT_STATE2         1201
 #define IDC_FREE_BLOCKS_UPDATE          1201
 #define IDC_FAT32_ENTRY_TENTH           1202
 #define IDC_PATH_TABLE_SIZE             1202
@@ -507,6 +508,7 @@
 #define IDC_EMBR_PATH_BRZ               1284
 #define IDC_EXTRACT_PATH_BRZ            1285
 #define IDC_TYPE                        1286
+#define IDC_VIEWER_PATH_BRZ             1286
 #define IDC_CD001                       1287
 #define IDC_SYS_USE                     1288
 #define IDC_PREP_ID                     1288
@@ -802,6 +804,7 @@
 #define ID_SEARCH                       1505
 #define IDC_FIND_STR                    1505
 #define IDC_CASE                        1506
+#define ID_VIEW                         1506
 #define IDC_TYPE_160K                   1507
 #define IDC_TYPE_180K                   1508
 #define IDC_TYPE_320K                   1509

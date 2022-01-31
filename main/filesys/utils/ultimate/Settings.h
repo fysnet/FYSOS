@@ -84,6 +84,7 @@ public:
   BOOL  m_clear_mru;
   CString m_extract_path;
   CString	m_help_path;
+  CString m_viewer_path;
   BOOL	m_force_fysos;
   //}}AFX_DATA
 
@@ -103,6 +104,7 @@ protected:
   afx_msg void OnMbrPathBrz();
   afx_msg void OnEmbrPathBrz();
   afx_msg void OnExtractPathBrz();
+  afx_msg void OnViewerPathBrz();
   //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
 };

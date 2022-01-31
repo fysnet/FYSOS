@@ -151,6 +151,7 @@ BEGIN_MESSAGE_MAP(CNTFS, CPropertyPage)
   ON_BN_CLICKED(ID_FORMAT, OnFormat)
   ON_BN_CLICKED(ID_CHECK, OnCheck)
   ON_BN_CLICKED(ID_COPY, OnCopy)
+  ON_BN_CLICKED(ID_VIEW, OnView)
   ON_BN_CLICKED(ID_INSERT, OnInsert)
   ON_BN_CLICKED(ID_SEARCH, OnSearch)
   ON_BN_CLICKED(ID_ERASE, OnErase)
@@ -201,6 +202,7 @@ void CNTFS::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
   
   GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
   GetDlgItem(ID_COPY)->EnableWindow((hItem != NULL) && (items->mft_entry >= STARTING_MFT) && items->CanCopy);
+  GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & ITEM_IS_FILE));
   //GetDlgItem(ID_INSERT)->EnableWindow(FALSE /*(hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0)*/);
   //GetDlgItem(ID_DELETE)->EnableWindow(FALSE /*hItem != NULL*/);
   
@@ -270,6 +272,7 @@ void CNTFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
   
   GetDlgItem(ID_ENTRY)->EnableWindow(FALSE);
   GetDlgItem(ID_COPY)->EnableWindow(FALSE);
+  GetDlgItem(ID_VIEW)->EnableWindow(FALSE);
   GetDlgItem(ID_INSERT)->EnableWindow(FALSE);
   GetDlgItem(ID_DELETE)->EnableWindow(FALSE);
   GetDlgItem(ID_SEARCH)->EnableWindow(FALSE);
@@ -288,7 +291,7 @@ void CNTFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
     m_dir_tree.DeleteAllItems();
     m_hRoot = m_dir_tree.Insert("\\", ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, TVI_ROOT);
     m_dir_tree.SetItemState(m_hRoot, TVIS_BOLD, TVIS_BOLD);
-    SaveItemInfo(m_hRoot, MFT_ROOT, 0, FALSE);
+    SaveItemInfo(m_hRoot, MFT_ROOT, 0, ITEM_IS_FOLDER, FALSE);
     
     UpdateWindow();
     
@@ -338,13 +341,13 @@ void CNTFS::ParseDir(unsigned start, DWORD64 ref, HTREEITEM parent) {
           if (attribs & NTFS_ATTR_SUB_DIR) {
             hItem = m_dir_tree.Insert(filename, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
             if (hItem == NULL) { m_too_many = TRUE; return; }
-            SaveItemInfo(hItem, cur_mft, 0, TRUE);
+            SaveItemInfo(hItem, cur_mft, 0, ITEM_IS_FOLDER, TRUE);
             if (cur_mft != MFT_ROOT)
               ParseDir(cur_mft+1, cur_mft, hItem);
           } else {
             hItem = m_dir_tree.Insert(filename, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
             if (hItem == NULL) { m_too_many = TRUE; return; }
-            SaveItemInfo(hItem, cur_mft, 0, TRUE);
+            SaveItemInfo(hItem, cur_mft, 0, ITEM_IS_FILE, TRUE);
           }
         }
       } else {
@@ -358,13 +361,13 @@ void CNTFS::ParseDir(unsigned start, DWORD64 ref, HTREEITEM parent) {
   }
 }
 
-void CNTFS::SaveItemInfo(HTREEITEM hItem, unsigned ref, DWORD ErrorCode, BOOL CanCopy) {
+void CNTFS::SaveItemInfo(HTREEITEM hItem, unsigned ref, DWORD ErrorCode, DWORD flags, BOOL CanCopy) {
   struct S_NTFS_ITEMS *items = (struct S_NTFS_ITEMS *) m_dir_tree.GetDataStruct(hItem);
   if (items) {
     items->mft_entry = ref;
     items->ErrorCode = ErrorCode;
     items->CanCopy = CanCopy;
-    
+    items->Flags = flags;
   }
 }
 
@@ -614,6 +617,39 @@ void CNTFS::CopyFolder(HTREEITEM hItem, CString csPath, CString csName) {
   
   // restore the current directory
   SetCurrentDirectory(szCurPath);
+}
+
+void CNTFS::OnView() {
+  char szPath[MAX_PATH];
+  char szName[MAX_PATH];
+  CString csPath, csName;
+  BOOL IsDir = FALSE;
+  
+  // get the path from the tree control
+  HTREEITEM hItem = m_dir_tree.GetFullPath(NULL, &IsDir, csName, csPath, TRUE);
+  if (!hItem)
+    return;
+  
+  CWaitCursor wait;
+  
+  if (IsDir)  // we shouldn't have found this
+    return;
+
+  if ((GetTempPath(MAX_PATH, szPath) == 0) ||
+      (GetTempFileName(szPath, "ULT", 0, szName) == 0)) {
+    AfxMessageBox("Error creating temp file...");
+    return;
+  }
+
+  // copy the file to the temp file
+  csPath = szName;
+  CopyFile(hItem, csPath);
+
+  // open the file using the default/specified app
+  csName = AfxGetApp()->GetProfileString("Settings", "DefaultViewerPath", "notepad.exe");
+  ShellExecute(NULL, _T("open"), csName, szName, _T(""), SW_SHOWNORMAL);
+  
+  wait.Restore();
 }
 
 void CNTFS::OnInsert() {

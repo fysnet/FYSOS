@@ -172,6 +172,7 @@ BEGIN_MESSAGE_MAP(CExFat, CPropertyPage)
   ON_BN_CLICKED(ID_FORMAT, OnExFatFormat)
   ON_BN_CLICKED(ID_CHECK, OnExFatCheck)
   ON_BN_CLICKED(ID_COPY, OnExFatCopy)
+  ON_BN_CLICKED(ID_VIEW, OnExFatView)
   ON_BN_CLICKED(ID_INSERT, OnExFatInsert)
   ON_BN_CLICKED(ID_ENTRY, OnExFatEntry)
   ON_BN_CLICKED(ID_FYSOS_SIG, OnFysosSig)
@@ -233,7 +234,8 @@ void CExFat::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
 
   GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
   GetDlgItem(ID_COPY)->EnableWindow((hItem != NULL) && items->CanCopy);
-  GetDlgItem(ID_INSERT)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));
+  GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & ITEM_IS_FILE));
+  //GetDlgItem(ID_INSERT)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));
   GetDlgItem(ID_DELETE)->EnableWindow(hItem != NULL);
   
   *pResult = 0;
@@ -278,6 +280,7 @@ void CExFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, con
   
   GetDlgItem(ID_ENTRY)->EnableWindow(FALSE);
   GetDlgItem(ID_COPY)->EnableWindow(FALSE);
+  GetDlgItem(ID_VIEW)->EnableWindow(FALSE);
   GetDlgItem(ID_INSERT)->EnableWindow(FALSE);
   GetDlgItem(ID_DELETE)->EnableWindow(FALSE);
   GetDlgItem(ID_SEARCH)->EnableWindow(FALSE);
@@ -321,7 +324,7 @@ void CExFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, con
     DWORD64 rootsize = 0;
     root = (struct S_EXFAT_ROOT *) ReadFile(vbr->root_dir_cluster, &rootsize, 0);
     if (root) {
-      SaveItemInfo(m_hRoot, NULL, vbr->root_dir_cluster, rootsize, 0, 0, 0, FALSE);
+      SaveItemInfo(m_hRoot, NULL, vbr->root_dir_cluster, rootsize, (0 << 8) | ITEM_IS_FOLDER, 0, 0, FALSE);
       CWaitCursor wait; // display a wait cursor
       m_too_many = FALSE;
       ParseDir(root, rootsize, m_hRoot);
@@ -358,12 +361,12 @@ void CExFat::ParseDir(struct S_EXFAT_ROOT *root, DWORD64 root_size, HTREEITEM pa
       case EXFAT_DIR_BITMAP: // Entry type: Bitmap
         hItem = m_dir_tree.Insert("Bitmap Entry", ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, parent, cur[0].type.bitmap.cluster_strt, cur[0].type.bitmap.data_len, cur[0].type.bitmap.flags, CurOffset, 0, FALSE);
+        SaveItemInfo(hItem, parent, cur[0].type.bitmap.cluster_strt, cur[0].type.bitmap.data_len, (cur[0].type.bitmap.flags << 8) | 0, CurOffset, 0, FALSE);
         break;
       case EXFAT_DIR_UCASE:  // Entry type: UCase Table
         hItem = m_dir_tree.Insert("UCase Entry", ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, parent, cur[0].type.up_case_table.cluster_strt, cur[0].type.up_case_table.data_len, 0, CurOffset, 0, FALSE);
+        SaveItemInfo(hItem, parent, cur[0].type.up_case_table.cluster_strt, cur[0].type.up_case_table.data_len, (0 << 8) | 0, CurOffset, 0, FALSE);
         break;
       case EXFAT_DIR_LABEL:  // Entry type: Label
         name_len = cur->type.label.len;
@@ -373,7 +376,7 @@ void CExFat::ParseDir(struct S_EXFAT_ROOT *root, DWORD64 root_size, HTREEITEM pa
         WideCharToMultiByte(CP_ACP, 0, (LPCWCH) namestr, -1, name.GetBuffer(256), 256, NULL, NULL); name.ReleaseBuffer(256);
         hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_LABEL, IMAGE_LABEL, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, parent, 0, 0, 0, CurOffset, 0, FALSE);
+        SaveItemInfo(hItem, parent, 0, 0, (0 << 8) | 0, CurOffset, 0, FALSE);
         break;
       case EXFAT_DIR_DELETED_S: // deleted entry
       case EXFAT_DIR_DELETED: // deleted entry
@@ -409,14 +412,14 @@ void CExFat::ParseDir(struct S_EXFAT_ROOT *root, DWORD64 root_size, HTREEITEM pa
               if (IsDlgButtonChecked(IDC_SHOW_DEL)) {
                 hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, parent);
                 if (hItem == NULL) { m_too_many = TRUE; return; }
-                SaveItemInfo(hItem, parent, cluster, filesize, flags, CurOffset, 0, FALSE);
+                SaveItemInfo(hItem, parent, cluster, filesize, (flags << 0) | 0, CurOffset, 0, FALSE);
               }
             } else {
               if (cur->type.dir_entry.attributes & EXFAT_ATTR_SUB_DIR) {
                 hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
                 if (hItem == NULL) { m_too_many = TRUE; return; }
                 BOOL IsDot = ((name == ".") || (name == ".."));
-                SaveItemInfo(hItem, parent, cluster, filesize, flags, CurOffset, 0, !IsDot);
+                SaveItemInfo(hItem, parent, cluster, filesize, (flags << 8) | ITEM_IS_FOLDER, CurOffset, 0, !IsDot);
                 if (!IsDot) {
                   DWORD64 size = filesize;
                   struct S_EXFAT_ROOT *sub = (struct S_EXFAT_ROOT *) ReadFile(cluster, &size, flags);
@@ -428,7 +431,7 @@ void CExFat::ParseDir(struct S_EXFAT_ROOT *root, DWORD64 root_size, HTREEITEM pa
               } else {
                 hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
                 if (hItem == NULL) { m_too_many = TRUE; return; }
-                SaveItemInfo(hItem, parent, cluster, filesize, flags, CurOffset, 0, TRUE);
+                SaveItemInfo(hItem, parent, cluster, filesize, (flags << 8) | ITEM_IS_FILE, CurOffset, 0, TRUE);
               }
             }
           } //else
@@ -439,23 +442,23 @@ void CExFat::ParseDir(struct S_EXFAT_ROOT *root, DWORD64 root_size, HTREEITEM pa
       case EXFAT_DIR_WINCE_ACC:  // Entry type: 
         hItem = m_dir_tree.Insert("TODO: WinCE_ACC", ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, parent, 0, 0, 0, CurOffset, 0, FALSE);
+        SaveItemInfo(hItem, parent, 0, 0, (0 << 8) | 0, CurOffset, 0, FALSE);
         break;
       case EXFAT_DIR_GUID:   // Entry type: 
         hItem = m_dir_tree.Insert("GUID Entry", ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, parent, 0, 0, 0, CurOffset, 0, FALSE);
+        SaveItemInfo(hItem, parent, 0, 0, (0 << 8) | 0, CurOffset, 0, FALSE);
         break;
       case EXFAT_DIR_TEXFAT: // Entry type: 
         hItem = m_dir_tree.Insert("TODO: TEXFAT", ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, parent, 0, 0, 0, CurOffset, 0, FALSE);
+        SaveItemInfo(hItem, parent, 0, 0, (0 << 8) | 0, CurOffset, 0, FALSE);
         break;
       default:
         name.Format("TODO: type = 0x%02X", cur->entry_type);
         hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, parent, 0, 0, 0, 0, 0, FALSE);
+        SaveItemInfo(hItem, parent, 0, 0, (0 << 8) | 0, 0, 0, FALSE);
     }
     cur++;
   }
@@ -721,7 +724,7 @@ void CExFat::AllocateRoot(CString csName, struct S_EXFAT_ITEMS *RootItems, DWORD
   int secondary_count = 1 + ((csName.GetLength() + (EXFAT_MAX_NAME_PER_ENTRY - 1)) / EXFAT_MAX_NAME_PER_ENTRY);
   int i, w;
   
-  void *root = (struct S_EXFAT_ROOT *) ReadFile(RootItems->Cluster, &rootsize, RootItems->Flags);
+  void *root = (struct S_EXFAT_ROOT *) ReadFile(RootItems->Cluster, &rootsize, (BYTE) (RootItems->Flags >> 8));
   if (root) {
     entry = (struct S_EXFAT_ROOT *) root;
     while ((BYTE *) entry < ((BYTE *) root + rootsize)) {
@@ -789,7 +792,7 @@ void CExFat::AllocateRoot(CString csName, struct S_EXFAT_ITEMS *RootItems, DWORD
     }
     
     // write the root back to the file image
-    WriteFile(root, RootItems->Cluster, rootsize, RootItems->Flags);
+    WriteFile(root, RootItems->Cluster, rootsize, (BYTE) (RootItems->Flags >> 8));
     free(root);
   }
 }
@@ -926,7 +929,7 @@ void CExFat::ExFatWriteFAT(void *fat_buffer) {
   dlg->WriteToFile(fat_buffer, m_lba + vbr->first_fat, vbr->sect_per_fat);
 }
 
-void CExFat::SaveItemInfo(HTREEITEM hItem, HTREEITEM hParent, DWORD Cluster, DWORD64 FileSize, BYTE Flags, DWORD EntryOffset, DWORD ErrorCode, BOOL CanCopy) {
+void CExFat::SaveItemInfo(HTREEITEM hItem, HTREEITEM hParent, DWORD Cluster, DWORD64 FileSize, DWORD Flags, DWORD EntryOffset, DWORD ErrorCode, BOOL CanCopy) {
   struct S_EXFAT_ITEMS *items = (struct S_EXFAT_ITEMS *) m_dir_tree.GetDataStruct(hItem);
   if (items) {
     items->hParent = hParent;
@@ -956,7 +959,7 @@ void CExFat::OnExFatEntry() {
       if (items->hParent) {
         parent_items = (struct S_EXFAT_ITEMS *) m_dir_tree.GetDataStruct(items->hParent);
         ExFatEntry.m_root_cluster = parent_items->Cluster;
-        ExFatEntry.m_Flags = parent_items->Flags;
+        ExFatEntry.m_Flags = (BYTE) (parent_items->Flags >> 8);
         ExFatEntry.m_buffer_size = parent_items->FileSize;
       } else {
         struct S_EXFAT_VBR *vbr = (struct S_EXFAT_VBR *) m_vbr_buffer;
@@ -1403,7 +1406,7 @@ void CExFat::CopyFile(HTREEITEM hItem, CString csName) {
     if (items->Cluster == 0)
       return;
     DWORD64 size = items->FileSize;
-    void *ptr = ReadFile(items->Cluster, &size, items->Flags);
+    void *ptr = ReadFile(items->Cluster, &size, (BYTE) (items->Flags >> 8));
     if (ptr) {
       CFile file;
       if (file.Open(csName, CFile::modeCreate | CFile::modeWrite | CFile::typeBinary | CFile::shareExclusive, NULL) != 0) {
@@ -1464,8 +1467,43 @@ void CExFat::CopyFolder(HTREEITEM hItem, CString csPath, CString csName) {
   SetCurrentDirectory(szCurPath);
 }
 
+void CExFat::OnExFatView() {
+  char szPath[MAX_PATH];
+  char szName[MAX_PATH];
+  CString csPath, csName;
+  BOOL IsDir = FALSE;
+  
+  // get the path from the tree control
+  HTREEITEM hItem = m_dir_tree.GetFullPath(NULL, &IsDir, csName, csPath, TRUE);
+  if (!hItem)
+    return;
+  
+  CWaitCursor wait;
+  
+  if (IsDir)  // we shouldn't have found this
+    return;
+
+  if ((GetTempPath(MAX_PATH, szPath) == 0) ||
+      (GetTempFileName(szPath, "ULT", 0, szName) == 0)) {
+    AfxMessageBox("Error creating temp file...");
+    return;
+  }
+
+  // copy the file to the temp file
+  csPath = szName;
+  CopyFile(hItem, csPath);
+
+  // open the file using the default/specified app
+  csName = AfxGetApp()->GetProfileString("Settings", "DefaultViewerPath", "notepad.exe");
+  ShellExecute(NULL, _T("open"), csName, szName, _T(""), SW_SHOWNORMAL);
+  
+  wait.Restore();
+}
+
 void CExFat::OnExFatInsert() {
+  
   // TODO:
+
   char szPath[MAX_PATH];
   BOOL IsDir, bError = FALSE;
   CString csName, csPath;
@@ -1717,7 +1755,7 @@ void CExFat::DeleteFile(HTREEITEM hItem) {
   
   bool root_mod = FALSE;
   DWORD64 rootsize = 0;
-  root = ReadFile(root_items->Cluster, &rootsize, root_items->Flags);
+  root = ReadFile(root_items->Cluster, &rootsize, (BYTE) (root_items->Flags >> 8));
   if (root) {
     struct S_EXFAT_ROOT *entry = (struct S_EXFAT_ROOT *) ((BYTE *) root + items->EntryOffset);
     int secondary_count;
@@ -1764,7 +1802,7 @@ void CExFat::DeleteFile(HTREEITEM hItem) {
     
     // write back the new root
     if (root_mod)
-      WriteFile(root, root_items->Cluster, rootsize, root_items->Flags);
+      WriteFile(root, root_items->Cluster, rootsize, (BYTE) (root_items->Flags >> 8));
     free(root);
   }
 }

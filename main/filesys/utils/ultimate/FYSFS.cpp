@@ -149,6 +149,7 @@ BEGIN_MESSAGE_MAP(CFYSFS, CPropertyPage)
   ON_BN_CLICKED(ID_CHECK, OnFYSFSCheck)
   ON_BN_CLICKED(ID_UPDATE_CODE, OnUpdateCode)
   ON_BN_CLICKED(ID_COPY, OnFYSFSCopy)
+  ON_BN_CLICKED(ID_VIEW, OnFYSFSView)
   ON_BN_CLICKED(ID_INSERT, OnFYSFSInsert)
   ON_BN_CLICKED(ID_SEARCH, OnSearch)
   ON_BN_CLICKED(ID_ERASE, OnErase)
@@ -203,6 +204,7 @@ void CFYSFS::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
 
   GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
   GetDlgItem(ID_COPY)->EnableWindow((hItem != NULL) && items->CanCopy);
+  GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & ITEM_IS_FILE));
   GetDlgItem(ID_INSERT)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));
   
   *pResult = 0;
@@ -457,6 +459,11 @@ void CFYSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, con
   
   SendToDialog(&m_super);
   
+  GetDlgItem(ID_ENTRY)->EnableWindow(FALSE);
+  GetDlgItem(ID_COPY)->EnableWindow(FALSE);
+  GetDlgItem(ID_VIEW)->EnableWindow(FALSE);
+  GetDlgItem(ID_INSERT)->EnableWindow(FALSE);
+  GetDlgItem(ID_DELETE)->EnableWindow(FALSE);
   GetDlgItem(ID_SEARCH)->EnableWindow(FALSE);
   
   if (m_isvalid) {
@@ -473,7 +480,7 @@ void CFYSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, con
     struct S_FYSFS_ROOT *root = (struct S_FYSFS_ROOT *) calloc((m_super.root_entries * sizeof(struct S_FYSFS_ROOT)) + (MAX_SECT_SIZE - 1), 1);
     if (root) {
       dlg->ReadFromFile(root, m_lba + m_super.root, ((m_super.root_entries * sizeof(struct S_FYSFS_ROOT)) + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
-      SaveItemInfo(m_hRoot, m_super.root_entries, NULL, 0, 0, FALSE);
+      SaveItemInfo(m_hRoot, m_super.root_entries, NULL, 0, ITEM_IS_FOLDER, 0, FALSE);
       CWaitCursor wait; // display a wait cursor
       m_too_many = FALSE;
       ParseDir(root, m_super.root_entries, m_hRoot, TRUE);
@@ -513,7 +520,7 @@ void CFYSFS::ParseDir(struct S_FYSFS_ROOT *root, const unsigned entries, HTREEIT
         else
           hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, filesize, &root[i], S_FYSFS_ROOT_NEW, 0, TRUE);
+        SaveItemInfo(hItem, filesize, &root[i], S_FYSFS_ROOT_NEW, ITEM_IS_FILE, 0, TRUE);
         break;
         
       case S_FYSFS_ROOT_DEL:
@@ -521,14 +528,14 @@ void CFYSFS::ParseDir(struct S_FYSFS_ROOT *root, const unsigned entries, HTREEIT
         name += " (deleted)";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, filesize, &root[i], S_FYSFS_ROOT_DEL, 0, FALSE);
+        SaveItemInfo(hItem, filesize, &root[i], S_FYSFS_ROOT_DEL, ITEM_IS_FILE, 0, FALSE);
         break;
         
       case S_FYSFS_ROOT_SUB:
         FysFSGetName(root, i, name, &attrb, &filesize);
         hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, filesize, &root[i], S_FYSFS_ROOT_SUB, 0, TRUE);
+        SaveItemInfo(hItem, filesize, &root[i], S_FYSFS_ROOT_SUB, ITEM_IS_FOLDER, 0, TRUE);
         sub = (struct S_FYSFS_ROOT *) ReadFile(&root[i]);
         if (sub) {
           ParseDir(sub, (unsigned) (filesize / sizeof(struct S_FYSFS_ROOT)), hItem, FALSE);
@@ -766,13 +773,14 @@ void *CFYSFS::ReadFile(struct S_FYSFS_ROOT *root) {
   return ptr;
 }
 
-void CFYSFS::SaveItemInfo(HTREEITEM hItem, DWORD64 FileSize, struct S_FYSFS_ROOT *Entry, DWORD Sig, DWORD ErrorCode, BOOL CanCopy) {
+void CFYSFS::SaveItemInfo(HTREEITEM hItem, DWORD64 FileSize, struct S_FYSFS_ROOT *Entry, DWORD Sig, DWORD flags, DWORD ErrorCode, BOOL CanCopy) {
   struct S_FYSFS_ITEMS *items = (struct S_FYSFS_ITEMS *) m_dir_tree.GetDataStruct(hItem);
   if (items) {
     items->FileSize = FileSize;
     items->ErrorCode = ErrorCode;
     items->CanCopy = CanCopy;
     items->Sig = Sig;
+    items->Flags = flags;
     if (Entry)
       memcpy(&items->Entry, Entry, sizeof(struct S_FYSFS_ROOT));
   }
@@ -937,6 +945,39 @@ void CFYSFS::CopyFolder(HTREEITEM hItem, CString csPath, CString csName) {
   
   // restore the current directory
   SetCurrentDirectory(szCurPath);
+}
+
+void CFYSFS::OnFYSFSView() {
+  char szPath[MAX_PATH];
+  char szName[MAX_PATH];
+  CString csPath, csName;
+  BOOL IsDir = FALSE;
+  
+  // get the path from the tree control
+  HTREEITEM hItem = m_dir_tree.GetFullPath(NULL, &IsDir, csName, csPath, TRUE);
+  if (!hItem)
+    return;
+  
+  CWaitCursor wait;
+  
+  if (IsDir)  // we shouldn't have found this
+    return;
+
+  if ((GetTempPath(MAX_PATH, szPath) == 0) ||
+      (GetTempFileName(szPath, "ULT", 0, szName) == 0)) {
+    AfxMessageBox("Error creating temp file...");
+    return;
+  }
+
+  // copy the file to the temp file
+  csPath = szName;
+  CopyFile(hItem, csPath);
+
+  // open the file using the default/specified app
+  csName = AfxGetApp()->GetProfileString("Settings", "DefaultViewerPath", "notepad.exe");
+  ShellExecute(NULL, _T("open"), csName, szName, _T(""), SW_SHOWNORMAL);
+  
+  wait.Restore();
 }
 
 void CFYSFS::OnFYSFSInsert() {

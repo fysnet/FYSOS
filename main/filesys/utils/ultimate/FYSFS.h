@@ -212,9 +212,9 @@ struct S_FYSFS_ITEMS {
   DWORD64 FileSize;
   DWORD ErrorCode;
   BOOL  CanCopy;        // the entry is not a deleted/invalid/other that we can copy out to the host
+  DWORD Flags;
   DWORD Sig;
   struct S_FYSFS_ROOT Entry;
-  
 };
 
 #pragma pack(pop)
@@ -274,7 +274,7 @@ public:
   void FysFSGetName(struct S_FYSFS_ROOT *root, unsigned index, CString &name, DWORD *attrb, DWORD64 *filesize);
   //DWORD64 FysFSGetFATEntry(struct S_FYSFS_ROOT *root, unsigned root_index, unsigned index);
   bool FYSFSFormat(const BOOL AskForBoot, const BOOL clean);
-  void SaveItemInfo(HTREEITEM hItem, DWORD64 FileSize, struct S_FYSFS_ROOT *Entry, DWORD Sig, DWORD ErrorCode, BOOL CanCopy);
+  void SaveItemInfo(HTREEITEM hItem, DWORD64 FileSize, struct S_FYSFS_ROOT *Entry, DWORD Sig, DWORD flags, DWORD ErrorCode, BOOL CanCopy);
   
   void SendToDialog(struct S_FYSFS_SUPER *super);
   void ReceiveFromDialog(struct S_FYSFS_SUPER *super);
@@ -317,6 +317,7 @@ protected:
   afx_msg void OnFYSFSCheck();
   afx_msg void OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult);
   afx_msg void OnFYSFSCopy();
+  afx_msg void OnFYSFSView();
   afx_msg void OnFYSFSEntry();
   afx_msg void OnFYSFSInsert();
   afx_msg void OnFysosSig();

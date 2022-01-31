@@ -85,6 +85,7 @@ CSettings::CSettings(CWnd* pParent /*=NULL*/)
   m_clear_mru = FALSE;
   m_extract_path = _T("");
   m_help_path = _T("");
+  m_viewer_path = _T("");
   m_force_fysos = FALSE;
   //}}AFX_DATA_INIT
 }
@@ -100,6 +101,7 @@ void CSettings::DoDataExchange(CDataExchange* pDX) {
   DDX_Check(pDX, IDC_CLEAR_MRU, m_clear_mru);
   DDX_Text(pDX, IDC_EXTRACT_PATH, m_extract_path);
   DDX_Text(pDX, IDC_HELP_PATH, m_help_path);
+  DDX_Text(pDX, IDC_VIEWER_PATH, m_viewer_path);
   DDX_Check(pDX, IDC_FORCE_FYSOS, m_force_fysos);
   //}}AFX_DATA_MAP
 }
@@ -109,6 +111,7 @@ BEGIN_MESSAGE_MAP(CSettings, CDialog)
   ON_BN_CLICKED(IDC_MBR_PATH_BRZ, OnMbrPathBrz)
   ON_BN_CLICKED(IDC_EMBR_PATH_BRZ, OnEmbrPathBrz)
   ON_BN_CLICKED(IDC_EXTRACT_PATH_BRZ, OnExtractPathBrz)
+  ON_BN_CLICKED(IDC_VIEWER_PATH_BRZ, OnViewerPathBrz)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
@@ -140,4 +143,13 @@ void CSettings::OnExtractPathBrz() {
   GetDlgItemText(IDC_EXTRACT_PATH, csStart);
   if (BrowseForFolder(GetSafeHwnd(), csStart, szPath, BIF_RETURNFSANCESTORS | BIF_RETURNONLYFSDIRS))
     SetDlgItemText(IDC_EXTRACT_PATH, szPath);
+}
+
+void CSettings::OnViewerPathBrz() {
+  CString csStart;
+  char szPath[MAX_PATH];
+  
+  GetDlgItemText(IDC_VIEWER_PATH, csStart);
+  if (BrowseForFolder(GetSafeHwnd(), csStart, szPath, BIF_RETURNFSANCESTORS | BIF_RETURNONLYFSDIRS))
+    SetDlgItemText(IDC_VIEWER_PATH, szPath);
 }

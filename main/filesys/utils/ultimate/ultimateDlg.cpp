@@ -1638,6 +1638,7 @@ void CUltimateDlg::OnAppSettings() {
   dlg.m_mbr_path = App->GetProfileString("Settings", "DefaultMBRPath", NULL);
   dlg.m_embr_path = App->GetProfileString("Settings", "DefaultEMBRPath", NULL);
   dlg.m_extract_path = App->GetProfileString("Settings", "DefaultExtractPath", NULL);
+  dlg.m_viewer_path = App->GetProfileString("Settings", "DefaultViewerPath", "notepad.exe");
   dlg.m_clear_mru = FALSE;
   
   if (dlg.DoModal() == IDOK) {
@@ -1648,6 +1649,7 @@ void CUltimateDlg::OnAppSettings() {
     App->WriteProfileString("Settings", "DefaultMBRPath", dlg.m_mbr_path);
     App->WriteProfileString("Settings", "DefaultEMBRPath", dlg.m_embr_path);
     App->WriteProfileString("Settings", "DefaultExtractPath", dlg.m_extract_path);
+    App->WriteProfileString("Settings", "DefaultViewerPath", dlg.m_viewer_path);
     if (dlg.m_clear_mru) {
       int i = m_rfl->GetSize();
       while (i--)

@@ -210,6 +210,7 @@ struct S_ISO_TERM {
 struct S_ISO_ITEMS {
   BOOL  CanCopy;        // the entry is not a deleted/invalid/other that we can copy out to the host
   BYTE RootEntry[34 + 256];
+  DWORD Flags;
   //struct S_ISO_ROOT root;
   //BYTE rest_of_ident[256];  
 };
@@ -258,7 +259,7 @@ public:
   void *ReadFile(DWORD extent, DWORD size, BYTE Flags, BOOL IsRoot);
   DWORD CheckRootEntry(struct S_ISO_ROOT *r);
   bool ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM parent, BOOL IsRoot);
-  void SaveItemInfo(HTREEITEM hItem, struct S_ISO_ROOT *root, DWORD ErrorCode, BOOL CanCopy);
+  void SaveItemInfo(HTREEITEM hItem, struct S_ISO_ROOT *root, DWORD flags, DWORD ErrorCode, BOOL CanCopy);
   
   void SendToDialog(const BOOL update);
   void ReceiveFromDialog(void);
@@ -299,6 +300,7 @@ protected:
   afx_msg void OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult);
   afx_msg void OnEntry();
   afx_msg void OnCopy();
+  afx_msg void OnView();
   afx_msg void OnInsert();
   afx_msg void OnISOCheck();
   afx_msg void OnExpand();

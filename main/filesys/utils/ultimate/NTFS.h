@@ -293,7 +293,7 @@ struct S_NTFS_ITEMS {
   BOOL  CanCopy;        // the entry is not a deleted/invalid/other that we can copy out to the host
   unsigned mft_entry;
   DWORD ErrorCode;
-  
+  DWORD Flags;
 };
 
 #pragma pack(pop)
@@ -341,7 +341,7 @@ public:
   
   void SendToDialog(struct S_NTFS_BPB *bpb);
   void ReceiveFromDialog(struct S_NTFS_BPB *bpb);
-  void SaveItemInfo(HTREEITEM hItem, unsigned ref, DWORD ErrorCode, BOOL CanCopy);
+  void SaveItemInfo(HTREEITEM hItem, unsigned ref, DWORD ErrorCode, DWORD flags, BOOL CanCopy);
   void *ReadFile(const unsigned ref, DWORD64 *FileSize);
   
   void CopyFile(HTREEITEM hItem, CString csName);
@@ -397,6 +397,7 @@ protected:
   afx_msg void OnFormat();
   afx_msg void OnCheck();
   afx_msg void OnCopy();
+  afx_msg void OnView();
   afx_msg void OnInsert();
   afx_msg void OnEntry();
   afx_msg void OnDelClear();

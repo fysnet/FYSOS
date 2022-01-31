@@ -213,6 +213,7 @@ BEGIN_MESSAGE_MAP(CFat, CPropertyPage)
   ON_BN_CLICKED(ID_CHECK, OnFatCheck)
   ON_BN_CLICKED(ID_UPDATE_CODE, OnUpdateCode)
   ON_BN_CLICKED(ID_COPY, OnFatCopy)
+  ON_BN_CLICKED(ID_VIEW, OnFatView)
   ON_BN_CLICKED(IDC_INSERT_VLABEL, OnInsertVLabel)
   ON_BN_CLICKED(ID_INSERT, OnFatInsert)
   ON_BN_CLICKED(ID_SEARCH, OnSearch)
@@ -279,6 +280,7 @@ void CFat::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
 
   GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
   GetDlgItem(ID_COPY)->EnableWindow((hItem != NULL) && items->CanCopy);
+  GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & ITEM_IS_FILE));
   GetDlgItem(ID_INSERT)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));
   GetDlgItem(ID_DELETE)->EnableWindow(hItem != NULL);
   
@@ -722,6 +724,7 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   
   GetDlgItem(ID_ENTRY)->EnableWindow(FALSE);
   GetDlgItem(ID_COPY)->EnableWindow(FALSE);
+  GetDlgItem(ID_VIEW)->EnableWindow(FALSE);
   GetDlgItem(ID_INSERT)->EnableWindow(FALSE);
   GetDlgItem(ID_DELETE)->EnableWindow(FALSE);
   GetDlgItem(ID_SEARCH)->EnableWindow(FALSE);
@@ -759,7 +762,7 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
       m_datastart = m_rootstart + (((bpb12->root_entrys * 32) + (bpb12->bytes_per_sect - 1)) / bpb12->bytes_per_sect);
     }
     if (root) {
-      SaveItemInfo(m_hRoot, rootcluster, m_rootsize, NULL, 0, 0, 0, FALSE);
+      SaveItemInfo(m_hRoot, rootcluster, m_rootsize, NULL, 0, 0, ITEM_IS_FOLDER, 0, FALSE);
       CWaitCursor wait; // display a wait cursor
       m_too_many = FALSE;
       m_parse_depth_limit = 0;  // start new
@@ -810,7 +813,7 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
     else if (ErrorCode != FAT_NO_ERROR) {
       hItem = m_dir_tree.Insert("Invalid Entry", ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, parent);
       if (hItem == NULL) { m_too_many = TRUE; m_parse_depth_limit--; return TRUE; }
-      SaveItemInfo(hItem, 0, filesize, &root[i], i, 1, ErrorCode, FALSE);
+      SaveItemInfo(hItem, 0, filesize, &root[i], i, 1, ITEM_IS_FILE, ErrorCode, FALSE);
       cnt = 1;
       if (++ErrorCount >= ErrorMax)
         break;
@@ -822,7 +825,7 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
           name = "(deleted entry)";
           hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, parent);
           if (hItem == NULL) { m_too_many = TRUE; m_parse_depth_limit--; return TRUE; }
-          SaveItemInfo(hItem, 0, filesize, &root[i], i, cnt, 0, FALSE);
+          SaveItemInfo(hItem, 0, filesize, &root[i], i, cnt, ITEM_IS_FILE, 0, FALSE);
         }
       } else {
         // retrieve the name.
@@ -833,7 +836,7 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
           else
             hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
           if (hItem == NULL) { m_too_many = TRUE; m_parse_depth_limit--; return TRUE; }
-          SaveItemInfo(hItem, start, filesize, &root[i], i, cnt, 0, !IsDot);
+          SaveItemInfo(hItem, start, filesize, &root[i], i, cnt, ITEM_IS_FOLDER, 0, !IsDot);
           if (!IsDot) {
             sub = (struct S_FAT_ROOT *) ReadFile(start, &filesize, FALSE);
             if (sub) {
@@ -848,14 +851,14 @@ bool CFat::ParseDir(struct S_FAT_ROOT *root, const unsigned entries, HTREEITEM p
         } else if (attrb & FAT_ATTR_VOLUME) {
           hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_LABEL, IMAGE_LABEL, parent);
           if (hItem == NULL) { m_too_many = TRUE; m_parse_depth_limit--; return TRUE; }
-          SaveItemInfo(hItem, 0, filesize, &root[i], i, cnt, 0, FALSE);
+          SaveItemInfo(hItem, 0, filesize, &root[i], i, cnt, 0, 0, FALSE);
         } else {
           if (attrb & FAT_ATTR_HIDDEN)
             hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE_HIDDEN, IMAGE_FILE_HIDDEN, parent);
           else
             hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
           if (hItem == NULL) { m_too_many = TRUE; m_parse_depth_limit--; return TRUE; }
-          SaveItemInfo(hItem, start, filesize, &root[i], i, cnt, 0, TRUE);
+          SaveItemInfo(hItem, start, filesize, &root[i], i, cnt, ITEM_IS_FILE, 0, TRUE);
         }
       }
     }
@@ -1765,7 +1768,7 @@ void CFat::ReceiveFromDialog(void *ptr) {
   }
 }
 
-void CFat::SaveItemInfo(HTREEITEM hItem, DWORD Cluster, DWORD FileSize, struct S_FAT_ROOT *Entry, int Index, int count, DWORD ErrorCode, BOOL CanCopy) {
+void CFat::SaveItemInfo(HTREEITEM hItem, DWORD Cluster, DWORD FileSize, struct S_FAT_ROOT *Entry, int Index, int count, DWORD flags, DWORD ErrorCode, BOOL CanCopy) {
   struct S_FAT_ITEMS *items = (struct S_FAT_ITEMS *) m_dir_tree.GetDataStruct(hItem);
   if (items) {
     items->Cluster = Cluster;
@@ -1773,6 +1776,7 @@ void CFat::SaveItemInfo(HTREEITEM hItem, DWORD Cluster, DWORD FileSize, struct S
     items->Index = Index;
     items->ErrorCode = ErrorCode;
     items->CanCopy = CanCopy;
+    items->Flags = flags;
     
     if (count > 64) count = 64;
     items->EntryCount = count;
@@ -1899,6 +1903,39 @@ void CFat::CopyFolder(HTREEITEM hItem, CString csPath, CString csName) {
   
   // restore the current directory
   SetCurrentDirectory(szCurPath);
+}
+
+void CFat::OnFatView() {
+  char szPath[MAX_PATH];
+  char szName[MAX_PATH];
+  CString csPath, csName;
+  BOOL IsDir = FALSE;
+  
+  // get the path from the tree control
+  HTREEITEM hItem = m_dir_tree.GetFullPath(NULL, &IsDir, csName, csPath, TRUE);
+  if (!hItem)
+    return;
+  
+  CWaitCursor wait;
+  
+  if (IsDir)  // we shouldn't have found this
+    return;
+
+  if ((GetTempPath(MAX_PATH, szPath) == 0) ||
+      (GetTempFileName(szPath, "ULT", 0, szName) == 0)) {
+    AfxMessageBox("Error creating temp file...");
+    return;
+  }
+
+  // copy the file to the temp file
+  csPath = szName;
+  CopyFile(hItem, csPath);
+
+  // open the file using the default/specified app
+  csName = AfxGetApp()->GetProfileString("Settings", "DefaultViewerPath", "notepad.exe");
+  ShellExecute(NULL, _T("open"), csName, szName, _T(""), SW_SHOWNORMAL);
+  
+  wait.Restore();
 }
 
 // insert a volume label entry into the root directory.

@@ -225,9 +225,9 @@ struct S_LEAN_ITEMS {
   DWORD64 Inode;
   DWORD64 FileSize;
   DWORD ErrorCode;
-  BOOL  CanCopy;        // the entry is not a deleted/invalid/other that we can copy out to the host
-  DWORD Offset; // byte offset in directory where this entry starts
-  
+  BOOL  CanCopy;    // the entry is not a deleted/invalid/other that we can copy out to the host
+  DWORD Offset;     // byte offset in directory where this entry starts
+  DWORD Flags;
 };
 
 #pragma pack(pop)
@@ -301,7 +301,7 @@ public:
   BOOL ValidInode(const struct S_LEAN_INODE *inode);
   BOOL ValidIndirect(const struct S_LEAN_INDIRECT *indirect);
   DWORD LeanCalcCRC(const void *data, unsigned count);
-  void SaveItemInfo(HTREEITEM hItem, DWORD64 Inode, DWORD64 FileSize, DWORD Offset, BOOL CanCopy);
+  void SaveItemInfo(HTREEITEM hItem, DWORD64 Inode, DWORD64 FileSize, DWORD flags, DWORD Offset, BOOL CanCopy);
   bool Format(const BOOL AskForBoot);
   
   void SendToDialog(struct S_LEAN_SUPER *super);
@@ -377,6 +377,7 @@ protected:
   afx_msg void OnChangeLeanBlockBand();
   afx_msg void OnChangeLeanBlockSize();
   afx_msg void OnLeanCopy();
+  afx_msg void OnLeanView();
   afx_msg void OnLeanInsert();
   afx_msg void OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult);
   afx_msg void OnLeanEntry();

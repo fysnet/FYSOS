@@ -136,6 +136,7 @@ BEGIN_MESSAGE_MAP(CSFS, CPropertyPage)
   ON_BN_CLICKED(IDC_CRC_UPDATE, OnCrcUpdate)
   ON_EN_CHANGE(IDC_SFS_TIMESTAMP, OnChangeSfsTimestamp)
   ON_BN_CLICKED(ID_COPY, OnSfsCopy)
+  ON_BN_CLICKED(ID_VIEW, OnSfsView)
   ON_BN_CLICKED(ID_ENTRY, OnSfsEntry)
   ON_BN_CLICKED(ID_INSERT, OnSfsInsert)
   ON_BN_CLICKED(ID_FYSOS_SIG, OnFysosSig)
@@ -190,6 +191,7 @@ void CSFS::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
 
   GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
   GetDlgItem(ID_COPY)->EnableWindow(IsFileOrFolder(hItem) || ((hItem != NULL) && (m_dir_tree.IsDir(hItem) == -1)) && items->CanCopy);
+  GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & ITEM_IS_FILE));
   GetDlgItem(ID_INSERT)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));
   GetDlgItem(ID_DELETE)->EnableWindow(IsFileOrFolder(hItem));
   
@@ -435,6 +437,7 @@ void CSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   
   GetDlgItem(ID_ENTRY)->EnableWindow(FALSE);
   GetDlgItem(ID_COPY)->EnableWindow(FALSE);
+  GetDlgItem(ID_VIEW)->EnableWindow(FALSE);
   GetDlgItem(ID_INSERT)->EnableWindow(FALSE);
   GetDlgItem(ID_DELETE)->EnableWindow(FALSE);
   GetDlgItem(ID_SEARCH)->EnableWindow(FALSE);
@@ -456,7 +459,7 @@ void CSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
     UpdateWindow();
     
     // fill the tree with the directory
-    SaveItemInfo(m_hRoot, NULL, -1, FALSE);
+    SaveItemInfo(m_hRoot, NULL, -1, ITEM_IS_FOLDER, FALSE);
     CWaitCursor wait; // display a wait cursor
     const unsigned offset = (m_indx_size * 512) - (unsigned) m_super.index_size;
     m_too_many = FALSE;
@@ -495,13 +498,13 @@ void CSFS::ParseDir(const BYTE *index, const int entries) {
         if (CalculateCRC(index, SFS_ENTRY_SIZE) != 0) name += " (Bad CRC)";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, m_hRoot);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, index, i, FALSE);
+        SaveItemInfo(hItem, index, i, 0, FALSE);
         cnt = 1;
       } break;
       case SFS_ENTRY_START:    // start marker
         hItem = m_dir_tree.Insert("(Start Entry)", ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, m_hRoot);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, index, i, FALSE);
+        SaveItemInfo(hItem, index, i, 0, FALSE);
         cnt = 1;
         break;
       case SFS_ENTRY_UNUSED:   // unused
@@ -517,7 +520,7 @@ void CSFS::ParseDir(const BYTE *index, const int entries) {
         //if (CalculateCRC(index, SFS_ENTRY_SIZE + (eDir->num_cont * SFS_ENTRY_SIZE)) != 0) name += " (Bad CRC)";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, hParent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, index, i, TRUE);
+        SaveItemInfo(hItem, index, i, ITEM_IS_FOLDER, TRUE);
         cnt = 1 + eDir->num_cont;
       } break;
       case SFS_ENTRY_FILE: {   // file entry
@@ -527,7 +530,7 @@ void CSFS::ParseDir(const BYTE *index, const int entries) {
         if (CalculateCRC(index, SFS_ENTRY_SIZE + (eFile->num_cont * SFS_ENTRY_SIZE)) != 0) name += " (Bad CRC)";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, hParent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, index, i, TRUE);
+        SaveItemInfo(hItem, index, i, ITEM_IS_FILE, TRUE);
         cnt = 1 + eFile->num_cont;
       } break;
       case SFS_ENTRY_UNUSABLE: // unusable entry (bad sector(s))
@@ -535,7 +538,7 @@ void CSFS::ParseDir(const BYTE *index, const int entries) {
         if (CalculateCRC(index, SFS_ENTRY_SIZE) != 0) name += " (Bad CRC)";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, m_hRoot);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, index, i, FALSE);
+        SaveItemInfo(hItem, index, i, 0, FALSE);
         cnt = 1;
         break;
       case SFS_ENTRY_DIR_DEL: { // deleted directory
@@ -547,7 +550,7 @@ void CSFS::ParseDir(const BYTE *index, const int entries) {
           //if (CalculateCRC(index, SFS_ENTRY_SIZE + (eDir->num_cont * SFS_ENTRY_SIZE)) != 0) name += " (Bad CRC)";
           hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_DELETE, IMAGE_DELETE, hParent);
           if (hItem == NULL) { m_too_many = TRUE; return; }
-          SaveItemInfo(hItem, index, i, FALSE);
+          SaveItemInfo(hItem, index, i, 0, FALSE);
         }
         cnt = 1 + eDir->num_cont;
       } break;
@@ -559,7 +562,7 @@ void CSFS::ParseDir(const BYTE *index, const int entries) {
           if (CalculateCRC(index, SFS_ENTRY_SIZE + (eFile->num_cont * SFS_ENTRY_SIZE)) != 0) name += " (Bad CRC)";
           hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, hParent);
           if (hItem == NULL) { m_too_many = TRUE; return; }
-          SaveItemInfo(hItem, index, i, FALSE);
+          SaveItemInfo(hItem, index, i, ITEM_IS_FILE, FALSE);
         }
         cnt = 1 + eFile->num_cont;
       } break;
@@ -632,14 +635,14 @@ HTREEITEM CSFS::GetName(CString &csname, void *entry, BOOL IsDir, BOOL *Error) {
   return hParent;
 }
 
-void CSFS::SaveItemInfo(HTREEITEM hItem, const BYTE *Entry, int Index, BOOL CanCopy) {
+void CSFS::SaveItemInfo(HTREEITEM hItem, const BYTE *Entry, int Index, DWORD flags, BOOL CanCopy) {
   struct S_SFS_ITEMS *items = (struct S_SFS_ITEMS *) m_dir_tree.GetDataStruct(hItem);
   if (items) {
     if (Entry) memcpy(items->entry, Entry, SFS_ENTRY_SIZE);
     else       memset(items->entry, 0, SFS_ENTRY_SIZE);
     items->index = Index;
     items->CanCopy = CanCopy;
-    
+    items->Flags = flags;
   }
 }
 
@@ -885,6 +888,39 @@ void CSFS::CopyFolder(HTREEITEM hItem, CString csPath, CString csName) {
   
   // restore the current directory
   SetCurrentDirectory(szCurPath);
+}
+
+void CSFS::OnSfsView() {
+  char szPath[MAX_PATH];
+  char szName[MAX_PATH];
+  CString csPath, csName;
+  BOOL IsDir = FALSE;
+  
+  // get the path from the tree control
+  HTREEITEM hItem = m_dir_tree.GetFullPath(NULL, &IsDir, csName, csPath, TRUE);
+  if (!hItem)
+    return;
+  
+  CWaitCursor wait;
+  
+  if (IsDir)  // we shouldn't have found this
+    return;
+
+  if ((GetTempPath(MAX_PATH, szPath) == 0) ||
+      (GetTempFileName(szPath, "ULT", 0, szName) == 0)) {
+    AfxMessageBox("Error creating temp file...");
+    return;
+  }
+
+  // copy the file to the temp file
+  csPath = szName;
+  CopyFile(hItem, csPath);
+
+  // open the file using the default/specified app
+  csName = AfxGetApp()->GetProfileString("Settings", "DefaultViewerPath", "notepad.exe");
+  ShellExecute(NULL, _T("open"), csName, szName, _T(""), SW_SHOWNORMAL);
+  
+  wait.Restore();
 }
 
 void CSFS::OnSfsInsert() {

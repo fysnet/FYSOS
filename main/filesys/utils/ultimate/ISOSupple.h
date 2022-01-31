@@ -161,7 +161,7 @@ public:
   void DoRoot(void);
   void *ReadFile(DWORD extent, DWORD size, BYTE Flags, BOOL IsRoot);
   void ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM parent, BOOL IsRoot);
-  void SaveItemInfo(HTREEITEM hItem, struct S_ISO_ROOT *root, DWORD ErrorCode);
+  void SaveItemInfo(HTREEITEM hItem, struct S_ISO_ROOT *root, DWORD flags, DWORD ErrorCode);
   
   void SendToDialog(const BOOL update);
   void ReceiveFromDialog(void);
@@ -201,6 +201,7 @@ protected:
   afx_msg void OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult);
   afx_msg void OnEntry();
   afx_msg void OnCopy();
+  afx_msg void OnView();
   afx_msg void OnInsert();
   afx_msg void OnISOCheck();
   afx_msg void OnExpand();
