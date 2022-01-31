@@ -23,7 +23,6 @@ BEGIN
     BEGIN
         MENUITEM "&New",                        ID_FILE_NEW
         MENUITEM "&Open",                       ID_FILE_OPEN
-        MENUITEM "Open &PSF Font",              IDC_PSF_FONT
         MENUITEM "&Save",                       ID_FILE_SAVE, GRAYED
         MENUITEM "Save &as...",                 ID_FILE_SAVEAS, GRAYED
         MENUITEM SEPARATOR

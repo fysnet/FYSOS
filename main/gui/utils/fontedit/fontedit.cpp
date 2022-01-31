@@ -74,7 +74,7 @@
  *   When using the Visual Studio IDE, do not edit the resource.rc file within
  *    the IDE's editor.  It will add items that will break this build.
  *
- *  Last updated: 29 Jan 2022
+ *  Last updated: 30 Jan 2022
  *
  *   This code was built with Visual Studio 6.0 (for 32-bit Windows XP)
  *    and Visual Studio 2019 (for 64-bit Windows 10)
@@ -98,6 +98,7 @@
 
 OPENFILENAME ofn;
 char szFileName[512];
+char szExt[64];
 char szClassName[] = "Font Editor";
 char szFontName[MAX_NAME_LEN] = "";
 
@@ -123,13 +124,16 @@ bool isdirty = FALSE;
 bool drawgrid = FALSE;
 bool drawnumbers = TRUE;
 bool hexcodes = TRUE;
+int  ftype = -1;
+bit32u fmode = 0;
+void *hashtable = NULL;
+long int hashtablesz = 0;
 
 HWND hButtonPrev, hButtonNext, hButtonFirst, hButtonLast;
 HWND hButtonUp, hButtonDown, hButtonLeft, hButtonRight;
 HWND hButtonMinus, hButtonPlus;
 HWND hButtonInvert, hButtonHFlip, hButtonVFlip;
 HWND hButtonRestore;
-//HWND hCheckDrop;
 
 HWND hSliderX, hSliderY, hSliderW;
 
@@ -156,7 +160,7 @@ int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance, LPSTR lpszA
   
   // Use Windows's default colour as the background of the window
   wincl.hbrBackground = (HBRUSH) COLOR_BACKGROUND;
-  //wincl.hbrBackground = (HBRUSH) CreateSolidBrush(RGB(169,208,241));
+  //wincl.hbrBackground = (HBRUSH) CreateSolidBrush(RGB(169,208,241)); // change the background color to light blue
   
   // Register the window class, and if it fails quit the program
   if (!RegisterClassEx (&wincl))
@@ -196,7 +200,6 @@ int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance, LPSTR lpszA
   hButtonHFlip   = CreateButton(hwnd, BS_DEFPUSHBUTTON, "&Horz Flip", 75, 25);
   hButtonVFlip   = CreateButton(hwnd, BS_DEFPUSHBUTTON, "&Vert Flip", 75, 25);
   hButtonRestore = CreateButton(hwnd, BS_DEFPUSHBUTTON, "Re&store", 75, 25);
-//  hCheckDrop     = CreateButton(hwnd, BS_AUTOCHECKBOX | BS_LEFTTEXT, "Dr&op Character", 125, 25);
   
   hSliderX = CreateTrackBar(hwnd, SLIDERW, SLIDERH);
   hSliderY = CreateTrackBar(hwnd, SLIDERW, SLIDERH);
@@ -325,7 +328,6 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
   struct FONT_INFO *info;
   bit8u *data;
   char szStr[256];
-  char szExt[64];
   
   PAINTSTRUCT ps;
   static int x, y, x1, y1;
@@ -439,9 +441,6 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         case 'S':
           SendMessage(hButtonRestore, BM_CLICK, 0, 0);
           break;
-//        case 'O':
-//          SendMessage(hCheckDrop, BM_CLICK, 0, 0);
-//          break;
       }
       // we need to set the focus to the hwnd so it will still catch the keypresses
       SetFocus(hwnd);
@@ -511,7 +510,6 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           return 0;
           
         case ID_FILE_OPEN:
-        case IDC_PSF_FONT:
           if (drawgrid)
             SaveCurChar(font, cur_char);
           
@@ -524,19 +522,9 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             }
           strcpy(szFileName, "");
           
-          if (LOWORD(wParam) == ID_FILE_OPEN) {
-            strcpy(szStr, "Open a Font File.");
-            memcpy(szExt, "Font Files (*.fnt)\0*.fnt\0\0", 27);
-          } else {
-            strcpy(szStr, "Open a PSF Font File.");
-            memcpy(szExt, "PSF Font Files (*.psf*)\0*.psf*\0\0", 33);
-          }
-          result = OpenFileDialog(hwnd, szFileName, (TCHAR *) szStr, (TCHAR *) szExt);
+          result = OpenFileDialog(hwnd, szFileName);
           if (result) {
-            if (LOWORD(wParam) == ID_FILE_OPEN)
-              font = OpenFile(hwnd, font);
-            else
-              font = OpenFilePSF(hwnd, font);
+            font = OpenFile(hwnd, font);
             if (font == NULL) {
               MessageBox(hwnd, "Error Loading File", "Warning!!!", MB_ICONEXCLAMATION | MB_OK);
               drawgrid = FALSE;
@@ -555,15 +543,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             tstart = font->start;
             tending = font->count - 1;
             EnableItems(menu, font);
-
-            if (LOWORD(wParam) == IDC_PSF_FONT) {
-              EnableMenuItem(menu, ID_FILE_SAVE, MF_GRAYED);
-              isdirty = TRUE;
-              strcpy(szFileName, "untitled.fnt");
-            } else {
-              EnableMenuItem(menu, ID_FILE_SAVE, MF_ENABLED);
-              isdirty = FALSE;
-            }
+            EnableMenuItem(menu, ID_FILE_SAVE, MF_ENABLED);
+            isdirty = FALSE;
 
             // update the title of the window
             SetTitleStr(hwnd);
@@ -579,9 +560,44 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           
         case ID_FILE_SAVEAS:
           SaveCurChar(font, cur_char);
-          result = SaveFileDialog(hwnd, szFileName, (TCHAR *) "Save the Font File.", (TCHAR *) "Font Files (*.fnt)\0*.fnt\0\0");
+          result = SaveFileDialog(hwnd, szFileName, "Save the Font File.", 
+            TEXT("All Files...\0*.*\0"
+                 "FYSOS Font file (*.fnt)\0*.fnt\0"
+                 "Linux PSFv1 (*.psf)\0*.psf\0"
+                 "Linux PSFv2 (*.psfu)\0*.psfu\0"
+                 "\0"));
           if (result) {
+            strcpy(szExt, szFileName + ofn.nFileExtension);
+            if (_stricmp(szExt, "fnt") == 0) {
+              if (ftype != FTYPE_FONT) {
+                ftype = FTYPE_FONT;
+                if (hashtable)
+                  free(hashtable);
+                hashtablesz = 0;
+                fmode = 0;
+              }
+            } else if (_stricmp(szExt, "psf") == 0) {
+              if (ftype != FTYPE_PSFv1) {
+                ftype = FTYPE_PSFv1;
+                fmode = 0;
+                if (font->count > 256)
+                  fmode |= PSF1_MODE512;
+                if (hashtable && (hashtablesz > 0))
+                  fmode |= PSF1_MODEHASTAB;
+              }
+            } else if (_stricmp(szExt, "psfu") == 0) {
+              if (ftype != FTYPE_PSFv2) {
+                ftype = FTYPE_PSFv2;
+                fmode = (hashtable && (hashtablesz > 0)) ? 1 : 0;
+              }
+            } else {
+              MessageBox(hwnd, "Unknown File Type", NULL, MB_OK);
+              return 0;
+            }
+            
+            // save it
             SaveFile(hwnd, font);
+            
             // update the title of the window
             SetTitleStr(hwnd);
             EnableMenuItem(menu, ID_FILE_SAVE, MF_ENABLED);
@@ -1079,8 +1095,6 @@ void DisableItems(HMENU menu) {
   ShowWindow(hSliderX, SW_HIDE);
   ShowWindow(hSliderY, SW_HIDE);
   ShowWindow(hSliderW, SW_HIDE);
-
-//  ShowWindow(hCheckDrop, SW_HIDE);
 }
 
 void EnableItems(HMENU menu, struct FONT *font) {
@@ -1140,9 +1154,7 @@ void EnableItems(HMENU menu, struct FONT *font) {
   ShowWindow(hSliderY, SW_SHOW);
   SetWindowPos(hSliderW, HWND_TOP, BUTTONSRT - 10, 10 + TEXTBOXH + 275 + ((SLIDERH + 30) * 2), 0, 0, SWP_NOSIZE | SWP_NOOWNERZORDER);
   ShowWindow(hSliderW, SW_SHOW);
-  
-//  SetWindowPos(hCheckDrop, HWND_TOP, BUTTONSRT, 10 + TEXTBOXH + 255, 0, 0, SWP_NOSIZE | SWP_NOOWNERZORDER);
-//  ShowWindow(hCheckDrop, SW_SHOW);
+ 
 }
 
 HWND CreateButton(HWND hwnd, DWORD Style, const char *text, const int w, const int h) {
@@ -1184,7 +1196,7 @@ HWND CreateTrackBar(HWND hwnd, const int w, const int h) {
   return Slider;
 }
 
-BOOL OpenFileDialog(HWND hwnd, LPTSTR pFileName, LPTSTR pTitleName, LPTSTR pFilter) {
+BOOL OpenFileDialog(HWND hwnd, LPTSTR pFileName) {
   ZeroMemory(&ofn, sizeof(ofn));
   
   ofn.lStructSize = sizeof(OPENFILENAME);
@@ -1196,9 +1208,9 @@ BOOL OpenFileDialog(HWND hwnd, LPTSTR pFileName, LPTSTR pTitleName, LPTSTR pFilt
   ofn.hwndOwner = hwnd;
   ofn.lpstrFile = pFileName;
   ofn.lpstrFileTitle = NULL;
-  ofn.lpstrTitle = pTitleName;
+  ofn.lpstrTitle = TEXT("Open a Font File.");
   ofn.Flags = OFN_EXPLORER|OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST;
-  ofn.lpstrFilter = pFilter;
+  ofn.lpstrFilter = TEXT("Font Files (fnt and PSF)\0*.fnt;*.psf;*.psfu\0\0");
   
   ofn.nMaxFile = 500;
   ofn.nMaxFileTitle = MAX_PATH;
@@ -1206,21 +1218,21 @@ BOOL OpenFileDialog(HWND hwnd, LPTSTR pFileName, LPTSTR pTitleName, LPTSTR pFilt
   return GetOpenFileName(&ofn);
 }
 
-BOOL SaveFileDialog(HWND hwnd, LPTSTR pFileName, LPTSTR pTitleName, LPTSTR pFilter) {
+BOOL SaveFileDialog(HWND hwnd, LPTSTR pFileName, LPCSTR pTitleName, LPCTSTR pFilter) {
   ZeroMemory(&ofn, sizeof(ofn));
   
   ofn.lStructSize = sizeof(OPENFILENAME);
   ofn.hInstance = GetModuleHandle(NULL);
   ofn.lpstrCustomFilter = NULL;
   ofn.nMaxCustFilter = 0;
-  ofn.nFilterIndex = 0;
+  ofn.nFilterIndex = 1;
   
   ofn.hwndOwner = hwnd;
   ofn.lpstrFile = pFileName;
   ofn.lpstrFileTitle = NULL;
   ofn.lpstrTitle = pTitleName;
-  ofn.lpstrDefExt = "fnt";
-  ofn.Flags = OFN_EXPLORER|OFN_OVERWRITEPROMPT;
+  ofn.lpstrDefExt = NULL;
+  ofn.Flags = OFN_EXPLORER | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
   ofn.lpstrFilter = pFilter;
   
   ofn.nMaxFile = 500;
@@ -1264,83 +1276,115 @@ struct FONT *InitFontData(struct FONT *font, const int width, const int height, 
   return font;
 }
 
+// saves the current font to disk
+// (TODO: does no error checking)
 void SaveFile(HWND hwnd, struct FONT *font) {
-  int i;
-  bit32u w;
+  int i, w, h, t;
   FILE *fp;
+  bit8u header[MAXH | 64], byte, *p;
+  struct PSFv1_FONT *psfv1 = (struct PSFv1_FONT *) header;
+  struct PSFv2_FONT *psfv2 = (struct PSFv2_FONT *) header;
   struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + font->info_start);
+  bit8u *data = (bit8u *) ((bit8u *) info + (sizeof(struct FONT_INFO) * font->count));
   
   // open the file (truncating it if already exists)
   if ((fp = fopen(szFileName, "w+b")) == NULL)
     return;
-  
-  // the size might have changed a little, so lets re-calculate
-  //  this size before we write it.
-  w = ((((info[font->count - 1].width * font->height) + 7) & ~7) / 8); // bytes needed to store the whole char
-  font->datalen = (info[font->count - 1].index + w);
-  font->total_size = font->info_start + (sizeof(struct FONT_INFO) * font->count) + font->datalen;
-  
-  // also run through it to catch the widest char
+
+  // run through it to catch the widest char
   w = 0;
   for (i=0; i<font->count; i++)
     if (info[i].width > w)
       w = info[i].width;
   font->max_width = (bit8u) w;
+
+  if ((ftype == FTYPE_PSFv1) && (w != 8)) {
+    if (MessageBox(hwnd, "Width is not 8.  Save as PSF v2?", NULL, MB_YESNO) == IDNO)
+      return;
+    ftype = FTYPE_PSFv2;
+    fmode = (hashtable && (hashtablesz > 0)) ? 1 : 0;
+  }
+
+  // what format are we using?
+  switch (ftype) {
+    case FTYPE_FONT:
+      // the size of the last char might have changed a little, so lets re-calculate the size before we write it.
+      w = ((((info[font->count - 1].width * font->height) + 7) & ~7) / 8); // bytes needed to store the whole char
+      font->datalen = (info[font->count - 1].index + w);
+      font->total_size = font->info_start + (sizeof(struct FONT_INFO) * font->count) + font->datalen;
+      
+      fwrite(font, 1, font->total_size, fp);
+      break;
+      
+    case FTYPE_PSFv1:
+      // version 1 of the PSF format
+      psfv1->magic[0] = PSF1_MAGIC0;
+      psfv1->magic[1] = PSF1_MAGIC1;
+      psfv1->mode = (bit8u) fmode;
+      psfv1->charsize = font->height;
+      fwrite(header, 1, 4, fp);
+
+      memset(header, 0, MAXH);
+      t = (fmode & PSF1_MODEHASTAB) ? 512 : 256;
+      for (i=0; i<t; i++) {
+        if (i < font->count) {
+          p = data + info[i].index;
+          for (h=0; h<font->height; h++) {
+            byte = 0;
+            for (w=0; w<8 && w<info[i].width; w++)
+              SetBit(&byte, w, GetBit(p, (h * info[i].width) + w));
+            fwrite(&byte, 1, 1, fp);
+          }
+        } else
+          fwrite(header, 1, font->height, fp);
+      }
+      break;
+      
+    case FTYPE_PSFv2:
+      // version 2 of the PSF format
+      psfv2->magic[0] = PSF2_MAGIC0;
+      psfv2->magic[1] = PSF2_MAGIC1;
+      psfv2->magic[2] = PSF2_MAGIC2;
+      psfv2->magic[3] = PSF2_MAGIC3;
+      psfv2->version = 0;
+      psfv2->headersize = 32;
+      psfv2->flags = (hashtable && (hashtablesz > 0)) ? 1 : 0;
+      psfv2->length = font->count;
+      psfv2->charsize = font->height * ((font->max_width + 7) / 8);
+      psfv2->height = font->height;
+      psfv2->width = font->max_width;
+      fwrite(header, 1, 32, fp);
+
+      t = (font->max_width + 7) / 8;  // bytes per line
+      for (i=0; i<font->count; i++) {
+        p = data + info[i].index;
+        for (h=0; h<font->height; h++) {
+          memset(header, 0, t);
+          for (w=0; w<info[i].width; w++)
+            SetBit(header, w, GetBit(p, (h * info[i].width) + w));
+          fwrite(header, 1, t, fp);
+        }
+      }
+      break;
+  }
+
+  // if there was a hash table, write it
+  if (hashtable && (hashtablesz > 0))
+    fwrite(hashtable, 1, hashtablesz, fp);
   
-  fwrite(font, 1, font->total_size, fp);
   fclose(fp);
-  
   isdirty = FALSE;
 }
 
+// try to open FYSOS FNT or Linux PSFv1 or PSFv2 font file
 struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
-  FILE *fp;
-  size_t sz;
-  
-  // Open the file.
-  if ((fp = fopen(szFileName, "r+b")) == NULL)
-    return NULL;
-  
-  if (font)
-    free(font);
-  
-  fseek(fp, 0, SEEK_END);
-  sz = ftell(fp);
-  rewind(fp);
-  
-  font = (struct FONT *) malloc(sz + MAX_EXTRA_MEM); // plus MAX_EXTRA_MEM to compensate for widening characters
-  
-  if (fread(font, 1, sz, fp) != sz) {
-    fclose(fp);
-    return NULL;
-  }
-  
-  // check for the old format
-  if (memcmp(font->sig, "FONT", 4) == 0) {
-    MessageBox(hwnd, "Found old format.\nUse CONV to convert to new format and then try again.", "Error", MB_OK);
-    fclose(fp);
-    return NULL;
-  }
-  
-  if (memcmp(font->sig, "Font", 4)) {
-    MessageBox(hwnd, "File Signature Error", "Error", MB_OK);
-    fclose(fp);
-    return NULL;
-  }
-  
-  fclose(fp);
-  
-  return font;
-}
-
-// try to open a Linux PSFv1 or PSFv2 font file, then convert it to our format
-struct FONT *OpenFilePSF(HWND hwnd, struct FONT *font) {
   bit8u header[32];
   struct PSFv1_FONT *psfv1 = (struct PSFv1_FONT *) header;
   struct PSFv2_FONT *psfv2 = (struct PSFv2_FONT *) header;
   FILE *fp;
   size_t sz;
-  int i, count, width, height, charsize, bytes_per_char, version;
+  long int unicode_off = 0;
+  int i, count, width, height, charsize, bytes_per_char, fixed = IDNO;
   
   // Open the file.
   if ((fp = fopen(szFileName, "r+b")) == NULL)
@@ -1350,29 +1394,63 @@ struct FONT *OpenFilePSF(HWND hwnd, struct FONT *font) {
     free(font);
 
   // read in 32 bytes to get either header format
-  if (fread(&header, 1, sizeof(struct PSFv2_FONT), fp) != sizeof(struct PSFv2_FONT)) {
+  if (fread(&header, 1, 32, fp) != 32) {
     fclose(fp);
     return NULL;
   }
 
+  // first check to see if it is an FYSOS FNT file
+  if (memcmp(header, "FONT", 4) == 0) {
+    MessageBox(hwnd, "Found old format.\nUse CONV to convert to new format and then try again.", "Error", MB_OK);
+    fclose(fp);
+    return NULL;
+  }
+  
+  // try the new version now
+  if (memcmp(header, "Font", 4) == 0) {
+    // we can simply read in the whole file as is
+    fseek(fp, 0, SEEK_END);
+    sz = ftell(fp);
+    rewind(fp);
+    
+    font = (struct FONT *) malloc(sz + MAX_EXTRA_MEM); // plus MAX_EXTRA_MEM to compensate for widening characters
+
+    if (fread(font, 1, sz, fp) != sz) {
+      fclose(fp);
+      return NULL;
+    }
+
+    ftype = FTYPE_FONT;
+    fmode = 0;
+    
+    fclose(fp);
+    return font;
+  }
+
   // check the sig to see which (if any) version it is
   if ((header[0] == PSF1_MAGIC0) && (header[1] == PSF1_MAGIC1)) {
-    version = 1;
+    ftype = FTYPE_PSFv1;
+    fmode = psfv1->mode;
     width = 8;
     bytes_per_char =   // number of bytes per glyph
       charsize =  
       height = psfv1->charsize;
     count = (psfv1->mode & PSF1_MODE512) ? 512 : 256;
+    if (psfv1->mode & PSF1_MODEHASTAB)
+      unicode_off = 4 + (count * charsize);
     // backup to the start of the bitmap
     fseek(fp, 4, SEEK_SET);
   } else if ((header[0] == PSF2_MAGIC0) && (header[1] == PSF2_MAGIC1) &&
              (header[2] == PSF2_MAGIC2) && (header[3] == PSF2_MAGIC3)) {
-    version = 2;
+    ftype = FTYPE_PSFv2;
+    fmode = psfv2->flags;
     width = psfv2->width;
     height = psfv2->height;
-    count = (psfv2->length < MAX_EXTRA_MEM) ? psfv2->length : MAX_EXTRA_MEM;
+    count = (psfv2->length < MAX_COUNT) ? psfv2->length : MAX_COUNT;
     charsize = psfv2->charsize; // number of bytes per glyph
     bytes_per_char = ((width * height) + 7) / 8;
+    if (psfv2->flags)
+      unicode_off = psfv2->headersize + (count * charsize);
     if (psfv2->headersize > 32)
       fseek(fp, psfv2->headersize, SEEK_SET);
   } else {
@@ -1380,6 +1458,7 @@ struct FONT *OpenFilePSF(HWND hwnd, struct FONT *font) {
     return NULL;
   }
 
+  // we found a PSF file, so convert it to our format so we can display it
   // check the limits
   if ((height > MAXH) || (width > MAXW)) {
     MessageBox(hwnd, "Font width and/or height is out of limits.", "Error", MB_OK);
@@ -1393,7 +1472,8 @@ struct FONT *OpenFilePSF(HWND hwnd, struct FONT *font) {
     return NULL;
 
   // ask if we want it to be a fixed width font
-  int fixed = MessageBox(hwnd, "Set as a fixed width font?", "fixed?", MB_ICONQUESTION | MB_YESNO);
+  if (ftype == FTYPE_PSFv2)
+    fixed = MessageBox(hwnd, "Set as a fixed width font?", "fixed?", MB_ICONQUESTION | MB_YESNO);
 
   // initialize the font header
   memcpy(font->sig, "Font", 4);
@@ -1413,7 +1493,7 @@ struct FONT *OpenFilePSF(HWND hwnd, struct FONT *font) {
 
   // version 1 has the same bitmap format as we do. height number of bytes per char.
   // if version 2 has a width that is 8, 16, 24, 32, etc., we can use this too
-  if ((version == 1) || ((width % 8) == 0)) {
+  if ((ftype == FTYPE_PSFv1) || ((width % 8) == 0)) {
     for (i=0; i<count; i++) {
       info[i].index = i * bytes_per_char;
       info[i].width = width;
@@ -1431,6 +1511,21 @@ struct FONT *OpenFilePSF(HWND hwnd, struct FONT *font) {
       bitmap += bytes_per_char;
     }
     free(buffer);
+  }
+
+  // if there was a hash table, we need to keep a copy of it
+  fseek(fp, 0, SEEK_END);
+  long int li = ftell(fp);
+  if (unicode_off && (li > unicode_off)) {
+    hashtablesz = li - unicode_off;
+    fseek(fp, unicode_off, SEEK_SET);
+    hashtable = realloc(hashtable, hashtablesz);
+    fread(hashtable, 1, hashtablesz, fp);
+  } else {
+    if (hashtable)
+      free(hashtable);
+    hashtable = NULL;
+    hashtablesz = 0;
   }
 
   fclose(fp);
@@ -1498,12 +1593,6 @@ int LoadCurChar(HWND hwnd, struct FONT *font, const int ch) {
         grid[y][x] = GetBit(p, i++);
   EnableWindow(hButtonRestore, TRUE);
   
-  // set or clear the button if the flag is set
-//  if (info[ch].flags & INFO_IS_DROPPED)
-//    Button_SetCheck(hCheckDrop, BST_CHECKED);
-//  else
-//    Button_SetCheck(hCheckDrop, BST_UNCHECKED);
-
   SendMessage(hSliderX, TBM_SETPOS, TRUE, info[ch].deltax);
   SendMessage(hSliderY, TBM_SETPOS, TRUE, info[ch].deltay);
   SendMessage(hSliderW, TBM_SETPOS, TRUE, info[ch].deltaw);
@@ -1535,12 +1624,6 @@ void SaveCurChar(struct FONT *font, const int ch) {
   info[ch].deltax = (char) ((int) SendMessage(hSliderX, TBM_GETPOS, 0, 0));
   info[ch].deltay = (char) ((int) SendMessage(hSliderY, TBM_GETPOS, 0, 0));
   info[ch].deltaw = (char) ((int) SendMessage(hSliderW, TBM_GETPOS, 0, 0));
-  
-  // set or clear the flag if the button is checked
-//  if (Button_GetCheck(hCheckDrop) == BST_CHECKED)
-//    info[ch].flags |= INFO_IS_DROPPED;
-//  else
-//    info[ch].flags &= ~INFO_IS_DROPPED;
 }
 
 void FontMoveData(struct FONT *font, int ch, int delta) {
