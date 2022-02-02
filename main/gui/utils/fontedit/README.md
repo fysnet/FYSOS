@@ -3,6 +3,8 @@
 It is for Windows only, but can be compiled for 32-bit or 64-bit versions.
 (Please let me know if you have compiled it for another platform)
 
+<img src=https://www.fysnet.net/fontedit/lucida_c.png>
+
 #### A few notes:
 This app now supports a new version of the Font File.  The old version is no longer supported.  Please see the changes for this new version at the link above.
 
