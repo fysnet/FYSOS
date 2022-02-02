@@ -74,7 +74,7 @@
  *   When using the Visual Studio IDE, do not edit the resource.rc file within
  *    the IDE's editor.  It will add items that will break this build.
  *
- *  Last updated: 31 Jan 2022
+ *  Last updated: 2 Feb 2022
  *
  *   This code was built with Visual Studio 6.0 (for 32-bit Windows XP)
  *    and Visual Studio 2019 (for 64-bit Windows 10)
@@ -565,7 +565,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                  "FYSOS Font file (*.fnt)\0*.fnt\0"
                  "Linux PSFv1 (*.psf)\0*.psf\0"
                  "Linux PSFv2 (*.psfu)\0*.psfu\0"
-                 "\0"));
+                 "\0"), "fnt");
           if (result) {
             strcpy(szExt, szFileName + ofn.nFileExtension);
             if (_stricmp(szExt, "fnt") == 0) {
@@ -741,7 +741,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             return 0;
           }
           
-          result = SaveFileDialog(hwnd, szFileName, (TCHAR *) "Save the converted Font File.", (TCHAR *) "Font Files (*.fnt)\0*.fnt\0\0");
+          result = SaveFileDialog(hwnd, szFileName, (TCHAR *) "Save the converted Font File.", (TCHAR *) "Font Files (*.fnt)\0*.fnt\0\0", "fnt");
           if (result) {
             font = ConvertFont(hwnd, font, tcurh, tcurw, tfixed, tending, szFontName);
             SaveFile(hwnd, font);
@@ -1218,7 +1218,7 @@ BOOL OpenFileDialog(HWND hwnd, LPTSTR pFileName) {
   return GetOpenFileName(&ofn);
 }
 
-BOOL SaveFileDialog(HWND hwnd, LPTSTR pFileName, LPCSTR pTitleName, LPCTSTR pFilter) {
+BOOL SaveFileDialog(HWND hwnd, LPTSTR pFileName, LPCSTR pTitleName, LPCTSTR pFilter, LPCTSTR pDefExt) {
   ZeroMemory(&ofn, sizeof(ofn));
   
   ofn.lStructSize = sizeof(OPENFILENAME);
@@ -1231,7 +1231,7 @@ BOOL SaveFileDialog(HWND hwnd, LPTSTR pFileName, LPCSTR pTitleName, LPCTSTR pFil
   ofn.lpstrFile = pFileName;
   ofn.lpstrFileTitle = NULL;
   ofn.lpstrTitle = pTitleName;
-  ofn.lpstrDefExt = NULL;
+  ofn.lpstrDefExt = pDefExt;
   ofn.Flags = OFN_EXPLORER | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
   ofn.lpstrFilter = pFilter;
   
@@ -1702,47 +1702,51 @@ void DumpFont(HWND hwnd, struct FONT *font) {
   bit8u *data = (bit8u *) ((bit8u *) info + (sizeof(struct FONT_INFO) * font->count));
   
   strcpy(szStr, "");
-  BOOL result = SaveFileDialog(hwnd, szStr, (TCHAR *) "Dump the Font File.", (TCHAR *) "Dump Files (*.txt)\0*.txt\0\0");
+  BOOL result = SaveFileDialog(hwnd, szStr, (TCHAR *) "Dump the Font File.", (TCHAR *) "Dump Files (*.txt)\0*.txt\0\0", "txt");
   if (result) {
     if ((fp = fopen(szStr, "w+b")) == NULL)
       return;
     
     // the font structure
     fprintf(fp, "/* Depending on your compiler, you may need to tweek this code */\r\n");
-    fprintf(fp, "struct FONT font%ix%i = {\r\n  {\r\n", font->max_width, font->height);
+    fprintf(fp, "struct FONT font%ix%i = {\r\n"
+                "{ ", font->max_width, font->height);
     
-    fprintf(fp, "      '");
     for (i=0; i<4; i++)
-      fprintf(fp, "%c", font->sig[i]);
-    fprintf(fp, "',\r\n");
+      fprintf(fp, "'%c',", font->sig[i]);
+    fprintf(fp, " },\r\n");
     fprintf(fp, "       % 5i,        // height of font in pixels\r\n"
                 "       % 5i,        // max_width\r\n"
+                "  % 10i,       // info start\r\n"
                 "  % 10i,       // start\r\n"
                 "  % 10i,       // count of chars in set\r\n"
                 "  % 10i,       // data len\r\n"
                 "  % 10i,       // total size\r\n"
                 "      0x%08X,   // flags\r\n"
-                "      '%s',  // name\r\n"
-                "       { 0, },      // reserved\r\n },\r\n",
-                font->height, font->max_width, font->start, font->count, font->datalen, font->total_size, font->flags, font->name);
+                "     \"%s\",    // name\r\n"
+                "       { 0, }       // reserved\r\n"
+                "};\r\n",
+                font->height, font->max_width, font->info_start, font->start, font->count, font->datalen, font->total_size, font->flags, font->name);
     
     // dump the font info
-    fprintf(fp, "\r\n/* Font Info */\r\n   {\r\n");
+    fprintf(fp, "\r\n/* Font Info */\r\n"
+                "struct FONT_INFO info[] {\r\n");
     for (i=0; i<font->count; i++) {
-      if (hexcodes) fprintf(fp, "     /* character 0x%06X */\r\n  ", i);
-      else          fprintf(fp, "     /* character %i */\r\n  ", i);
+      if (hexcodes) fprintf(fp, "     /* character 0x%06X */\r\n  ", font->start + i);
+      else          fprintf(fp, "     /* character %i */\r\n  ", font->start + i);
       if (i < (font->count - 1))
         fprintf(fp, "    { % 10i, % 3i, % 2i, % 2i, % 2i, { 0, } },\r\n", info[i].index, info[i].width, info[i].deltax, info[i].deltay, info[i].deltaw);
       else
         fprintf(fp, "    { % 10i, % 3i, % 2i, % 2i, % 2i, { 0, } }\r\n", info[i].index, info[i].width, info[i].deltax, info[i].deltay, info[i].deltaw);
     }
-    fprintf(fp, "    },\r\n");
+    fprintf(fp, "};\r\n");
     
     // dump the data
-    fprintf(fp, "\r\n/* Data */\r\n  {\r\n");
+    fprintf(fp, "\r\n/* Bitmaps */\r\n"
+                "bit8u bitmap[] {\r\n");
     for (i=0; i<font->count; i++) {
-      if (hexcodes) fprintf(fp, "     /* character 0x%06X */\r\n  ", i);
-      else          fprintf(fp, "     /* character %i */\r\n  ", i);
+      if (hexcodes) fprintf(fp, "     /* character 0x%06X */\r\n  ", font->start + i);
+      else          fprintf(fp, "     /* character %i */\r\n  ", font->start + i);
       p = (bit8u *) (data + info[i].index);
       k = ((font->height * info[i].width) + 7) / 8;
       for (j=0; j<k; j++) {
@@ -1761,7 +1765,7 @@ void DumpFont(HWND hwnd, struct FONT *font) {
       }
       fprintf(fp, "*/\r\n");
     }
-    fprintf(fp, "  }\r\n};\r\n");
+    fprintf(fp, "};\r\n");
 
     fclose(fp);
   } else
