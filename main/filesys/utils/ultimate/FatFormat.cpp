@@ -106,7 +106,8 @@ BOOL CFatFormat::OnInitDialog() {
   m_calc_spc = 
   m_sect_cluster = CalcSPC(m_sectors, m_fat_size);
   m_info.Format("For FAT%i with %I64i sectors, you must have a count of\r\n"
-                "'sectors per cluster' of at least %i.",
+                "'sectors per cluster' of at least %i.\r\n"
+                "(Must be a power of 2)",
                 m_fat_size == FS_FAT12 ? 12 : (m_fat_size == FS_FAT16) ? 16 : 32,
                 m_sectors,
                 m_sect_cluster);
@@ -121,8 +122,8 @@ void CFatFormat::OnOK() {
   
   UpdateData(TRUE);  // bring from dialog
   
-  if (m_sect_cluster < m_calc_spc) {
-    cs.Format("Sectors per Cluster must be at least %i", m_calc_spc);
+  if ((m_sect_cluster < m_calc_spc) || ((m_sect_cluster > 1) && !power_of_two(m_sect_cluster))) {
+    cs.Format("Sectors per Cluster must be at least %i and a power of 2", m_calc_spc);
     AfxMessageBox(cs);
     SetDlgItemInt(IDC_SECT_CLUSTER, m_calc_spc, FALSE);
     return;
@@ -142,9 +143,9 @@ int CFatFormat::CalcSPC(DWORD64 sectors, int fat_size) {
       return spc;
     if ((fat_size == FS_FAT16) && ((sectors / spc) < 65525))
       return spc;
-    if (fat_size == FS_FAT32)
+    if ((fat_size == FS_FAT32) && ((sectors / spc) >= 65525))
       return spc;
-    spc++;
+    spc = spc << 1;  // only powers of two are allowed
   }
   
   AfxMessageBox("Illegal combination of sectors per cluster, total sectors, and fat size");
