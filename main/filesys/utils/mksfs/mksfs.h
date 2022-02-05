@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -63,7 +63,7 @@
 // set it to 1 (align on byte)
 #pragma pack (push, 1)
 
-char strtstr[] = "\nMKSFS  v2.00.00    Forever Young Software 1984-2019";
+char strtstr[] = "\nMKSFS  v2.00.10    Forever Young Software 1984-2022";
 
 // at offset 0x18E in first part of partition (first sector on floppy, etc)
 struct S_SFS_SUPER {
