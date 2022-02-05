@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2021
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -77,7 +77,7 @@
  *  Assumptions/prerequisites:
  *   - requires 64-bit integers
  *
- *  Last updated: 28 Mar 2021
+ *  Last updated: 5 Feb 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os mleanfs.c -o mleanfs.exe -s
@@ -110,7 +110,7 @@ size_t cur_block = 0;
 uint8_t *bitmaps = NULL;
 size_t blocks_used = 0;
 size_t band_size, bitmap_size, tot_bands;
-size_t tot_blocks, block_size;
+size_t tot_blocks, block_size, cylinders;
 
 int main(int argc, char *argv[]) {
   size_t super_loc = LEAN_SUPER_LOCATION;
@@ -139,27 +139,16 @@ int main(int argc, char *argv[]) {
     if (resources) free(resources);
     return -1;
   }
-
-  /*
-  // do we need to add sectors to end on a cylinder boundary?
-  size_t cylinders = (size_t) (resources->tot_sectors + ((16 * 63) - 1)) / (16 * 63);    // cylinders used
-  size_t add = (size_t) ((cylinders * (16 * 63)) - resources->tot_sectors); // sectors to add to boundary on cylinder
-  if (add && (resources->tot_sectors > 2880)) {  // don't add if floppy image
-    printf(" Total Sectors does not end on cylinder boundary. Expand to %" LL64BIT "i? [Y|N] ", resources->tot_sectors + add);
-    if (toupper(getchecho()) == 'Y') {
-      resources->tot_sectors += add;
-      // need to calculate again since we added sectors
-      cylinders = (size_t) ((resources->tot_sectors + ((16 * 63) - 1)) / (16 * 63));
-    }
-    puts("");
-  }
-  */
+  
+  // done getting parameters, start building the image
+  block_size = ((uint64_t) 1 << resources->param1);
+  
   // this gives a rough cylinder usage (TODO: We need to use resources->heads and resources->spt here?)
-  size_t cylinders = (size_t) (((resources->tot_sectors * block_size) / SECT_SIZE) / (16 * 63));    // roughly the cylinders used
+  cylinders = (size_t) (((resources->tot_sectors * block_size) / SECT_SIZE) / (16 * 63));    // roughly the cylinders used
 
   // total blocks in partition
   tot_blocks = (size_t) resources->tot_sectors;
-
+  
   // make sure log_blocks_size is within boundaries
   // (we only support up to 64k blocks here)
   if ((resources->param1 < 8) || (resources->param1 > 16)) {
@@ -192,10 +181,7 @@ int main(int argc, char *argv[]) {
       return -1;
     puts("");
   }
-
-  // done getting parameters, start building the image
-  block_size = ((uint64_t) 1 << resources->param1);
-
+  
   if (!existing_image) {
     // create target file
     if ((targ = fopen(resources->targ_filename, "w+b")) == NULL) {
@@ -241,19 +227,33 @@ int main(int argc, char *argv[]) {
       pt->si = 0xEA;  //lEAn
       lba_to_chs(&pt->end_chs, (size_t) ((cylinders * resources->heads * resources->spt) - 1 - resources->base_lba));  // last sector - 1 for the MBR
       pt->startlba = (uint32_t) resources->base_lba;
-      pt->size = (uint32_t) ((cylinders * resources->heads * resources->spt) - resources->base_lba);
+      //pt->size = (uint32_t) ((cylinders * resources->heads * resources->spt) - resources->base_lba);
+      pt->size = (uint32_t) tot_blocks;
       printf(" Writing MBR to LBA %" LL64BIT "i\n", FTELL(targ) / SECT_SIZE);
       fwrite(buffer, SECT_SIZE, 1, targ);
-      memset(buffer, 0, SECT_SIZE);
+      u = 1;
+    } else if (resources->base_lba > 0) {
+      struct PART_TBLE *pt = (struct PART_TBLE *) &buffer[0x01BE];
+      pt->bi = 0x80;
+      lba_to_chs(&pt->start_chs, (size_t) resources->base_lba);
+      pt->si = 0xEA;  //lEAn
+      lba_to_chs(&pt->end_chs, (size_t) ((cylinders * resources->heads * resources->spt) - 1 - resources->base_lba));  // last sector - 1 for the MBR
+      pt->startlba = (uint32_t) resources->base_lba;
+      //pt->size = (uint32_t) ((cylinders * resources->heads * resources->spt) - resources->base_lba);
+      pt->size = (uint32_t) tot_blocks;
+      buffer[510] = 0x55; buffer[511] = 0xAA;
+      printf(" Writing MBR to LBA %" LL64BIT "i\n", FTELL(targ) / SECT_SIZE);
+      fwrite(buffer, SECT_SIZE, 1, targ);
       u = 1;
     }
+    memset(buffer, 0, SECT_SIZE);
 
     if (u < resources->base_lba)
       printf(" Writing Padding between MBR and Base LBA...\n");
     for (; u < resources->base_lba; u++)
       fwrite(buffer, SECT_SIZE, 1, targ);
-    resources->tot_sectors -= resources->base_lba;
-    tot_blocks -= (size_t) resources->base_lba;
+    //resources->tot_sectors -= resources->base_lba;
+    //tot_blocks -= (size_t) resources->base_lba;
     
     // *** At this point, we read/write block_size blocks ***
     // create the boot code sectors (up to 32)
@@ -463,7 +463,7 @@ int main(int argc, char *argv[]) {
   super->checksum = lean_calc_crc(super, block_size);
   fwrite(super, block_size, 1, targ);
   FSEEK(targ, (resources->base_lba + super->backup_super) * block_size, SEEK_SET);
-  printf(" Writing Backup Super Block to block %" LL64BIT "i\n", FTELL(targ) / block_size);
+  printf(" Writing Backup Super Block to block %" LL64BIT "i\n", (uint64_t) (FTELL(targ) / block_size));
   fwrite(super, block_size, 1, targ);
   --tot_blocks;
 
@@ -481,7 +481,7 @@ int main(int argc, char *argv[]) {
     if (u < (tot_bands - 1))
       count_blocks -= band_size;
     else
-      count_blocks = (size_t) (resources->tot_sectors - (FTELL(targ) / block_size));
+      count_blocks = (size_t) (resources->base_lba + (resources->tot_sectors - (FTELL(targ) / block_size)));
   }
 
   // if there was only one band, we have written all sectors
@@ -540,7 +540,7 @@ uint8_t lean_calc_log_band_size(const size_t block_size, const size_t tot_blocks
  *     loop (n times)
  *       crc = ror(crc) + dword[x]
  */
-uint32_t lean_calc_crc(const void *ptr, unsigned int size) {
+uint32_t lean_calc_crc(const void *ptr, size_t size) {
   uint32_t crc = 0;
   const uint32_t *p = (const uint32_t *) ptr;
   unsigned int i;

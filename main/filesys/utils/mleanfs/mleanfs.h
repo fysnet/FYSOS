@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2021
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -57,7 +57,7 @@
  */
 
 /*
- *  Last updated: 28 Mar 2021
+ *  Last updated: 5 Feb 2022
  */
 
 // set it to 1 (align on byte)
@@ -99,7 +99,7 @@ struct S_LEAN_SUPER {
   uint8_t  pre_alloc_count;         // count minus one of contiguous blocks that driver should try to preallocate
   uint8_t  log_blocks_per_band;     // 1 << log_blocks_per_band = blocks_per_band. Valid values are 12, 13, 14, ...
   uint32_t state;                   // bit 0 = unmounted?, bit 1 = error?
-  struct S_GUID guid;             // Globally Unique IDentifier
+  struct S_GUID guid;               // Globally Unique IDentifier
   uint8_t  volume_label[64];        // can be modified by the LABEL command
   uint64_t block_count;             // The total number of blocks that form a file system volume
   uint64_t free_block_count;        // The number of free blocks in the volume. A value of zero means disk full.
@@ -229,4 +229,4 @@ void create_inode(FILE *, const uint64_t, const uint64_t, const uint32_t, const 
 
 void parse_command(int, char *[], char *, bool *, char *);
 
-uint32_t lean_calc_crc(const void *, unsigned int);
+uint32_t lean_calc_crc(const void *, size_t);
