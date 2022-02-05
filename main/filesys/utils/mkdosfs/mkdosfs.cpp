@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -75,7 +75,7 @@
  *   - Since the FAT FS won't allow file sizes larger than 32-bit, no
  *     need to use the 64-bit forms of FSEEK() and FTELL()
  *
- *  Last updated: 15 July 2020
+ *  Last updated: 5 Feb 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *  gcc -Os mkdosfs.cpp -o mkdosfs.exe -s
@@ -198,7 +198,8 @@ int main(int argc, char *argv[]) {
       // We call rand() multiple times because rand() usually is set for 0 -> 32768 only.
       * (bit32u *) &buffer[0x01B8] = (bit32u) ((rand() << 20) | (rand() << 10) | (rand() << 0));
       * (bit16u *) &buffer[0x01BC] = 0x0000;
-      
+    }
+    if (resources->base_lba > 0) {
       // create a single partition entry pointing to our partition
       struct PART_TBLE *pt = (struct PART_TBLE *) &buffer[0x01BE];
       pt->bi = 0x80;
@@ -215,6 +216,7 @@ int main(int argc, char *argv[]) {
       lba_to_chs(&pt->end_chs, (bit32u) ((cylinders * resources->heads * resources->spt)));
       pt->startlba = (bit32u) resources->base_lba;
       pt->size = (bit32u) ((cylinders * resources->heads * resources->spt) - resources->base_lba);
+      buffer[510] = 0x55; buffer[511] = 0xAA;
       printf(" Writing MBR to LBA %i\n", ftell(targ) / SECT_SIZE);
       fwrite(buffer, SECT_SIZE, 1, targ);
       memset(buffer, 0, SECT_SIZE);

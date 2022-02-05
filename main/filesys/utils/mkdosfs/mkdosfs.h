@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -57,13 +57,13 @@
  */
 
 /*
- *  Last updated: 15 July 2020
+ *  Last updated: 5 Feb 2022
  */
 
 // set it to 1 (align on byte)
 #pragma pack (push, 1)
 
-char strtstr[] = "\nMake DOS Image  v02.00.00    Forever Young Software 1984-2019\n\n";
+char strtstr[] = "\nMake DOS Image  v02.00.00    Forever Young Software 1984-2022\n\n";
 
 #define SECT_SIZE  512
 
