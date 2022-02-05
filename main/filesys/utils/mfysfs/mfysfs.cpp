@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -71,7 +71,7 @@
  *     I wrote it to simply make a fysfs image for use with this book.
  *     Please consider this if you add or modify to this utility.
  *
- *  Last updated: 15 July 2020
+ *  Last updated: 5 Feb 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os mfysfs.c -o mfysfs.exe -s
@@ -209,7 +209,8 @@ int main(int argc, char *argv[]) {
       // We call rand() multiple times because rand() usually is set for 0 -> 32768 only.
       * (bit32u *) &buffer[0x01B8] = (bit32u) ((rand() << 20) | (rand() << 10) | (rand() << 0));
       * (bit16u *) &buffer[0x01BC] = 0x0000;
-      
+    }
+    if (resources->base_lba > 0) {
       // create a single partition entry pointing to our partition
       struct PART_TBLE *pt = (struct PART_TBLE *) &buffer[0x01BE];
       pt->bi = 0x80;
@@ -219,6 +220,7 @@ int main(int argc, char *argv[]) {
       pt->startlba = (bit32u) resources->base_lba;
       pt->size = (bit32u) ((cylinders * resources->heads * resources->spt) - resources->base_lba);
       printf("\n Writing MBR to LBA %" LL64BIT "i", (bit64u) (FTELL(targ) / 512));
+      buffer[510] = 0x55; buffer[511] = 0xAA;
       fwrite(buffer, 512, 1, targ);
       memset(buffer, 0, 512);
       i = 1;
