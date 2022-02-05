@@ -57,15 +57,15 @@
  */
 
 /*
- *  Last updated: 2 Feb 2022
+ *  Last updated: 5 Feb 2022
  */
 
 #pragma pack(push, 1)
 
 #ifdef _WIN64
-  #define VERSION_INFO "Font Edit\nVersion 1.54.02 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.54.10 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #else
-  #define VERSION_INFO "Font Edit\nVersion 1.54.02 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.54.10 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #endif
 
 #define FTYPE_FONT   1
@@ -184,7 +184,6 @@ void EnableItems(HMENU, struct FONT *);
 void DrawTextBox(HDC, DWORD, const int, const int, const int, const int, const char *);
 int  LoadCurChar(HWND, struct FONT *, const int);
 void SaveCurChar(struct FONT *, const int);
-struct FONT *ConvertFont(HWND, struct FONT *, const int, const int, const int, const int, const char *);
 void DumpFont(HWND, struct FONT *);
 void FontMoveData(struct FONT *, int, int);
 

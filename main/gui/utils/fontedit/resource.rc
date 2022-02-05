@@ -45,7 +45,7 @@ BEGIN
     END
     POPUP "&Utilities"
     BEGIN
-        MENUITEM "Convert...",                  IDC_CONV_CUR, GRAYED
+        MENUITEM "Mark as non-fixed",           IDC_CONV_CUR, GRAYED
         MENUITEM "Name...",                     IDC_NAME_CUR, GRAYED
         MENUITEM "Dump...",                     IDC_DUMP, GRAYED
     END

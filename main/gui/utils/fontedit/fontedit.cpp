@@ -74,7 +74,7 @@
  *   When using the Visual Studio IDE, do not edit the resource.rc file within
  *    the IDE's editor.  It will add items that will break this build.
  *
- *  Last updated: 2 Feb 2022
+ *  Last updated: 5 Feb 2022
  *
  *   This code was built with Visual Studio 6.0 (for 32-bit Windows XP)
  *    and Visual Studio 2019 (for 64-bit Windows 10)
@@ -539,7 +539,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             curw = LoadCurChar(hwnd, font, 0);
             curh = font->height;
             drawgrid = TRUE;
-            tfixed = (font->flags & 1) > 0;
+            tfixed = (font->flags & FLAGS_FIXED_WIDTH) > 0;
             tstart = font->start;
             tending = font->count - 1;
             EnableItems(menu, font);
@@ -707,7 +707,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             font->start, font->start, 
             font->start + font->count - 1, font->start + font->count - 1, 
             font->count,
-            font->max_width, (font->flags & 1) ? "(fixed)" : "", 
+            font->max_width, (font->flags & FLAGS_FIXED_WIDTH) ? "(fixed)" : "", 
             font->height,
             font->info_start, 
             font->datalen);
@@ -715,41 +715,11 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           break;
 
         case IDC_CONV_CUR:
-          SaveCurChar(font, cur_char);
-          tstart = DIAG_DISABLE(font->start);
-          tending = DIAG_ENABLE(font->start + font->count - 1);
-          tcurw = DIAG_ENABLE(font->max_width);
-          tcurh = DIAG_ENABLE(font->height);
-          tfixed = (font->flags & FLAGS_FIXED_WIDTH) > 0;
-          tfixed_enable = TRUE;
-          strcpy(szFontName, font->name);
-          ret = DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SIZE), hwnd, (DLGPROC) SizeDialogProc);
-          SetFocus(hwnd); // make sure our main window has focus
-          
-          if (ret == IDCANCEL)
-            return 0;
-
-          // check the limits
-          if ((tcurw < MINW) || (tcurw > MAXW) ||
-              (tcurh < MINH) || (tcurh > MAXH) ||
-              (((tending + 1) - tstart) > MAX_COUNT)) {
-            sprintf(szStr, "Outside of limits. \n"
-                           " Width: 1 -> %i\n"
-                           "Height: 5 -> %i\n"
-                           " Count: 1 -> %i\n", MAXW, MAXH, MAX_COUNT);
-            MessageBox(hwnd, szStr, "Warning!!!", MB_ICONEXCLAMATION);
-            return 0;
-          }
-          
-          result = SaveFileDialog(hwnd, szFileName, (TCHAR *) "Save the converted Font File.", (TCHAR *) "Font Files (*.fnt)\0*.fnt\0\0", "fnt");
-          if (result) {
-            font = ConvertFont(hwnd, font, tcurh, tcurw, tfixed, tending, szFontName);
-            SaveFile(hwnd, font);
-            curw = LoadCurChar(hwnd, font, cur_char);
-            // update the title of the window
-            SetTitleStr(hwnd);
-            InvalidateRect(hwnd, NULL, TRUE);
-          }
+          tfixed = 0;
+          font->flags &= ~FLAGS_FIXED_WIDTH;
+          EnableMenuItem(menu, IDC_CONV_CUR, MF_GRAYED);
+          EnableWindow(hButtonMinus, TRUE);
+          EnableWindow(hButtonPlus, TRUE);
           break;
           
         case IDC_NAME_CUR:
@@ -1105,7 +1075,7 @@ void EnableItems(HMENU menu, struct FONT *font) {
   EnableMenuItem(menu, ID_EDIT_GOTO, MF_ENABLED);
   EnableMenuItem(menu, ID_VIEW_SHOW_NUMS, MF_ENABLED);
   EnableMenuItem(menu, IDC_VIEW_INFO, MF_ENABLED);
-  EnableMenuItem(menu, IDC_CONV_CUR, MF_ENABLED);
+  EnableMenuItem(menu, IDC_CONV_CUR, (tfixed) ? MF_ENABLED : MF_GRAYED);
   EnableMenuItem(menu, IDC_NAME_CUR, MF_ENABLED);
   EnableMenuItem(menu, IDC_DUMP, MF_ENABLED);
   
@@ -1384,7 +1354,7 @@ struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
   FILE *fp;
   size_t sz;
   long int unicode_off = 0;
-  int i, count, width, height, charsize, bytes_per_char, fixed = IDNO;
+  int i, count, width, height, charsize, bytes_per_char;
   
   // Open the file.
   if ((fp = fopen(szFileName, "r+b")) == NULL)
@@ -1471,10 +1441,6 @@ struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
   if (font == NULL)
     return NULL;
 
-  // ask if we want it to be a fixed width font
-  if (ftype == FTYPE_PSFv2)
-    fixed = MessageBox(hwnd, "Set as a fixed width font?", "fixed?", MB_ICONQUESTION | MB_YESNO);
-
   // initialize the font header
   memcpy(font->sig, "Font", 4);
   font->height = height;
@@ -1484,7 +1450,7 @@ struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
   font->count = count;
   font->datalen = count * charsize; // len of the data section in bytes
   bit32u total_size = (bit32u) sz;  // total size of this file in bytes
-  font->flags = (fixed == IDYES) ? 1 : 0;   // bit 0 = fixed width font, remaining bits are reserved
+  font->flags = FLAGS_FIXED_WIDTH;  // bit 0 = fixed width font, (all PSF fonts are initially fixed)
   strcpy(font->name, "PSF Font");
 
   // now read in the font information
@@ -1634,61 +1600,6 @@ void FontMoveData(struct FONT *font, int ch, int delta) {
     memmove((void *) (data + info[ch].index + delta), (void *) (data + info[ch].index), font->datalen - info[ch].index);
     font->datalen += delta;
   }
-}
-
-struct FONT *ConvertFont(HWND hwnd, struct FONT *font, const int height, const int width, const int fixed, const int ending, const char *name) {
-  int i, j, w, dw = 0, dh = 0;
-  int nCount = ending + 1 - font->start;
-  int n = (nCount < font->count) ? nCount : font->count;
-  size_t sz;
-  
-  w = ((((width * height) + 7) & ~7) / 8); // bytes needed to store the whole char
-  sz = sizeof(struct FONT) + ((sizeof(struct FONT_INFO) + w) * nCount);
-  struct FONT *nFont = (struct FONT *) calloc(sz + MAX_EXTRA_MEM, 1); // plus MAX_EXTRA_MEM to compensate for widening characters
-  struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) nFont + sizeof(struct FONT));
-  
-  memcpy(nFont->sig, "Font", 4);
-  nFont->height = height;
-  nFont->max_width = width;
-  nFont->info_start = sizeof(struct FONT);
-  nFont->start = font->start;
-  nFont->count = nCount;
-  nFont->datalen = (w * height * nCount);
-  nFont->total_size = (bit32u) sz;
-  nFont->flags = (fixed) ? FLAGS_FIXED_WIDTH : 0;
-  strncpy(nFont->name, name, MAX_NAME_LEN - 1);
-  
-  if (width < curw)
-    dw = ((curw - width) + 1) / 2;
-  if (height < curh)
-    dh = ((curh - height) + 1) / 2;
-  for (i=0; i<n; i++) {
-    LoadCurChar(hwnd, font, i);
-    for (j=0; j<dw; j++)
-      SendMessage(hwnd, BN_CLICKED, 0, (LPARAM) hButtonLeft);
-    for (j=0; j<dh; j++)
-      SendMessage(hwnd, BN_CLICKED, 0, (LPARAM) hButtonUp);
-    info[i].width = width;
-    info[i].index = (w * i);
-    SaveCurChar(nFont, i);
-  }
-  for (; i<nCount; i++) {
-    for (int y=0; y<MAXH; y++)
-      for (int x=0; x<MAXW; x++)
-        grid[y][x] = back[y][x] = 0;
-    info[i].width = width;
-    info[i].index = (w * i);
-    SaveCurChar(nFont, i);
-    info[i].deltaw = 0;
-    info[i].deltax = 0;
-    info[i].deltay = 0;
-  }
-  
-  curw = width;
-  curh = height;
-  free(font);
-  
-  return nFont;
 }
 
 void DumpFont(HWND hwnd, struct FONT *font) {
