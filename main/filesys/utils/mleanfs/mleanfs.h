@@ -74,7 +74,7 @@
 
 #define LOG2(x) (int) (log((double) (x)) / log(2.0))  // log2(x) = log(x) / log(2.0)
 
-char strtstr[] = "\nMLEANFS  v2.10.00    Forever Young Software 1984-2021\n\n";
+char strtstr[] = "\nMLEANFS  v2.10.10    Forever Young Software 1984-2022\n\n";
 
 // default superblock location (will sector pad to this location if boot_size is less than)
 //  if boot code is larger, will move super location to just past boot code
