@@ -219,20 +219,9 @@ int main(int argc, char *argv[]) {
       // We call rand() multiple times.
       * (uint32_t *) &buffer[0x01B8] = (uint32_t) ((rand() << 20) | (rand() << 10) | (rand() << 0));
       * (uint16_t *) &buffer[0x01BC] = 0x0000;
-
+    } 
+    if (resources->base_lba > 0) {
       // create a single partition entry pointing to our partition
-      struct PART_TBLE *pt = (struct PART_TBLE *) &buffer[0x01BE];
-      pt->bi = 0x80;
-      lba_to_chs(&pt->start_chs, (size_t) resources->base_lba);
-      pt->si = 0xEA;  //lEAn
-      lba_to_chs(&pt->end_chs, (size_t) ((cylinders * resources->heads * resources->spt) - 1 - resources->base_lba));  // last sector - 1 for the MBR
-      pt->startlba = (uint32_t) resources->base_lba;
-      //pt->size = (uint32_t) ((cylinders * resources->heads * resources->spt) - resources->base_lba);
-      pt->size = (uint32_t) tot_blocks;
-      printf(" Writing MBR to LBA %" LL64BIT "i\n", FTELL(targ) / SECT_SIZE);
-      fwrite(buffer, SECT_SIZE, 1, targ);
-      u = 1;
-    } else if (resources->base_lba > 0) {
       struct PART_TBLE *pt = (struct PART_TBLE *) &buffer[0x01BE];
       pt->bi = 0x80;
       lba_to_chs(&pt->start_chs, (size_t) resources->base_lba);
