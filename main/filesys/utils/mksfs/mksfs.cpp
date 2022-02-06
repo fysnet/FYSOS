@@ -330,7 +330,10 @@ int main(int argc, char *argv[]) {
         if (read == 0)
           break;
         fwrite(buffer, SFS_BLOCK_SIZE, 1, targ);
-        resources->tot_sectors--;
+        if (--resources->tot_sectors == 0) {
+          printf("\n *** Disk is full...");
+          break;
+        }
         data_used++;
       } while (read == SFS_BLOCK_SIZE);
       fclose(src);
@@ -348,6 +351,8 @@ int main(int argc, char *argv[]) {
   //  Index Data Area may not start on a block boundary
   int ida_size = ((ida_count * SFS_ENTRY_SIZE) + (SFS_BLOCK_SIZE - 1)) / SFS_BLOCK_SIZE;  // size of IDA in blocks
   printf("\n Writing free space at LBA %" LL64BIT "i (%" LL64BIT "i blocks)", (bit64u) (FTELL(targ) / SFS_BLOCK_SIZE), resources->tot_sectors - ida_size);
+  if ((int) (resources->tot_sectors - ida_size) < 0)
+    printf("\n *** Looks like you have too many files.  You overwrote the Index Data Area with that last file...");
   memset(buffer, 0, SFS_BLOCK_SIZE);
   while (resources->tot_sectors) {
     fwrite(buffer, SFS_BLOCK_SIZE, 1, targ);
