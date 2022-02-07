@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -1003,7 +1003,7 @@ void CNewImage::OnCreateImage() {
       memcpy(pvd->ident, "CD001", 5);
       pvd->ver = 1;
       memcpy(pvd->sys_ident, "WINXP                           ", 32);
-      memcpy(pvd->vol_ident, "Forever Young Software 1984-2020", 32);
+      memcpy(pvd->vol_ident, "Forever Young Software 1984-2022", 32);
       pvd->num_lbas = partition->m_sectors;
       pvd->num_lbas_b = ENDIAN_32U(pvd->num_lbas);
       pvd->set_size = 1;

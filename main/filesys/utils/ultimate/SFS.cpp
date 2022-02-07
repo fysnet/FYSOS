@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -98,6 +98,7 @@ CSFS::CSFS() : CPropertyPage(CSFS::IDD) {
   m_show_del = FALSE;
   m_del_clear = FALSE;
   //}}AFX_DATA_INIT
+  m_free_blocks = 0;
   m_indx_buffer = NULL;
   m_hard_format = FALSE;
 }
@@ -105,6 +106,7 @@ CSFS::CSFS() : CPropertyPage(CSFS::IDD) {
 CSFS::~CSFS() {
   if (m_indx_buffer)
     free(m_indx_buffer);
+  m_free_blocks = 0;
 }
 
 void CSFS::DoDataExchange(CDataExchange* pDX) {
@@ -421,7 +423,7 @@ void CSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   
   // DetectSFS() detected us, so we should be good
   m_isvalid = TRUE;
-  
+
   // 
   dlg->m_SFSNames[index] = "SimpleFS";
   m_psp.dwFlags |= PSP_USETITLE;
@@ -449,6 +451,8 @@ void CSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
     m_indx_buffer = (BYTE *) realloc(m_indx_buffer, m_indx_size * 512);
     dlg->ReadFromFile(m_indx_buffer, m_lba + m_indx_start, m_indx_size);
     
+    m_free_blocks = CalcFreeBlocks();
+    
     GetDlgItem(IDC_DIR_TREE)->EnableWindow(TRUE);
     
     // make sure the tree is emtpy
@@ -474,6 +478,10 @@ void CSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
     GetDlgItem(IDC_DIR_TREE)->SetFocus();
     m_dir_tree.SelectSetFirstVisible(m_hRoot);
   }
+  
+  // display the running total of free bytes left
+  DisplayFreeSpace();
+  
   Invalidate(TRUE);  // redraw the tab
 }
 
@@ -788,6 +796,43 @@ INT64 CSFS::CalculateTime(void) {
   return ((INT64) time.GetTime()) * 65536;
 }
 
+void CSFS::DisplayFreeSpace(void) {
+  CString csFree;
+  
+  size_t block_size = (1ULL << (m_super.block_size + 7));
+  csFree.Format("Free Space: %s (bytes)", (LPCSTR) gFormatNum((size_t) m_free_blocks * block_size, FALSE, FALSE));
+  SetDlgItemText(IDC_FREE_SIZE_STR, csFree);
+}
+
+size_t CSFS::CalcFreeBlocks(void) {
+  DWORD64 count = 0;
+  unsigned offset;
+
+  // first, search the current entries and see if there is a deleted block(s) to count
+  offset = (m_indx_size * 512) - (unsigned) m_super.index_size;
+  while (offset < (m_indx_size * 512)) {
+    // since we only use these if it is a FILE/DIR ENTRY or a DELETED FILE/DIR ENTRY,
+    //  the results won't matter if another entry is found.
+    struct S_SFS_FILE_DEL *file = (struct S_SFS_FILE_DEL *) &m_indx_buffer[offset];
+    int j = 1 + m_indx_buffer[offset + 2];
+    switch (m_indx_buffer[offset]) {
+      case SFS_ENTRY_FILE_DEL:
+        count += ((file->end_block + 1) - file->start_block);
+        // fall through
+      case SFS_ENTRY_FILE:
+      case SFS_ENTRY_DIR_DEL:
+      case SFS_ENTRY_DIR:
+        offset += (j * SFS_ENTRY_SIZE);
+        break;
+      default:
+        offset += SFS_ENTRY_SIZE;
+    }
+  }
+
+  // free count = Total Size - Blocks used - Size of Index + "Deleted" Blocks
+  return (size_t) (m_size - m_super.data_block_count - m_indx_size + count);
+}
+
 void CSFS::OnSfsCopy() {
   char szPath[MAX_PATH];
   CString csPath, csName;
@@ -958,7 +1003,7 @@ void CSFS::OnSfsInsert() {
     InsertFile(csFPath, csName, csPath);
   wait.Restore();
   //AfxMessageBox("Files transferred.");
-  
+
   // refresh the "system"
   Start(m_lba, m_size, m_color, m_index, FALSE);
 }
@@ -1082,6 +1127,10 @@ void CSFS::OnSfsDelete() {
   
   // select the parent item
   m_dir_tree.Select((hParent != NULL) ? hParent : TVI_ROOT, TVGN_CARET);
+  
+  // update the freespace display
+  m_free_blocks = CalcFreeBlocks();
+  DisplayFreeSpace();
   
   wait.Restore();
   //AfxMessageBox("File(s) deleted.");
@@ -1217,7 +1266,7 @@ DWORD64 CSFS::AppendFileToIndex(CString csFPath, CString csName, DWORD Size, BOO
   offset = (m_indx_size * 512) - (unsigned) m_super.index_size;
   while (!fnd && (offset < (m_indx_size * 512))) {
     int j = 1 + m_indx_buffer[offset + 2];
-    if (j == 0) break;  // catch an error (if any)
+    //if (j == 0) break;  // catch an error (if any) (will always be atleast 1)
     switch (m_indx_buffer[offset]) {
       case SFS_ENTRY_FILE_DEL:
         if (j >= cnt) {

@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -216,7 +216,9 @@ public:
   void ZeroFile(DWORD64 Start, DWORD64 End);
   BYTE CalculateCRC(const void *buffer, DWORD Size);
   INT64 CalculateTime(void);
-  
+  void DisplayFreeSpace(void);
+  size_t CalcFreeBlocks(void);
+
   bool Format(const BOOL AskForBoot);
   
   void SendToDialog(struct S_SFS_SUPER *super);
@@ -240,7 +242,6 @@ public:
   BYTE   *m_indx_buffer;
   unsigned m_indx_size;  // in 512-byte sectors
   DWORD64 m_indx_start;  // lba of the first index sector
-  int     m_block_size;
   
   BOOL    m_isvalid;
   int     m_index; // index into dlg->SFS[]
@@ -252,6 +253,7 @@ public:
 
   BOOL    m_show_del;
   BOOL    m_del_clear;
+  size_t  m_free_blocks;
   
 // Overrides
   // ClassWizard generate virtual function overrides

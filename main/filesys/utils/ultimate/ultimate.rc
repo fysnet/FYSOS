@@ -78,7 +78,7 @@ CAPTION "About ultimate"
 FONT 8, "MS Sans Serif"
 BEGIN
     CONTROL         IDD_SFS,IDC_STATIC,"Static",SS_BITMAP,11,10,20,20
-    LTEXT           "Ultimate   00.54.22 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
+    LTEXT           "Ultimate   00.55.20 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
     LTEXT           "Copyright (C)  Forever Young Software 1984-2022",IDC_STATIC,46,27,175,8
     DEFPUSHBUTTON   "OK",IDOK,178,7,50,14,WS_GROUP
     LTEXT           "http://www.fysnet.net",IDC_STATIC,46,38,175,8
@@ -487,6 +487,7 @@ BEGIN
     EDITTEXT        IDC_SFS_VERSION_DISP,108,80,26,12,ES_CENTER | ES_AUTOHSCROLL | ES_READONLY
     EDITTEXT        IDC_SFS_TIMESTAMP_DISP,171,10,88,12,ES_CENTER | ES_AUTOHSCROLL | ES_READONLY
     CTEXT           "",IDC_BASE_SIZE_STR,296,239,115,11,SS_SUNKEN
+    CTEXT           "",IDC_FREE_SIZE_STR,142,239,146,11,SS_SUNKEN
     PUSHBUTTON      "+",IDC_EXPAND,174,58,10,10,WS_DISABLED
     PUSHBUTTON      "--",IDC_COLAPSE,186,58,10,10,WS_DISABLED
 END
@@ -851,6 +852,7 @@ BEGIN
     RTEXT           "Label:",IDC_STATIC,195,24,25,11
     RTEXT           "CRC:",IDC_STATIC,195,52,25,11
     CTEXT           "",IDC_BASE_SIZE_STR,296,239,115,11,SS_SUNKEN
+    CTEXT           "",IDC_FREE_SIZE_STR,142,239,146,11,SS_SUNKEN
     PUSHBUTTON      "+",IDC_EXPAND,142,58,10,10,WS_DISABLED
     PUSHBUTTON      "--",IDC_COLAPSE,154,58,10,10,WS_DISABLED
 END
@@ -1411,6 +1413,7 @@ BEGIN
     RTEXT           "Rev Level:",IDC_STATIC,142,12,54,11
     RTEXT           "UID:",IDC_STATIC,293,39,19,11
     RTEXT           "GID:",IDC_STATIC,294,53,18,11
+    CTEXT           "",IDC_FREE_SIZE_STR,142,239,146,11,SS_SUNKEN
     PUSHBUTTON      "<<",ID_MAGIC,122,212,14,12
 END
 
@@ -1626,6 +1629,7 @@ BEGIN
     EDITTEXT        IDC_EXFAT_LOG_BYTES_SECT_DISP,104,134,30,12,ES_CENTER | ES_AUTOHSCROLL | ES_READONLY
     EDITTEXT        IDC_EXFAT_LOG_SECT_CLUSTER_DISP,104,148,30,12,ES_CENTER | ES_AUTOHSCROLL | ES_READONLY
     LTEXT           "%",IDC_STATIC,105,192,8,8
+    CTEXT           "",IDC_FREE_SIZE_STR,142,239,146,11,SS_SUNKEN
     PUSHBUTTON      "Flags:",IDFLAGS,170,52,25,10,BS_RIGHT
 END
 
@@ -2354,7 +2358,7 @@ BEGIN
             VALUE "FileDescription", "ultimate MFC Application"
             VALUE "FileVersion", "1, 0, 0, 1"
             VALUE "InternalName", "ultimate"
-            VALUE "LegalCopyright", "Copyright (C) 2018"
+            VALUE "LegalCopyright", "Copyright (C) 2022"
             VALUE "OriginalFilename", "ultimate.EXE"
             VALUE "ProductName", "ultimate Application"
             VALUE "ProductVersion", "1, 0, 0, 1"
