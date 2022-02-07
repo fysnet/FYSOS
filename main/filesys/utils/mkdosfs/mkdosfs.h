@@ -57,13 +57,13 @@
  */
 
 /*
- *  Last updated: 5 Feb 2022
+ *  Last updated: 6 Feb 2022
  */
 
 // set it to 1 (align on byte)
 #pragma pack (push, 1)
 
-char strtstr[] = "\nMake DOS Image  v02.00.00    Forever Young Software 1984-2022\n\n";
+char strtstr[] = "\nMake DOS Image  v02.00.10    Forever Young Software 1984-2022\n\n";
 
 #define SECT_SIZE  512
 
@@ -165,13 +165,13 @@ struct S_FAT_ROOT {
 
 struct S_FAT_LFN_ROOT {
   bit8u  sequ_flags;
-  bit8u  name0[10];
+  bit16u name0[5];
   bit8u  attrb;
   bit8u  resv;
   bit8u  sfn_crc;
-  bit8u  name1[12];
+  bit16u name1[6];
   bit16u clust_zero;
-  bit8u  name2[4];
+  bit16u name2[2];
 };
 
 void parse_command(int, char *[], char *, bool *, bool *, char *);

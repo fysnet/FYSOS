@@ -75,7 +75,7 @@
  *   - Since the FAT FS won't allow file sizes larger than 32-bit, no
  *     need to use the 64-bit forms of FSEEK() and FTELL()
  *
- *  Last updated: 5 Feb 2022
+ *  Last updated: 6 Feb 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *  gcc -Os mkdosfs.cpp -o mkdosfs.exe -s
@@ -432,7 +432,7 @@ int main(int argc, char *argv[]) {
    *  free clusters or slots when we create new entries.  Therefore, we will
    *  start with the first cluster after the root (cur_clust) and the first
    *  slot within the root (cur_slot).  We will also keep track of how many
-   *  clusters we use so that we can update the bitmap(s).
+   *  clusters we use so that we can update the fat(s).
    */
   if ((FAT_TYPE == 12) || (FAT_TYPE == 16))
     fseek(targ, (bit32u) ((resources->base_lba + boot_size + (num_fats * spfat) + root_size) * SECT_SIZE), SEEK_SET);
@@ -662,9 +662,10 @@ void create_root_entry(struct S_FAT_ROOT *root, char *filename, const bit32u fil
                        bit8u *fat_buf, bit32u *cur_clust, const bit8u attribute, const int type, 
                        const int spc, const bit32u do_sfn) {
 
-  unsigned slots, i, j, k, index;
+  unsigned slots, i, j, k, len, index;
   unsigned sfn_name_len = 0, sfn_ext_len = 0;
-  bit8u *s, *t, new_crc;
+  bit8u *s, new_crc;
+  bit16u *t;
   char sfn_name[8], sfn_ext[3];
   char illegal[] = "\"*+,/:;<=>?[\\]| ";
   struct S_FAT_LFN_ROOT *f_root = (struct S_FAT_LFN_ROOT *) root;
@@ -702,32 +703,23 @@ void create_root_entry(struct S_FAT_ROOT *root, char *filename, const bit32u fil
   
   // create the lfn entries
   index = *root_pos;
-  slots = (unsigned int) ((strlen(filename) + 12) / 13);
-  for (i=slots; i; i--) {
+  len = (unsigned) strlen(filename);
+  slots = (unsigned int) ((len + 12) / 13);
+  k = 0;
+  for (i=slots; i > 0; i--) {
     f_root[index].sequ_flags = ((i==slots) ? 0x40 : 0x00) | i;
     f_root[index].attrb = 0x0F;
     f_root[index].resv = 0x00;
     f_root[index].clust_zero = 0x0000;
     f_root[index].sfn_crc = new_crc;
-    s = (bit8u *) (filename + ((i-1) * 13));
-    t = (bit8u *) f_root[index].name0;
-    for (j=0; j<13; j++) {
-      if (j==5) t = (bit8u *) f_root[index].name1;
-      if (j==11) t = (bit8u *) f_root[index].name2;
-      if (*s) {
-        *t++ = *s++;
-        *t++ = '\0';
-      } else {
-        *t++ = '\0';
-        *t++ = '\0';
-        for (k=j+1; k<13; k++) {
-          if (k==5) t = (bit8u *) f_root[index].name1;
-          if (k==11) t = (bit8u *) f_root[index].name2;
-          *t++ = 0xFF;
-          *t++ = 0xFF;
-        }
-        break;
-      }
+    t = f_root[index].name0;
+    for (j=0; j<13; j++, t++) {
+      if (j==5) t = f_root[index].name1;
+      if (j==11) t = f_root[index].name2;
+      if (k < len) *t = filename[k];
+      else if (k == len) *t = 0x0000;
+      else *t = 0xFFFF;
+      k++;
     }
     index++;
   }
@@ -762,22 +754,22 @@ void create_root_entry(struct S_FAT_ROOT *root, char *filename, const bit32u fil
       value = (i == 0) ? 0x0FFFFFFF : (*cur_clust + 1);
       switch (type) {
       case 12:
-        t = fat_buf + *cur_clust;
-        t += (*cur_clust / 2);
-        dword = *((bit16u *) t);
+        s = fat_buf + *cur_clust;
+        s += (*cur_clust / 2);
+        dword = * ((bit16u *) s);
         if (*cur_clust & 1)
-          *((bit16u *) t) = (bit16u) ((dword & ~0xFFF0) | ((value & 0xFFF)<<4));
+          * ((bit16u *) s) = (bit16u) ((dword & ~0xFFF0) | ((value & 0xFFF)<<4));
         else
-          *((bit16u *) t) = (bit16u) ((dword & ~0x0FFF) | (value & 0xFFF));
+          * ((bit16u *) s) = (bit16u) ((dword & ~0x0FFF) | (value & 0xFFF));
         break;
       case 16:
-        t = fat_buf + (*cur_clust << 1);
-        *((bit16u *) t) = (bit16u) (value & 0xFFFF);
+        s = fat_buf + (*cur_clust << 1);
+        * ((bit16u *) s) = (bit16u) (value & 0xFFFF);
         break;
       case 32:
         // top 4 bits are reserved and should not be modified
-        t = fat_buf + (*cur_clust << 2);
-        *((bit32u *) t) = (value & 0x0FFFFFFF);
+        s = fat_buf + (*cur_clust << 2);
+        * ((bit32u *) s) = (value & 0x0FFFFFFF);
       }
       (*cur_clust)++;
     }
