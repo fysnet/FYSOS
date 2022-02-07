@@ -1041,7 +1041,7 @@ unsigned CFat::FatGetLFN(struct S_FAT_LFN_ROOT *lfn, CString &name) {
   memset(str, 0, 1024);
   t = str;
   
-  for (i=0; i<cnt; i++) {
+  for (i=cnt-1; i>=0; i--) {
     WORD *s = lfn[i].name0;
     for (j=0; j<13; j++) {
       if (j==5)  s = lfn[i].name1;
@@ -1085,7 +1085,7 @@ unsigned CFat::FatCheckLFN(struct S_FAT_LFN_ROOT *lfn, DWORD *ErrorCode) {
   // now get the name and check it for illegal values
   memset(str, 0, 1024); // 63 total entries * 26 w_chars each (13 bytes each) = 819 total byte chars
   t = str;
-  for (i=0; i<cnt; i++) {
+  for (i=cnt-1; i>=0; i--) {
     WORD *s = lfn[i].name0;
     for (j=0; j<13; j++) {
       if (j==5)  s = lfn[i].name1;
