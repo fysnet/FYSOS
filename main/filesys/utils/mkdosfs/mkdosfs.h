@@ -57,13 +57,13 @@
  */
 
 /*
- *  Last updated: 6 Feb 2022
+ *  Last updated: 7 Feb 2022
  */
 
 // set it to 1 (align on byte)
 #pragma pack (push, 1)
 
-char strtstr[] = "\nMake DOS Image  v02.00.10    Forever Young Software 1984-2022\n\n";
+char strtstr[] = "\nMake DOS Image  v02.00.11    Forever Young Software 1984-2022\n\n";
 
 #define SECT_SIZE  512
 

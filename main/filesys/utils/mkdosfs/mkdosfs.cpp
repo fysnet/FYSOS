@@ -75,7 +75,7 @@
  *   - Since the FAT FS won't allow file sizes larger than 32-bit, no
  *     need to use the 64-bit forms of FSEEK() and FTELL()
  *
- *  Last updated: 6 Feb 2022
+ *  Last updated: 7 Feb 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *  gcc -Os mkdosfs.cpp -o mkdosfs.exe -s
@@ -662,7 +662,7 @@ void create_root_entry(struct S_FAT_ROOT *root, char *filename, const bit32u fil
                        bit8u *fat_buf, bit32u *cur_clust, const bit8u attribute, const int type, 
                        const int spc, const bit32u do_sfn) {
 
-  unsigned slots, i, j, k, len, index;
+  int slots, i, j, k, l, len, index;
   unsigned sfn_name_len = 0, sfn_ext_len = 0;
   bit8u *s, new_crc;
   bit16u *t;
@@ -706,23 +706,24 @@ void create_root_entry(struct S_FAT_ROOT *root, char *filename, const bit32u fil
   len = (unsigned) strlen(filename);
   slots = (unsigned int) ((len + 12) / 13);
   k = 0;
-  for (i=slots; i > 0; i--) {
-    f_root[index].sequ_flags = ((i==slots) ? 0x40 : 0x00) | i;
-    f_root[index].attrb = 0x0F;
-    f_root[index].resv = 0x00;
-    f_root[index].clust_zero = 0x0000;
-    f_root[index].sfn_crc = new_crc;
-    t = f_root[index].name0;
+  l = 1;
+  for (i=slots-1; i >= 0; i--) {
+    f_root[index + i].sequ_flags = ((i==0) ? 0x40 : 0x00) | l++;
+    f_root[index + i].attrb = 0x0F;
+    f_root[index + i].resv = 0x00;
+    f_root[index + i].clust_zero = 0x0000;
+    f_root[index + i].sfn_crc = new_crc;
+    t = f_root[index + i].name0;
     for (j=0; j<13; j++, t++) {
-      if (j==5) t = f_root[index].name1;
-      if (j==11) t = f_root[index].name2;
+      if (j==5) t = f_root[index + i].name1;
+      if (j==11) t = f_root[index + i].name2;
       if (k < len) *t = filename[k];
       else if (k == len) *t = 0x0000;
       else *t = 0xFFFF;
       k++;
     }
-    index++;
   }
+  index += slots;
   
   // create the SFN slot
   memcpy(root[index].name, sfn_name, 8);
