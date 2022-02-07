@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -592,6 +592,9 @@ public:
   
   bool Ext2Format(const BOOL AskForBoot);
   void MarkBitmap(const int group, const int bitmap, const int start, const int length, const BOOL mark);
+
+  void DisplayFreeSpace(void);
+  size_t CalcFreeBlocks(void);
   
   CMyImageList m_TreeImages;
   HTREEITEM m_hRoot;
@@ -625,6 +628,7 @@ public:
   unsigned m_block_table_inode;
 
   BOOL    m_del_clear;
+  size_t  m_free_blocks;
   
 // Overrides
   // ClassWizard generate virtual function overrides
@@ -653,6 +657,7 @@ protected:
   afx_msg void OnErase();
   afx_msg void OnFormat();
   afx_msg void OnClean();
+  afx_msg void OnCheck();
   afx_msg void OnMountTime();
   afx_msg void OnLastCheck();
   afx_msg void OnWriteTime();

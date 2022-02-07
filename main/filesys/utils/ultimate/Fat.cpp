@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -1032,26 +1032,23 @@ unsigned CFat::FatGetName(struct S_FAT_ROOT *root, CString &name, BYTE *attrb, D
 }
 
 unsigned CFat::FatGetLFN(struct S_FAT_LFN_ROOT *lfn, CString &name) {
-  int i, j;
   char *t, str[1024];
-  unsigned cnt = lfn->sequ_flags & 0x3F;
+  int i, j, cnt = lfn->sequ_flags & 0x3F;
 
   if (lfn->sequ_flags & 0x80)
     return cnt;
   
-  i = cnt - 1;
   memset(str, 0, 1024);
   t = str;
   
-  while (i>=0) {
-    BYTE *s = (BYTE *) lfn[i].name0;
+  for (i=0; i<cnt; i++) {
+    WORD *s = lfn[i].name0;
     for (j=0; j<13; j++) {
-      if (j==5)  s = (BYTE *) lfn[i].name1;
-      if (j==11) s = (BYTE *) lfn[i].name2;
-      *t++ = *s++;
+      if (j==5)  s = lfn[i].name1;
+      if (j==11) s = lfn[i].name2;
+      *t++ = *s & 0x00FF;
       s++;
     }
-    i--;
   }
   
   name = str;
@@ -1086,18 +1083,16 @@ unsigned CFat::FatCheckLFN(struct S_FAT_LFN_ROOT *lfn, DWORD *ErrorCode) {
   }
   
   // now get the name and check it for illegal values
-  i = cnt - 1;
   memset(str, 0, 1024); // 63 total entries * 26 w_chars each (13 bytes each) = 819 total byte chars
   t = str;
-  while (i>=0) {
-    BYTE *s = (BYTE *) lfn[i].name0;
+  for (i=0; i<cnt; i++) {
+    WORD *s = lfn[i].name0;
     for (j=0; j<13; j++) {
-      if (j==5)  s = (BYTE *) lfn[i].name1;
-      if (j==11) s = (BYTE *) lfn[i].name2;
-      *t++ = *s++;
+      if (j==5)  s = lfn[i].name1;
+      if (j==11) s = lfn[i].name2;
+      *t++ = *s & 0x00FF;
       s++;
     }
-    i--;
   }
   
   t = str;
@@ -1454,20 +1449,23 @@ void CFat::AllocateRoot(CString csName, DWORD RootCluster, DWORD StartCluster, D
       int l = csName.GetLength();
       for (i=cnt-2; i>=0; i--) {
         lfn[i].sequ_flags = ((i == 0) ? 0x40 : 0) | k++;
-        for (j=0; j<10; j+=2) {
-          lfn[i].name0[j] = (p == l) ? 0 : csName.GetAt(p++);
-          lfn[i].name0[j+1] = 0;
+        for (j=0; j<5; j++, p++) {
+          if (p < l) lfn[i].name0[j] = (WORD) csName.GetAt(p);
+          else if (p == l) lfn[i].name0[j] = 0x0000;
+          else lfn[i].name0[j] = 0xFFFF;
         }
         lfn[i].attrb = 0x0F;
         lfn[i].sfn_crc = CalcCRCFromSFN(sfn);
-        for (j=0; j<12; j+=2) {
-          lfn[i].name1[j] = (p == l) ? 0 : csName.GetAt(p++);
-          lfn[i].name1[j+1] = 0;
+        for (j=0; j<6; j++, p++) {
+          if (p < l) lfn[i].name1[j] = (WORD) csName.GetAt(p);
+          else if (p == l) lfn[i].name1[j] = 0x0000;
+          else lfn[i].name1[j] = 0xFFFF;
         }
         lfn[i].clust_zero = 0;
-        for (j=0; j<4; j+=2) {
-          lfn[i].name2[j] = (p == l) ? 0 : csName.GetAt(p++);
-          lfn[i].name2[j+1] = 0;
+        for (j=0; j<2; j++, p++) {
+          if (p < l) lfn[i].name2[j] = (WORD) csName.GetAt(p);
+          else if (p == l) lfn[i].name2[j] = 0x0000;
+          else lfn[i].name2[j] = 0xFFFF;
         }
       }
       

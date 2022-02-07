@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -300,7 +300,10 @@ public:
   void *ExFatLoadBP(void *bp_buffer);
   void ExFatWriteBP(void *bp_buffer);
   bool ExFatFormat(const BOOL AskForBoot);
-  
+
+  void DisplayFreeSpace(void);
+  size_t CalcFreeBlocks(void);
+
   CMyImageList m_TreeImages;
   HTREEITEM m_hRoot;
   BOOL      m_too_many;
@@ -323,6 +326,7 @@ public:
 
   BOOL    m_show_del;
   BOOL    m_del_clear;
+  size_t  m_free_blocks;
   
 // Overrides
   // ClassWizard generate virtual function overrides

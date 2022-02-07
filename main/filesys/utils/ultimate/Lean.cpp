@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2021
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -741,7 +741,7 @@ void CLean::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
   m_index = index;
   m_color = color;
   m_isvalid = TRUE;
-  
+
   m_hard_format = FALSE;
   
   if (!DetectLeanFS()) {

@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -785,7 +785,7 @@ void CGpt::OnGPTTotalCheck() {
   for (i=0; i<(int) (dlg->m_sect_size - hdr->hdr_size); i++)
     j |= byte[i];
   if (j != 0) {
-    csInfo += "*Remaining part of header should not be zeros...\r\n";
+    csInfo += "*Remaining part of header should all be zeros...\r\n";
     error_cnt++;
   }
   

@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -107,9 +107,11 @@ CFYSFS::CFYSFS() : CPropertyPage(CFYSFS::IDD) {
   m_del_clear = FALSE;
   //}}AFX_DATA_INIT
   m_hard_format = FALSE;
+  m_free_blocks = 0;
 }
 
 CFYSFS::~CFYSFS() {
+  m_free_blocks = 0;
 }
 
 void CFYSFS::DoDataExchange(CDataExchange* pDX) {
@@ -495,7 +497,13 @@ void CFYSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, con
       GetDlgItem(IDC_DIR_TREE)->SetFocus();
       m_dir_tree.SelectSetFirstVisible(m_hRoot);
     }
+
+    m_free_blocks = CalcFreeBlocks();
   }
+  
+  // display the running total of free bytes left
+  DisplayFreeSpace();
+
   Invalidate(TRUE);  // redraw the tab
 }
 
@@ -1027,6 +1035,22 @@ void CFYSFS::OnFlagsUpdate() {
 
 void CFYSFS::OnBitmapUpdate() {
   AfxMessageBox("TODO:");
+}
+
+void CFYSFS::DisplayFreeSpace(void) {
+  CString csFree;
+  
+  csFree = "Not Implemented Yet";
+  //csFree.Format("Free Space: %s (bytes)", (LPCSTR) gFormatNum((size_t) m_free_blocks * block_size, FALSE, FALSE));
+  SetDlgItemText(IDC_FREE_SIZE_STR, csFree);
+}
+
+size_t CFYSFS::CalcFreeBlocks(void) {
+  
+  // TODO
+
+
+  return 0;
 }
 
 void CFYSFS::OnChangeVersion() {

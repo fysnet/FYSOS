@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -118,6 +118,7 @@ CExFat::CExFat() : CPropertyPage(CExFat::IDD) {
   m_bp_flags = 0;
 
   m_hard_format = FALSE;
+  m_free_blocks = 0;
 }
 
 CExFat::~CExFat() {
@@ -131,6 +132,7 @@ CExFat::~CExFat() {
   m_fat_buffer = NULL;
   m_vbr_buffer = NULL;
   m_bp_buffer = NULL;
+  m_free_blocks = 0;
 }
 
 void CExFat::DoDataExchange(CDataExchange* pDX) {
@@ -339,7 +341,13 @@ void CExFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, con
       GetDlgItem(IDC_DIR_TREE)->SetFocus();
       m_dir_tree.SelectSetFirstVisible(m_hRoot);
     }
+
+    m_free_blocks = CalcFreeBlocks();
   }
+
+  // display free space
+  DisplayFreeSpace();
+
   Invalidate(TRUE);  // redraw the tab
 }
 
@@ -1805,6 +1813,20 @@ void CExFat::DeleteFile(HTREEITEM hItem) {
       WriteFile(root, root_items->Cluster, rootsize, (BYTE) (root_items->Flags >> 8));
     free(root);
   }
+}
+
+void CExFat::DisplayFreeSpace(void) {
+  CString csFree;
+  
+  //csFree.Format("Free Space: %s (bytes)", (LPCSTR) gFormatNum((size_t) m_free_blocks * block_size, FALSE, FALSE));
+  csFree = "Not Implemented Yet";
+
+  SetDlgItemText(IDC_FREE_SIZE_STR, csFree);
+}
+
+size_t CExFat::CalcFreeBlocks(void) {
+
+  return 0;
 }
 
 void CExFat::OnSearch() {

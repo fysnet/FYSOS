@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -170,13 +170,13 @@ struct S_FAT_ROOT {
 
 struct S_FAT_LFN_ROOT {
   BYTE   sequ_flags;
-  BYTE   name0[10];
+  WORD   name0[5];
   BYTE   attrb;
   BYTE   resv;
   BYTE   sfn_crc;
-  BYTE   name1[12];
+  WORD   name1[6];
   WORD   clust_zero;
-  BYTE   name2[4];
+  WORD   name2[2];
 };
 
 #define  FAT_NO_ERROR       0   // no error found

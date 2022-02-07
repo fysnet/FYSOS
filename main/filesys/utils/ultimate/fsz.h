@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2021
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net

@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -282,6 +282,9 @@ public:
   void CopyFile(HTREEITEM hItem, CString csName);
   void CopyFolder(HTREEITEM hItem, CString csPath, CString csName);
   
+  void DisplayFreeSpace(void);
+  size_t CalcFreeBlocks(void);
+
   CMyImageList m_TreeImages;
   HTREEITEM m_hRoot;
   BOOL      m_too_many;
@@ -297,6 +300,8 @@ public:
   BOOL    m_hard_format;
 
   BOOL    m_del_clear;
+
+  size_t  m_free_blocks;
   
 // Overrides
   // ClassWizard generate virtual function overrides

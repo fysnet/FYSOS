@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -120,6 +120,7 @@ CExt2::CExt2() : CPropertyPage(CExt2::IDD) {
   m_block_table_inode = -1;
   m_inode_dirty = FALSE;
   m_hard_format = FALSE;
+  m_free_blocks = 0;
 }
 
 CExt2::~CExt2() {
@@ -133,6 +134,7 @@ CExt2::~CExt2() {
   m_desc_table = NULL;
   m_cur_inode_table = NULL;
   m_block_table = NULL;
+  m_free_blocks = 0;
 }
 
 void CExt2::DoDataExchange(CDataExchange* pDX) {
@@ -184,6 +186,7 @@ BEGIN_MESSAGE_MAP(CExt2, CPropertyPage)
   ON_BN_CLICKED(ID_ERASE, OnErase)
   ON_BN_CLICKED(ID_FORMAT, OnFormat)
   ON_BN_CLICKED(ID_CLEAN, OnClean)
+  ON_BN_CLICKED(ID_CHECK, OnCheck)
   ON_BN_CLICKED(ID_MOUNT_TIME, OnMountTime)
   ON_BN_CLICKED(ID_LAST_CHECK, OnLastCheck)
   ON_BN_CLICKED(ID_WRITE_TIME, OnWriteTime)
@@ -340,7 +343,12 @@ void CExt2::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
       }
     } else
       AfxMessageBox("Did not find root Inode");
+
+    m_free_blocks = CalcFreeBlocks();
   }
+
+  // display the free space
+  DisplayFreeSpace();
 }
 
 void CExt2::ParseDir(void *root, DWORD64 root_size, HTREEITEM parent) {
@@ -1200,6 +1208,12 @@ void CExt2::OnClean() {
   Start(m_lba, m_size, m_color, m_index, FALSE);
 }
 
+void CExt2::OnCheck() {
+
+  AfxMessageBox("TODO");
+
+}
+
 void CExt2::OnFormat() {
   int r = AfxMessageBox("This will erase the volume, using most of the current Superblock values.\r\n"
                         "Do you wish to specify a boot sector file?\r\n", MB_YESNOCANCEL, NULL);
@@ -1455,6 +1469,20 @@ bool CExt2::Ext2Format(const BOOL AskForBoot) {
     Start(m_lba, m_size, m_color, m_index, FALSE);
 
   return TRUE;
+}
+
+void CExt2::DisplayFreeSpace(void) {
+  CString csFree;
+  
+  //csFree.Format("Free Space: %s (bytes)", (LPCSTR) gFormatNum((size_t) m_free_blocks * block_size, FALSE, FALSE));
+  csFree = "Not Implemented Yet";
+
+  SetDlgItemText(IDC_FREE_SIZE_STR, csFree);
+}
+
+size_t CExt2::CalcFreeBlocks(void) {
+
+  return 0;
 }
 
 // group  = group number

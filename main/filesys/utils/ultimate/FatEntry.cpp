@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -364,11 +364,11 @@ void CFatEntry::LFNtoDialog() {
   char *t, str[1024];
   memset(str, 0, 1024);
   t = str;
-  BYTE *s = (BYTE *) lfn[m_lfn_cur].name0;
+  WORD *s = lfn[m_lfn_cur].name0;
   for (int j=0; j<13; j++) {
-    if (j==5)  s = (BYTE *) lfn[m_lfn_cur].name1;
-    if (j==11) s = (BYTE *) lfn[m_lfn_cur].name2;
-    *t++ = *s++;
+    if (j==5)  s = lfn[m_lfn_cur].name1;
+    if (j==11) s = lfn[m_lfn_cur].name2;
+    *t++ = *s & 0x00FF;
     s++;
   }
   SetDlgItemText(IDC_ENTRY_LFN_NAME, str);
@@ -394,12 +394,14 @@ void CFatEntry::DialogtoLFN() {
     memset(lfn[m_lfn_cur].name0, 0, 10);
     memset(lfn[m_lfn_cur].name1, 0, 12);
     memset(lfn[m_lfn_cur].name2, 0, 4);
-    BYTE *t = (BYTE *) lfn[m_lfn_cur].name0;
+    WORD *t = lfn[m_lfn_cur].name0;
     int j, l = cs.GetLength();
-    for (j=0; (j<13) && (j<l); j++) {
-      if (j==5)  t = (BYTE *) lfn[m_lfn_cur].name1;
-      if (j==11) t = (BYTE *) lfn[m_lfn_cur].name2;
-      *t++ = cs.GetAt(j);
+    for (j=0; j<13; j++) {
+      if (j==5)  t = lfn[m_lfn_cur].name1;
+      if (j==11) t = lfn[m_lfn_cur].name2;
+      if (j < l) *t = cs.GetAt(j);
+      else if (j == l) *t = 0x0000;
+      else *t = 0xFFFF;
       t++;
     }
   }

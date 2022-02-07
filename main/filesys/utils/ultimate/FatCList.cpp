@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -101,20 +101,29 @@ BOOL CFatCList::OnInitDialog() {
   CDialog::OnInitDialog();
   
   CString cs;
-  for (int i=0; i<m_entries->entry_count; i++) {
+  char ch;
+  int i;
+  CWaitCursor wait;  // creates and changes to a wait cursor (automatically changes back on destroy())
+
+  for (i=0; i<m_entries->entry_count; i++) {
+    ch = ((i > 0) && (m_entries->entries[i] != m_entries->entries[i-1] + 1)) ? '*' : ' ';
     switch (m_fat_size) {
       case FS_FAT12:
-        cs.Format("0x%03X (%i)", m_entries->entries[i], m_entries->entries[i]);
+        cs.Format("0x%03X (%i)%c", m_entries->entries[i], m_entries->entries[i], ch);
         break;
       case FS_FAT16:
-        cs.Format("0x%04X (%i)", m_entries->entries[i], m_entries->entries[i]);
+        cs.Format("0x%04X (%i)%c", m_entries->entries[i], m_entries->entries[i], ch);
         break;
       case FS_FAT32:
-        cs.Format("0x%08X (%i)", m_entries->entries[i], m_entries->entries[i]);
+        cs.Format("0x%08X (%i)%c", m_entries->entries[i], m_entries->entries[i], ch);
         break;
     }
     m_list.AddString(cs);
   }
   
+  // add a trailing entry to indicate how many entries there were
+  cs.Format("%i entries", i);
+  m_list.AddString(cs);
+
   return TRUE;
 }
