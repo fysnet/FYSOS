@@ -1,5 +1,5 @@
 # Resource file used with MBOOTCD for the FILESYS book by Benjamin David Lunt
-#  Copyright 1984-2020  All Rights Reserved
+#  Copyright 1984-2022  All Rights Reserved
 #
 #  mbrfile=filename   - Ignored
 #  bootfile=filename  - Ignored
@@ -26,7 +26,7 @@ imgfile= D:\fysos\main\filesys\images\bootcd.iso
 # You may have as many or as few as you wish.  Please note that this app
 #  does not check for out of bounds due to too many entries specified below.
 D:\fysos\main\filesys\images\cd_menu.img, , 0  # no emulation
-D:\fysos\main\filesys\images\a.img, , 2         # 1.44 meg
-D:\fysos\main\filesys\images\fat12.img, , 4     # hard drive image
-D:\fysos\main\filesys\images\fat16.img, , 4     # hard drive image
-D:\fysos\main\filesys\images\fat32.img, , 4     # hard drive image
+D:\fysos\main\filesys\images\a.img,       , 2  # 1.44 meg
+D:\fysos\main\filesys\images\fat12.img,   , 4  # hard drive image
+D:\fysos\main\filesys\images\fat16.img,   , 4  # hard drive image
+D:\fysos\main\filesys\images\fat32.img,   , 4  # hard drive image

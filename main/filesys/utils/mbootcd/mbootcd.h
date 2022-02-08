@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -66,7 +66,7 @@
 
 #define VERSION_STR  "02.00.00"
 
-char strtstr[] = "\nMake Bootable CDROM Image  v" VERSION_STR "  Forever Young Software 1984-2019\n";
+char strtstr[] = "\nMake Bootable CDROM Image  v" VERSION_STR "  Forever Young Software 1984-2022\n";
 
 #define DESC_TYPE_BOOT    0
 #define DESC_TYPE_PVD     1
