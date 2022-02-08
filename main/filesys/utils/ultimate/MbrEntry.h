@@ -96,6 +96,8 @@ public:
   BOOL   m_dirty;
   void  *m_parent;  // pointer to parent CMBR
   
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
+
 // Overrides
   // ClassWizard generate virtual function overrides
   //{{AFX_VIRTUAL(CMbrEntry)

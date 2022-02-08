@@ -97,6 +97,8 @@ public:
   int    m_index;
   BOOL   m_dirty;
   
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
+
 // Overrides
   // ClassWizard generate virtual function overrides
   //{{AFX_VIRTUAL(CEmbrEntry)
@@ -115,6 +117,7 @@ public:
   afx_msg void OnEmbrClearResv();
   afx_msg void OnEdateNow();
   afx_msg void OnEbootNow();
+  virtual BOOL OnInitDialog();
   //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
 

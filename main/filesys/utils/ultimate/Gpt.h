@@ -160,6 +160,7 @@ public:
   CString	m_version_num;
   //}}AFX_DATA
 
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
 
 // Overrides
   // ClassWizard generate virtual function overrides

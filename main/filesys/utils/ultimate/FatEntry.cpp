@@ -162,11 +162,63 @@ BEGIN_MESSAGE_MAP(CFatEntry, CDialog)
   ON_BN_CLICKED(IDFATENTRIES, OnFatentries)
   ON_BN_CLICKED(IDC_CRC_UPDATE, OnCrcUpdate)
   ON_BN_CLICKED(IDC_SHOW_BYTES, OnShowBytes)
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
 // CFatEntry message handlers
+BOOL CFatEntry::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
+  UNREFERENCED_PARAMETER(id);
+  UNREFERENCED_PARAMETER(pResult);
+
+  // need to handle both ANSI and UNICODE versions of the message
+  TOOLTIPTEXTA *pTTTA = (TOOLTIPTEXTA *) pNMHDR;
+  CString strTipText;
+  UINT_PTR nID = pNMHDR->idFrom;  // idFrom is actually the HWND of the tool
+
+  if (pNMHDR->code == TTN_NEEDTEXTA && (pTTTA->uFlags & TTF_IDISHWND))
+    nID = ::GetDlgCtrlID((HWND)nID);
+
+  // Make sure that all strings are less than 80 chars
+  switch (nID) {
+    case ID_FAT_ATTRIB:
+      strTipText = "Modify Attributes";
+      break;
+    case IDSFN_CLEAR:
+    case IDLFN_CLEAR:
+      strTipText = "Clear Reserved Area";
+      break;
+    case IDTIME:
+    case IDDATE:
+      strTipText = "Set to now";
+      break;
+    case IDC_CRC_UPDATE:
+      strTipText = "Set to CRC of SFN";
+      break;
+
+    case IDPREV:
+      strTipText = "Previous LFN entry in this slot";
+      break;
+    case IDNEXT:
+      strTipText = "Next LFN entry in this slot";
+      break;
+    
+    case IDFATENTRIES:
+      strTipText = "View all of the FAT entries for this file";
+      break;
+
+    case IDOK:
+      strTipText = "Save modifications";
+      break;
+  }
+
+  strncpy(pTTTA->szText, strTipText, 79);
+  pTTTA->szText[79] = '\0';  // make sure it is null terminated
+
+  return TRUE; // message was handled
+}
+
 BOOL CFatEntry::OnInitDialog() {
   CDialog::OnInitDialog();
   
@@ -198,6 +250,8 @@ BOOL CFatEntry::OnInitDialog() {
   
   GetDlgItem(IDFATENTRIES)->EnableWindow(m_fat_entries.entries > 0);
   
+  EnableToolTips(TRUE);
+
   return TRUE;
 }
 
@@ -361,8 +415,8 @@ void CFatEntry::LFNtoDialog() {
   cs.Format("0x%04X", lfn[m_lfn_cur].clust_zero);
   SetDlgItemText(IDC_ENTRY_LFN_CLUST, cs);
   
-  char *t, str[1024];
-  memset(str, 0, 1024);
+  char *t, str[16];
+  memset(str, 0, 16);
   t = str;
   WORD *s = lfn[m_lfn_cur].name0;
   for (int j=0; j<13; j++) {

@@ -205,7 +205,7 @@ public:
   void RemoveSectors(const DWORD64 lba, const long count);
   
   BOOL UpdateSig(DWORD64 lba);
-
+  
   // ClassWizard generated virtual function overrides
   //{{AFX_VIRTUAL(CUltimateDlg)
 protected:

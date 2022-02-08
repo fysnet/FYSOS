@@ -111,6 +111,8 @@ public:
   BOOL  m_show_bytes;
   
   struct S_FAT_ENTRIES m_fat_entries;
+
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
   
 // Overrides
   // ClassWizard generated virtual function overrides

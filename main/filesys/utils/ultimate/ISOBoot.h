@@ -175,6 +175,8 @@ public:
   virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
   //}}AFX_VIRTUAL
 
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
+
 // Implementation
 protected:
   // Generated message map functions

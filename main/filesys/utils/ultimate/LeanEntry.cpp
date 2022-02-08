@@ -141,11 +141,55 @@ BEGIN_MESSAGE_MAP(CLeanEntry, CDialog)
   ON_BN_CLICKED(IDC_MOD_TIME_NOW, OnModTimeNow)
   ON_BN_CLICKED(IDC_SCH_TIME_NOW, OnSchTimeNow)
   ON_BN_CLICKED(IDEAS, OnEas)
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
 // CLeanEntry message handlers
+BOOL CLeanEntry::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
+  UNREFERENCED_PARAMETER(id);
+  UNREFERENCED_PARAMETER(pResult);
+
+  // need to handle both ANSI and UNICODE versions of the message
+  TOOLTIPTEXTA *pTTTA = (TOOLTIPTEXTA *) pNMHDR;
+  CString strTipText;
+  UINT_PTR nID = pNMHDR->idFrom;  // idFrom is actually the HWND of the tool
+
+  if (pNMHDR->code == TTN_NEEDTEXTA && (pTTTA->uFlags & TTF_IDISHWND))
+    nID = ::GetDlgCtrlID((HWND)nID);
+
+  // Make sure that all strings are less than 80 chars
+  switch (nID) {
+    case IDC_CRC_UPDATE:
+      strTipText = "Recalculate CRC of Inode";
+      break;
+    case IDC_ATTRIBUTE:
+      strTipText = "Modify Attributes";
+      break;
+
+    case IDC_ACC_TIME_NOW:
+    case IDC_SCH_TIME_NOW:
+    case IDC_MOD_TIME_NOW:
+    case IDC_CRE_TIME_NOW:
+      strTipText = "Adjust Timestamp";
+      break;
+
+    case IDEAS:
+      strTipText = "View/Modify Extended Attributes";
+      break;
+
+    case ID_APPLY:
+      strTipText = "Save modifications";
+      break;
+  }
+
+  strncpy(pTTTA->szText, strTipText, 79);
+  pTTTA->szText[79] = '\0';  // make sure it is null terminated
+
+  return TRUE; // message was handled
+}
+
 BOOL CLeanEntry::OnInitDialog() {
   CDialog::OnInitDialog();
 
@@ -206,6 +250,8 @@ BOOL CLeanEntry::OnInitDialog() {
   
   // send to the dialog
   UpdateData(FALSE);
+
+  EnableToolTips(TRUE);
 
   return TRUE;
 }

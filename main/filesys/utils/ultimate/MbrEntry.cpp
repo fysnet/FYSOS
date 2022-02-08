@@ -142,6 +142,7 @@ BEGIN_MESSAGE_MAP(CMbrEntry, CPropertyPage)
   ON_EN_KILLFOCUS(IDC_MBR_SIZE, OnTabItemChangeSize)
   ON_EN_CHANGE(IDC_MBR_START_LBA, OnTabItemChange)
   ON_BN_CLICKED(IDC_SYS_ID, OnSysId)
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
@@ -408,6 +409,46 @@ const char *fdisk_ids[] = {
   "BBT"
 };
 
+BOOL CMbrEntry::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
+  UNREFERENCED_PARAMETER(id);
+  UNREFERENCED_PARAMETER(pResult);
+
+  // need to handle both ANSI and UNICODE versions of the message
+  TOOLTIPTEXTA *pTTTA = (TOOLTIPTEXTA *) pNMHDR;
+  CString strTipText;
+  UINT_PTR nID = pNMHDR->idFrom;  // idFrom is actually the HWND of the tool
+
+  if (pNMHDR->code == TTN_NEEDTEXTA && (pTTTA->uFlags & TTF_IDISHWND))
+    nID = ::GetDlgCtrlID((HWND)nID);
+
+  // Make sure that all strings are less than 80 chars
+  switch (nID) {
+    case IDC_MBR_BOOT_ID:
+      strTipText = "Set to 0x80 for bootable. 0x00 for not";
+      break;
+
+    case IDC_MBR_BEGIN_UPDATE:
+      strTipText = "Set Beginning CHS values";
+      break;
+    case IDC_MBR_END_UPDATE:
+      strTipText = "Set Ending CHS values";
+      break;
+    case IDC_SYS_ID:
+      strTipText = "Choose a Sys ID value";
+      break;
+    
+
+    case ID_MBR_APPLY:
+      strTipText = "Save modifications";
+      break;
+  }
+
+  strncpy(pTTTA->szText, strTipText, 79);
+  pTTTA->szText[79] = '\0';  // make sure it is null terminated
+
+  return TRUE; // message was handled
+}
+
 void CMbrEntry::OnMbrBeginUpdate() {
   UpdateData(TRUE);  // bring from Dialog
   DWORD lba;
@@ -531,6 +572,8 @@ BOOL CMbrEntry::OnInitDialog() {
   SetDlgItemText(IDC_SYS_STR, fdisk_ids[(i & 0xFF)]);	
   m_dirty = FALSE;
   
+  EnableToolTips(TRUE);
+
   return TRUE;
 }
 

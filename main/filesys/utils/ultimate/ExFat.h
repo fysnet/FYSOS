@@ -327,6 +327,8 @@ public:
   BOOL    m_show_del;
   BOOL    m_del_clear;
   size_t  m_free_blocks;
+
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
   
 // Overrides
   // ClassWizard generate virtual function overrides

@@ -158,11 +158,55 @@ BEGIN_MESSAGE_MAP(CGpt, CPropertyPage)
   ON_BN_CLICKED(IDC_GPT_BACKUP, OnGPTBackup)
   ON_BN_CLICKED(IDC_GPT_TOTAL_CHECK, OnGPTTotalCheck)
   ON_WM_HELPINFO()
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
 // CGpt message handlers
+BOOL CGpt::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
+   UNREFERENCED_PARAMETER(id);
+   UNREFERENCED_PARAMETER(pResult);
+
+   // need to handle both ANSI and UNICODE versions of the message
+   TOOLTIPTEXTA *pTTTA = (TOOLTIPTEXTA *) pNMHDR;
+   CString strTipText;
+   UINT_PTR nID = pNMHDR->idFrom;  // idFrom is actually the HWND of the tool
+
+   if (pNMHDR->code == TTN_NEEDTEXTA && (pTTTA->uFlags & TTF_IDISHWND))
+     nID = ::GetDlgCtrlID((HWND)nID);
+
+   // Make sure that all strings are less than 80 chars
+   switch (nID) {
+    case IDC_GPT_TOTAL_CHECK:
+      strTipText = "Check the GPT Header and Entries";
+      break;
+    case IDC_GPT_FROM_BACKUP:
+      strTipText = "Restore GPT Header and Entries from Backup";
+      break;
+    case IDC_GPT_BACKUP:
+      strTipText = "Save GPT Header and Entries to Backup";
+      break;
+    case IDC_CRC_BUTTON:
+      strTipText = "Recalculate and store the Header CRC";
+      break;
+    case IDC_GUID_CREATE:
+      strTipText = "Create a new GUID";
+      break;
+    case IDC_ECRC_BUTTON:
+      strTipText = "Recalculate and store the Entries CRC";
+      break;
+
+    case ID_GPT_APPLY:
+      strTipText = "Save modifications";
+      break;
+   }
+
+   strncpy(pTTTA->szText, strTipText, 79);
+   pTTTA->szText[79] = '\0';  // make sure it is null terminated
+
+   return TRUE; // message was handled
+}
 
 BOOL CGpt::OnInitDialog() {
   CPropertyPage::OnInitDialog();
@@ -176,6 +220,8 @@ BOOL CGpt::OnInitDialog() {
   csBaseSize.Format("Start: %I64i, End: %I64i", convert64(m_first_lba), convert64(m_last_lba));
   SetDlgItemText(IDC_BASE_SIZE_STR, csBaseSize);
   
+  EnableToolTips(TRUE);
+
   return TRUE;
 }
 

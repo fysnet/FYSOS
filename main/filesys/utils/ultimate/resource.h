@@ -961,6 +961,7 @@
 #define IDC_FSZ_CHECKED_UPDATE          1626
 #define IDC_FSZ_UUID_CREATE             1627
 #define IDC_FSZ_SUPER_CRC_UPDATE        1628
+#define IDC_CAPTION                     1628
 #define IDC_FSZ_ENCRYPT_NAME            1629
 #define IDC_FSZ_ENC_MASK_DO             1630
 #define IDC_FREE_SIZE_STR               1631
@@ -982,9 +983,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        201
+#define _APS_NEXT_RESOURCE_VALUE        203
 #define _APS_NEXT_COMMAND_VALUE         32785
-#define _APS_NEXT_CONTROL_VALUE         1628
+#define _APS_NEXT_CONTROL_VALUE         1629
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

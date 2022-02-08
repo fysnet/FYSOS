@@ -139,8 +139,65 @@ BEGIN_MESSAGE_MAP(CISOBoot, CPropertyPage)
   ON_BN_CLICKED(IDC_DI_INSERT, OnDiInsert)
   ON_BN_CLICKED(IDC_DI_EXTRACT, OnDiExtract)
   ON_BN_CLICKED(IDC_CLEAR_RESERVED, OnClearReserved)
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
+
+BOOL CISOBoot::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
+   UNREFERENCED_PARAMETER(id);
+   UNREFERENCED_PARAMETER(pResult);
+
+   // need to handle both ANSI and UNICODE versions of the message
+   TOOLTIPTEXTA *pTTTA = (TOOLTIPTEXTA *) pNMHDR;
+   CString strTipText;
+   UINT_PTR nID = pNMHDR->idFrom;  // idFrom is actually the HWND of the tool
+
+   if (pNMHDR->code == TTN_NEEDTEXTA && (pTTTA->uFlags & TTF_IDISHWND))
+     nID = ::GetDlgCtrlID((HWND)nID);
+
+   // Make sure that all strings are less than 80 chars
+   switch (nID) {
+    case IDC_DI_INSERT:
+      strTipText.Format("Insert Boot Code at LBA %i", GetDlgItemInt(IDC_DI_LBA, 0, FALSE));
+      break;
+    case IDC_DI_EXTRACT:
+      strTipText.Format("Extract %i sectors of Boot Code from LBA %i", GetDlgItemInt(IDC_DI_COUNT, 0, FALSE), GetDlgItemInt(IDC_DI_LBA, 0, FALSE));
+      break;
+    case IDC_DI_COUNT:
+      strTipText = "Count of 512-byte sectors to load";
+      break;
+    case IDC_DI_LBA:
+      strTipText = "2048-byte LBA of boot code";
+      break;
+    case IDC_CLEAR_RESERVED:
+      strTipText = "Clear the Reserved Area";
+      break;
+    case IDC_VAL_CRC_UPDATE:
+      strTipText = "Update the CRC";
+      break;
+    case IDC_VAL_KEY_UPDATE:
+      strTipText = "Update the Key";
+      break;
+    case IDC_DI_LOAD_SEG:
+      strTipText = "Usually 0x0000, can be 0x07C0";
+      break;
+    case IDC_DI_MEDIA:
+      strTipText = "Emulated Media type";
+      break;
+    case IDC_DI_BOOTABLE:
+      strTipText = "Bootable";
+      break;
+
+    case ID_APPLY:
+      strTipText = "Save modifications";
+      break;
+   }
+
+   strncpy(pTTTA->szText, strTipText, 79);
+   pTTTA->szText[79] = '\0';  // make sure it is null terminated
+
+   return TRUE; // message was handled
+}
 
 /////////////////////////////////////////////////////////////////////////////
 // CISOBoot message handlers
@@ -153,7 +210,9 @@ BOOL CISOBoot::OnInitDialog() {
   
   // we have to update controls *after* the dialog is created so we put it here
   SendToDialog();
-  
+
+  EnableToolTips(TRUE);
+
   return TRUE;
 }
 

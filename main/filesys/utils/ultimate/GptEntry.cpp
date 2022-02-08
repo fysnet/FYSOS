@@ -129,11 +129,57 @@ BEGIN_MESSAGE_MAP(CGptEntry, CPropertyPage)
   ON_EN_CHANGE(IDC_GPTE_START_LBA, OnTabItemChange)
   ON_BN_CLICKED(IDC_ATTRIBUTE, OnAttribute)
   ON_BN_CLICKED(IDC_GUID_PLUS_MINUS, OnPlusMinus)
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
 // CGptEntry message handlers
+BOOL CGptEntry::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
+   UNREFERENCED_PARAMETER(id);
+   UNREFERENCED_PARAMETER(pResult);
+
+   // need to handle both ANSI and UNICODE versions of the message
+   TOOLTIPTEXTA *pTTTA = (TOOLTIPTEXTA *) pNMHDR;
+   CString strTipText;
+   UINT_PTR nID = pNMHDR->idFrom;  // idFrom is actually the HWND of the tool
+
+   if (pNMHDR->code == TTN_NEEDTEXTA && (pTTTA->uFlags & TTF_IDISHWND))
+     nID = ::GetDlgCtrlID((HWND)nID);
+
+   // Make sure that all strings are less than 80 chars
+   switch (nID) {
+     case IDC_GUID_CREATE_TYPE:
+      strTipText = "Select a GUID Type";
+      break;
+     case IDC_GUID_TYPE:
+      strTipText = "Create a GUID";
+      break;
+     case IDC_GUID_PLUS_MINUS:
+      strTipText = "Increase/Decrease Partition Size";
+      break;
+     case IDC_ATTRIBUTE:
+      strTipText = "Change an Attribute";
+      break;
+
+     case ID_GPT_APPLY:
+      strTipText = "Save modifications";
+      break;
+   }
+
+   strncpy(pTTTA->szText, strTipText, 79);
+   pTTTA->szText[79] = '\0';  // make sure it is null terminated
+
+   return TRUE; // message was handled
+}
+
+BOOL CGptEntry::OnInitDialog() {
+  CDialog::OnInitDialog();
+  
+  EnableToolTips(TRUE);
+
+  return TRUE;
+}
 
 void CGptEntry::OnGptApply() {
   // just update the members.

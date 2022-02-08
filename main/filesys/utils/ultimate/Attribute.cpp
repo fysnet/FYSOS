@@ -104,6 +104,7 @@ END_MESSAGE_MAP()
 
 BOOL CAttribute::OnInitDialog() {
   CDialog::OnInitDialog();
+  int bCaption = SW_HIDE;
   int i=0;
   
   SetWindowText(m_title);
@@ -112,8 +113,13 @@ BOOL CAttribute::OnInitDialog() {
     m_list.AddString((LPCTSTR) m_attributes[i].str);
     if ((m_attrib & m_attributes[i].mask) == m_attributes[i].attrb)
       m_list.SetSel(i, TRUE);
+    if (m_attributes[i].str[0] == '*')
+      bCaption = SW_SHOW;
     i++;
   }
+
+  // no need to show the caption if no 'single-only' entries
+  GetDlgItem(IDC_CAPTION)->ShowWindow(bCaption);
   
   return TRUE;
 }

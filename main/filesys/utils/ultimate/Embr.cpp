@@ -139,11 +139,62 @@ BEGIN_MESSAGE_MAP(CEmbr, CPropertyPage)
   ON_EN_CHANGE(IDC_EMBR_VERSION, OnChangeEmbrVersion)
   ON_BN_CLICKED(IDC_UPDATE_TOT_SECTS, OnUpdateTotSects)
   ON_WM_HELPINFO()
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
 // CEmbr message handlers
+BOOL CEmbr::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
+  UNREFERENCED_PARAMETER(id);
+  UNREFERENCED_PARAMETER(pResult);
+
+  // need to handle both ANSI and UNICODE versions of the message
+  TOOLTIPTEXTA *pTTTA = (TOOLTIPTEXTA *) pNMHDR;
+  CString strTipText;
+  UINT_PTR nID = pNMHDR->idFrom;  // idFrom is actually the HWND of the tool
+
+  if (pNMHDR->code == TTN_NEEDTEXTA && (pTTTA->uFlags & TTF_IDISHWND))
+    nID = ::GetDlgCtrlID((HWND)nID);
+
+  // Make sure that all strings are less than 80 chars
+  switch (nID) {
+    case IDC_SIGNATURE_SET:
+      strTipText = "Set the signature to 'EmbrrbmE'";
+      break;
+    case IDC_BOOT_SIG_UPDATE:
+      strTipText = "Set the signature to 0xAA55";
+      break;
+    case IDC_SIG0_SET:
+      strTipText = "Set the signature to 0x52424D45";
+      break;
+    case IDC_CRC_SET:
+      strTipText = "Recalculate CRC";
+      break;
+    case IDC_UPDATE_TOT_SECTS:
+      strTipText = "Sets to max sectors used via last sector in last partition";
+      break;
+    case IDC_RESV_CLEAR:
+      strTipText = "Clear reserved area";
+      break;
+    case IDC_SIG1_SET:
+      strTipText = "Set the signature to 0x454D4252";
+      break;
+    
+    case ID_UPDATE_CODE:
+      strTipText = "Update Boot Code from file on Host";
+      break;
+
+    case ID_EMBR_APPLY:
+      strTipText = "Save modifications";
+      break;
+  }
+
+  strncpy(pTTTA->szText, strTipText, 79);
+  pTTTA->szText[79] = '\0';  // make sure it is null terminated
+
+  return TRUE; // message was handled
+}
 
 BOOL CEmbr::OnInitDialog() {
   CPropertyPage::OnInitDialog();
@@ -159,6 +210,8 @@ BOOL CEmbr::OnInitDialog() {
   csBaseSize.Format("Start: %I64i, Size: %I64i", m_lba, convert64(m_tot_sectors));
   SetDlgItemText(IDC_BASE_SIZE_STR, csBaseSize);
   
+  EnableToolTips(TRUE);
+
   return TRUE;
 }
 

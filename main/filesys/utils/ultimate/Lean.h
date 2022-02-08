@@ -353,6 +353,8 @@ public:
   BOOL    m_show_del;
   BOOL    m_del_clear;
   BOOL    m_ESs_in_Inode;
+
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
   
 // Overrides
   // ClassWizard generate virtual function overrides

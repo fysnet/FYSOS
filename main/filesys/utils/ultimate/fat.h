@@ -334,8 +334,7 @@ public:
 
   int     m_parse_depth_limit; // used to catch a repeating '..' or '.' recursive error
   
-
-  CToolTipCtrl m_tip;
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
 
 // Overrides
   // ClassWizard generate virtual function overrides

@@ -375,6 +375,8 @@ public:
   
   BOOL    m_del_clear;
 
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
+
 // Overrides
   // ClassWizard generate virtual function overrides
   //{{AFX_VIRTUAL(CNTFS)

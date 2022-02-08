@@ -91,6 +91,8 @@ public:
   int    m_index;
   BOOL   m_dirty;
   
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
+
 // Overrides
   // ClassWizard generated virtual function overrides
   //{{AFX_VIRTUAL(CGptEntry)
@@ -113,6 +115,7 @@ protected:
   afx_msg void OnGuidSelectGUID();
   afx_msg void OnAttribute();
   afx_msg void OnPlusMinus();
+  virtual BOOL OnInitDialog();
   //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
 };

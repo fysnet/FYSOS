@@ -131,11 +131,59 @@ BEGIN_MESSAGE_MAP(CEmbrEntry, CPropertyPage)
   ON_EN_CHANGE(IDC_EMBRE_START_LBA, OnTabItemChange)
   ON_BN_CLICKED(IDC_EDATE_NOW, OnEdateNow)
   ON_BN_CLICKED(IDC_EBOOT_NOW, OnEbootNow)
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
 // CEmbrEntry message handlers
+BOOL CEmbrEntry::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
+  UNREFERENCED_PARAMETER(id);
+  UNREFERENCED_PARAMETER(pResult);
+
+  // need to handle both ANSI and UNICODE versions of the message
+  TOOLTIPTEXTA *pTTTA = (TOOLTIPTEXTA *) pNMHDR;
+  CString strTipText;
+  UINT_PTR nID = pNMHDR->idFrom;  // idFrom is actually the HWND of the tool
+
+  if (pNMHDR->code == TTN_NEEDTEXTA && (pTTTA->uFlags & TTF_IDISHWND))
+    nID = ::GetDlgCtrlID((HWND)nID);
+
+  // Make sure that all strings are less than 80 chars
+  switch (nID) {
+    case IDC_FLAGS_SET:
+      strTipText = "Modify the Flags";
+      break;
+    case IDC_ESIG_SET:
+      strTipText = "Set the signature to 0x52424D65";
+      break;
+    case IDC_EDATE_NOW:
+    case IDC_EBOOT_NOW:
+      strTipText = "Set to now";
+      break;
+    case IDC_EMBR_CLEAR_RESV:
+      strTipText = "Clear the reserved area";
+      break;
+
+    case ID_APPLY:
+      strTipText = "Save modifications";
+      break;
+  }
+
+  strncpy(pTTTA->szText, strTipText, 79);
+  pTTTA->szText[79] = '\0';  // make sure it is null terminated
+
+  return TRUE; // message was handled
+}
+
+BOOL CEmbrEntry::OnInitDialog() {
+  CDialog::OnInitDialog();
+  
+  EnableToolTips(TRUE);
+
+  return TRUE;
+}
+
 void CEmbrEntry::OnEmbreApply() {
   struct S_EMBR_ENTRY *entry = (struct S_EMBR_ENTRY *) ((BYTE *) m_entry_buffer + sizeof(struct S_EMBR_HDR) + (m_index * sizeof(S_EMBR_ENTRY)));
   UpdateData(TRUE); // bring from Dialog

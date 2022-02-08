@@ -102,6 +102,8 @@ public:
   CLean    *m_parent;
   HTREEITEM m_hItem;
   DWORD64 m_inode_num;
+
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
   
 // Overrides
   // ClassWizard generated virtual function overrides

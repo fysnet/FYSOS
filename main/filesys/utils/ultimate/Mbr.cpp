@@ -119,11 +119,66 @@ BEGIN_MESSAGE_MAP(CMbr, CPropertyPage)
   ON_BN_CLICKED(IDC_ID_ZERO_UPDATE, OnIdZeroUpdate)
   ON_BN_CLICKED(IDPREPEND_MBR, OnPrependMBR)
   ON_WM_HELPINFO()
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
 // CMbr message handlers
+BOOL CMbr::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
+  UNREFERENCED_PARAMETER(id);
+  UNREFERENCED_PARAMETER(pResult);
+
+  // need to handle both ANSI and UNICODE versions of the message
+  TOOLTIPTEXTA *pTTTA = (TOOLTIPTEXTA *) pNMHDR;
+  CString strTipText;
+  UINT_PTR nID = pNMHDR->idFrom;  // idFrom is actually the HWND of the tool
+
+  if (pNMHDR->code == TTN_NEEDTEXTA && (pTTTA->uFlags & TTF_IDISHWND))
+    nID = ::GetDlgCtrlID((HWND)nID);
+
+  // Make sure that all strings are less than 80 chars
+  switch (nID) {
+    case IDEXTRACT:
+      strTipText = "Write this MBR to a file on the host";
+      break;
+    case IDC_ID_SIG_UPDATE:
+      strTipText = "Set to a random signature";
+      break;
+    case IDC_ID_ZERO_UPDATE:
+      strTipText = "Set to zero";
+      break;
+
+    case IDUPDATE_MBR:
+      strTipText = "Write a file from the host to this MBR";
+      break;
+    case IDUPDATE_MBR_SIG:
+      strTipText = "Set the word at 0x1FE to 0xAA55";
+      break;
+    case IDPREPEND_MBR:
+      strTipText = "Move all sectors forward and write a MBR at LBA 0";
+      break;
+    case IDC_MBR_OVERWRITE:
+      strTipText = "When clear, preserves current partition table on MBR write";
+      break;
+    case IDC_MBR_OVERWRITE_ID:
+      strTipText = "When clear, preserves current id sig at 0x1B8";
+      break;
+    case IDC_MBR_LEGACY_GPT:
+      strTipText = "When set, preserves th 92-byte GPT at LBA 1 when writing multi-sector MBR";
+      break;
+
+    case ID_MBR_APPLY:
+      strTipText = "Save modifications";
+      break;
+  }
+
+  strncpy(pTTTA->szText, strTipText, 79);
+  pTTTA->szText[79] = '\0';  // make sure it is null terminated
+
+  return TRUE; // message was handled
+}
+
 BOOL CMbr::OnInitDialog() {
   CPropertyPage::OnInitDialog();
   
@@ -136,6 +191,8 @@ BOOL CMbr::OnInitDialog() {
   csBaseSize.Format("Start: %I64i, Size: %I64i", m_lba, (DWORD64) 1);
   SetDlgItemText(IDC_BASE_SIZE_STR, csBaseSize);
   
+  EnableToolTips(TRUE);
+
   return TRUE;
 }
 

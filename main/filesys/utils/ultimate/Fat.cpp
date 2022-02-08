@@ -233,11 +233,108 @@ BEGIN_MESSAGE_MAP(CFat, CPropertyPage)
   ON_BN_CLICKED(IDC_SHOW_DEL, OnShowDeleted)
   ON_BN_CLICKED(IDC_DEL_CLEAR, OnDelClear)
   ON_WM_HELPINFO()
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
 /////////////////////////////////////////////////////////////////////////////
 // CFat message handlers
+BOOL CFat::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
+  UNREFERENCED_PARAMETER(id);
+  UNREFERENCED_PARAMETER(pResult);
+
+  // need to handle both ANSI and UNICODE versions of the message
+  TOOLTIPTEXTA *pTTTA = (TOOLTIPTEXTA *) pNMHDR;
+  CString strTipText;
+  UINT_PTR nID = pNMHDR->idFrom;  // idFrom is actually the HWND of the tool
+
+  if (pNMHDR->code == TTN_NEEDTEXTA && (pTTTA->uFlags & TTF_IDISHWND))
+    nID = ::GetDlgCtrlID((HWND)nID);
+
+  // Make sure that all strings are less than 80 chars
+  switch (nID) {
+    case IDC_EXPAND:
+      strTipText = "Expand all Folders";
+      break;
+    case IDC_COLAPSE:
+      strTipText = "Collapse all Folders";
+      break;
+
+    case ID_FORMAT:
+      strTipText = "Format Partition";
+      break;
+    case ID_CLEAN:
+      strTipText = "Clean Partition (Delete All)";
+      break;
+    case ID_CHECK:
+      strTipText = "Check File System items";
+      break;
+    case ID_UPDATE_CODE:
+      strTipText = "Write a new Boot Code Image to partition";
+      break;
+    
+    case ID_ENTRY:
+      strTipText = "View/Modify FAT Entry";
+      break;
+    case ID_COPY:
+      strTipText = "Extract Folder/File from Partition to Host";
+      break;
+    case ID_INSERT:
+      strTipText = "Insert Folder/File from Host to Partition";
+      break;
+    case ID_DELETE:
+      strTipText = "Delete Folder/File from Partition";
+      break;
+    case ID_SEARCH:
+      strTipText = "Search for Folder/File in Partition";
+      break;
+    case ID_VIEW:
+      strTipText = "View File in Host's default Viewer";
+      break;
+    case IDC_SHOW_DEL:
+      strTipText = "Show Deleted Entries";
+      break;
+    case IDC_DEL_CLEAR:
+      strTipText = "Zero File Contents on Delete";
+      break;
+
+    case IDC_INSERT_VLABEL:
+      //strTipText.Format("Insert Boot Code at LBA %i", GetDlgItemInt(IDC_DI_LBA, 0, FALSE));
+      strTipText = "Insert Volume Label into Root Directory";
+      break;
+    case ID_FAT32_INFO:
+      strTipText = "View/Modify the Info Sector";
+      break;
+    case IDC_FAT_BACKUP_SECT_UPDATE:
+      strTipText = "TODO: Update Backup with Current";
+      break;
+    case IDC_FAT_BACKUP_SECT_RESTORE:
+      strTipText = "TODO: Update Current with Backup";
+      break;
+    case IDC_SERIAL_UPDATE:
+      strTipText = "Insert Random Serial Number";
+      break;
+    case IDC_OLD_FAT:
+      strTipText = "View as old FAT version 2.3";
+      break;
+
+    case ID_ERASE:
+      strTipText = "Erase whole Partition";
+      break;
+    case ID_FYSOS_SIG:
+      strTipText = "Insert FYSOS Boot Signature";
+      break;
+    case ID_APPLY:
+      strTipText = "Save modifications";
+      break;
+  }
+
+  strncpy(pTTTA->szText, strTipText, 79);
+  pTTTA->szText[79] = '\0';  // make sure it is null terminated
+
+  return TRUE; // message was handled
+}
+
 BOOL CFat::OnInitDialog() {
   CPropertyPage::OnInitDialog();
   
@@ -260,6 +357,8 @@ BOOL CFat::OnInitDialog() {
     SetDlgItemText(ID_DELETE, "Delete/Zero");
   else
     SetDlgItemText(ID_DELETE, "Delete");
+
+  EnableToolTips(TRUE);
 
   return TRUE;
 }
