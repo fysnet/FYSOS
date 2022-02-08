@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2020
+ ;                             Copyright (c) 1984-2022
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -66,10 +66,10 @@
  ;    This code uses instructions that are valid for a 386 or later 
  ;    Intel x86 or compatible CPU.
  ;
- ;  Last updated: 15 July 2020
+ ;  Last updated: 7 Feb 2022
  ;
- ;  Assembled using (NBASM v00.26.74) (http://www.fysnet/newbasic.htm)
- ;   nbasm usbboot
+ ;  Assembled using (NBASM v00.26.74) (https://www.fysnet/newbasic.htm)
+ ;   nbasm cd_menu
  ;
  ;  Notes:
  ;   This 'El Torito' BIOS loads us to 0x07C0:0000, all sectors of the file.
@@ -1106,7 +1106,7 @@ no_reboot_str db  'Did not boot to emulated image correctly. (',0
 brvd_contents db  0, 'CD001', 1, 'EL TORITO SPECIFICATION',0,0,0,0,0,0,0,0,0
 
 menu_start  db  'ÕÍÍÍÍÍÍÍÍÍÍÍÍÍÍ  FYS OS (aka Konan) Multi-boot CD-ROM v1.00.00  ÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¸',13,10
-            db  '³                (C)opyright Forever Young Software  1984-2019                ³',13,10
+            db  '³                (C)opyright Forever Young Software  1984-2022                ³',13,10
             db  '³    ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿ ³',13,10
             db  '³    ³                                                                      ',24,' ³',13,10
             db  '³    ³                                                                      ° ³',13,10

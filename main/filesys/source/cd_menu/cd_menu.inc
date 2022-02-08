@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2020
+ ;                             Copyright (c) 1984-2022
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -55,7 +55,7 @@
  ; For more information, please visit:
  ;             http://www.fysnet.net/osdesign_book_series.htm
 
- ;  Last updated: 15 July 2020
+ ;  Last updated: 7 Feb 2022
  
 ; initial stack location
 STACK_OFFSET  equ 0FFFEh        ; first push at 07C0:FFFE
