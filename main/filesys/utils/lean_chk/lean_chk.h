@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2021
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -65,7 +65,7 @@
 
 #define MAX_PATH 260
 
-char strtstr[] = "\nLEAN_CHK  v2.00.02    Forever Young Software 1984-2021";
+char strtstr[] = "LEAN_CHK  v2.02.00    Forever Young Software 1984-2022\n";
 
 #define REPAIR_FS_CHK_ONLY  0x00000001
 #define REPAIR_FS_REPAIR    0x00000002
@@ -79,33 +79,36 @@ char strtstr[] = "\nLEAN_CHK  v2.00.02    Forever Young Software 1984-2021";
 struct S_LEAN_SUPER {
   bit32u checksum;                // bit32u sum of all fields.
   bit32u magic;                   // 0x4E41454C ('LEAN')
-  bit16u fs_version;              // 0x0006 = 0.6
-  bit8u  pre_alloc_count;         // count minus one of contiguous sectors that driver should try to preallocate
-  bit8u  log_sectors_per_band;    // 1 << log_sectors_per_band = sectors_per_band. Valid values are 12, 13, 14, ...
+  bit16u fs_version;              // 0x0007 = 0.7
+  bit8u  pre_alloc_count;         // count minus one of contiguous blocks that driver should try to preallocate
+  bit8u  log_blocks_per_band;     // 1 << log_blocks_per_band = blocks_per_band. Valid values are 12, 13, 14, ...
   bit32u state;                   // bit 0 = unmounted?, bit 1 = error?
-  struct S_GUID guid;             // Globally Unique IDentifier
+  struct S_GUID guid;             // Universally Unique IDentifier
   bit8u  volume_label[64];        // can be modified by the LABEL command
-  bit64u sector_count;            // The total number of sectors that form a file system volume
-  bit64u free_sector_count;       // The number of free sectors in the volume. A value of zero means disk full.
-  bit64u primary_super;           // sector number of primary super block
-  bit64u backup_super;            // sector number of backup super block
-  bit64u bitmap_start;            // This is the address of the sector where the first bands bitmap starts
-  bit64u root_start;              // This is the address of the sector where the root directory of the volume starts, the inode number of the root directory.
-  bit64u bad_start;               // This is the address of the sector where the pseudo-file to track bad sectors starts.
-  bit8u  reserved[360];           // zeros
+  bit64u block_count;             // The total number of blocks that form a file system volume
+  bit64u free_block_count;        // The number of free blocks in the volume. A value of zero means disk full.
+  bit64u primary_super;           // block number of primary super block
+  bit64u backup_super;            // block number of backup super block
+  bit64u bitmap_start;            // This is the address of the block where the first bands bitmap starts
+  bit64u root_start;              // This is the address of the block where the root directory of the volume starts, the inode number of the root directory.
+  bit64u bad_start;               // This is the address of the block where the pseudo-file to track bad sectors starts.
+  bit64u journal_start;           // This is the address of the block where the (optional) Journal starts.
+  bit8u  log_block_size;          // 1 << log_block_size = block size in bytes
+  bit8u  reserved0[7];            // padding
+  bit8u  reserved1[344];          // zeros (assuming 512-byte block sizes)
 };
 
 #define LEAN_INDIRECT_EXTENT_CNT  38
 struct S_LEAN_INDIRECT {
   bit32u checksum;                // bit32u sum of all fields before this one.
   bit32u magic;                   // 0x58444E49 ('INDX')
-  bit64u sector_count;            // total number of sectors addressable using this indirect sector.
-  bit64u inode;                   // the inode number of this file this indirect sector belongs to.
-  bit64u this_sector;             // The address of the sector storing this indirect sector.
-  bit64u prev_indirect;           // the address of the previous indirect sector.
-  bit64u next_indirect;           // the address of the next indirect sector.
-  bit8u  extent_count;            // The number of valid extent specifications storing in the indirect struct.
-  bit8u  reserved0[3];            // reserved
+  bit64u block_count;             // total number of blocks addressable using this indirect block.
+  bit64u inode;                   // the inode number of this file this indirect block belongs to.
+  bit64u this_block;              // The address of the block storing this indirect block.
+  bit64u prev_indirect;           // the address of the previous indirect block.
+  bit64u next_indirect;           // the address of the next indirect block.
+  bit16u extent_count;            // The number of valid extent specifications storing in the indirect struct.
+  bit8u  reserved0[2];            // reserved
   bit32u reserved1;               // reserved
   bit64u extent_start[LEAN_INDIRECT_EXTENT_CNT]; // The array of extents
   bit32u extent_size[LEAN_INDIRECT_EXTENT_CNT];
@@ -121,19 +124,19 @@ struct S_LEAN_INODE {
   bit32u magic;                   // 0x45444F4E  ('NODE')
   bit8u  extent_count;            // count of extents in this inode struct.
   bit8u  reserved[3];             // reserved
-  bit32u indirect_count;          // number of indirect sectors owned by file
+  bit32u indirect_count;          // number of indirect blocks owned by file
   bit32u links_count;             // The number of hard links (the count of directory entries) referring to this file, at least 1
   bit32u uid;                     // currently reserved, set to 0
   bit32u gid;                     // currently reserved, set to 0
   bit32u attributes;              // see table below
   bit64u file_size;               // file size
-  bit64u sector_count;            // count of sectors used
+  bit64u block_count;             // count of blocks used
   bit64s acc_time;                // last accessed: number of mS elapsed since midnight of 1970-01-01
   bit64s sch_time;                // status change: number of mS elapsed since midnight of 1970-01-01
   bit64s mod_time;                // last modified: number of mS elapsed since midnight of 1970-01-01
   bit64s cre_time;                //       created: number of mS elapsed since midnight of 1970-01-01
-  bit64u first_indirect;          // address of the first indirect sector of the file.
-  bit64u last_indirect;           // address of the last indirect sector of the file.
+  bit64u first_indirect;          // address of the first indirect block of the file.
+  bit64u last_indirect;           // address of the last indirect block of the file.
   bit64u fork;
   bit64u extent_start[LEAN_INODE_EXTENT_CNT]; // The array of extents
   bit32u extent_size[LEAN_INODE_EXTENT_CNT]; 
@@ -157,8 +160,8 @@ struct S_LEAN_INODE {
 #define  LEAN_ATTR_ARCHIVE      (1 << 14) // File changed since last backup 
 #define  LEAN_ATTR_SYNC_FL      (1 << 15) // Synchronous updates 
 #define  LEAN_ATTR_NOATIME_FL   (1 << 16) // Don't update last access time 
-#define  LEAN_ATTR_IMMUTABLE_FL (1 << 17) // Don't move file sectors 
-#define  LEAN_ATTR_PREALLOC     (1 << 18) // Keep any preallocated sectors beyond fileSize when the file is closed
+#define  LEAN_ATTR_IMMUTABLE_FL (1 << 17) // Don't move file blocks 
+#define  LEAN_ATTR_PREALLOC     (1 << 18) // Keep any preallocated blocks beyond fileSize when the file is closed
 #define  LEAN_ATTR_INLINEXTATTR (1 << 19) // Remaining bytes after the inode structure are reserved for inline extended attributes
 //       LEAN_ATTR_             (1 << 20)  // reserved
 //       LEAN_ATTR_             (1 << 21)  // reserved
@@ -205,7 +208,7 @@ bool is_utf8(bit8u);
 bool lean_check_directory(const bit64u, const char *, const bit32u);
 unsigned lean_compare_bitmaps(const unsigned);
 
-bit64u lean_get_sector_num(struct S_LEAN_INODE *, const bit64u);
+bit64u lean_get_block_num(struct S_LEAN_INODE *, const bit64u);
 bit64u find_free_bit(bit8u *, const bit64u, bit64u, const bool);
 
 bool lean_check_inode(const bit64u, struct S_LEAN_INODE *, const bit32u);

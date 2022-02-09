@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2021
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -69,7 +69,10 @@
  *    I wrote it to simply check a leanfs image for use with this book.
  *    Please consider this if you add or modify to this utility.
  *
- *  Last updated: 21 Mar 2021
+ *  - This code only works with 512-byte blocks.  Any other size should by
+ *    easy to adjust to, though here we only use 512-byte blocks.
+ *
+ *  Last updated: 8 Feb 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os lean_chk.c -o lean_chk.exe -s
@@ -124,25 +127,27 @@ int main(int argc, char *argv[]) {
   
   // try to open the file.
   if ((fp = fopen(filename, "r+b")) == NULL) {
-    printf("\nError opening file: '%s'", filename);
+    printf("Error opening file: '%s'\n", filename);
     return -1;
   }
   
   if (base_lba > 0)
-    printf("\n Using a base LBA of %zi", base_lba);
+    printf("Using a base LBA of %zi\n", base_lba);
   
-  // get and store the image size in 512-byte sectors
+  // get and store the image size in 512-byte blocks
   FSEEK(fp, 0, SEEK_END);
   img_size = (FTELL(fp) / 512) - base_lba;
   rewind(fp);
   
-  /* First check will be to read in the first 33 sectors and see if we find a super block
+  /* First check will be to read in the first 33 blocks and see if we find a super block
    *  We will search for the super's magic number, then checksum it.
    *  If we get that far, we will then validate items within the super block
+   * (Again, this assumes 512-byte block sizes.  To not assume this, we would need to
+   *  re-write this code a bit)
    */
   super_buffer = (bit8u *) malloc(33 * 512);
   if (read_block(super_buffer, 0, 33) != 33) {
-    printf("\n Error reading the first 33 sectors of the volume...");
+    puts(" Error reading the first 33 blocks of the volume...");
     fclose(fp);
     return -1;
   }
@@ -154,36 +159,36 @@ int main(int argc, char *argv[]) {
       // save the super items for later.
       super_lba = u;
       memcpy(&super, s, sizeof(struct S_LEAN_SUPER));
-      printf("\n Super found at LBA %i with a checksum of 0x%08X.", u, crc);
+      printf(" Super found at LBA %i with a checksum of 0x%08X.\n", u, crc);
       // the fs_version should be at least 0.6 (0x0006)
-      printf("\n Found version number %i.%i.", super.fs_version >> 8, super.fs_version & 0xFF);
-      // at the moment, only version 0.6 is supported
-      if (super.fs_version != 0x0006) {
-        printf(" *Only version 0.6 is supported.");
+      printf(" Found version number %i.%i.\n", super.fs_version >> 8, super.fs_version & 0xFF);
+      // at the moment, only version 0.7 is supported
+      if (super.fs_version != 0x0007) {
+        printf(" *Only version 0.7 is supported.");
         errors++;
       }
       // pre_alloc_count, though can be anything from 0 to 255, should be 1 less than a multiple of 2
-      printf("\n PreAllocate Count is %i", super.pre_alloc_count);
+      printf(" PreAllocate Count is %i\n", super.pre_alloc_count);
       if ((super.pre_alloc_count + 1) & 0x01) {
-        printf("\n   Count would be more logical as an odd number, calculating to an even number.");
+        puts("   Count would be more logical as an odd number, calculating to an even number.");
         diags++;
       }
-      // Logical Sectors per band  (1 << logs = sectors per band) (must be at least 12)
-      printf("\n Logical Sectors per band is %i (%i sectors per band)", super.log_sectors_per_band, 1 << super.log_sectors_per_band);
-      if (super.log_sectors_per_band < 12) {
-        printf("\n Logical Sectors per band must be at least 12");
+      // Logical blocks per band  (1 << logs = blocks per band) (must be at least 12)
+      printf(" Logical blocks per band is %i (%i blocks per band)\n", super.log_blocks_per_band, 1 << super.log_blocks_per_band);
+      if (super.log_blocks_per_band < 12) {
+        puts(" Logical blocks per band must be at least 12");
         errors++;
       }
       // state must have all bits zero except bit 1 and 0.
-      printf("\n State is 0x%08X", super.state);
+      printf(" State is 0x%08X\n", super.state);
       if (super.state & 0xFFFFFFFC) {
-        printf("\n  Unknown bits set in super->state");
+        puts(" Unknown bits set in super->state");
         errors++;
       }
       // if the guid field is empty, give it a guid.
       if (is_buf_empty(&super.guid, sizeof(struct S_GUID))) {
         calc_guid(&super.guid);
-        printf("\n No GUID found, setting to: %08X-%04X-%04X-%04X-%02X%02X%02X%02X%02X%02X", super.guid.data1, super.guid.data2, 
+        printf(" No GUID found, setting to: %08X-%04X-%04X-%04X-%02X%02X%02X%02X%02X%02X\n", super.guid.data1, super.guid.data2, 
           super.guid.data3, super.guid.data4, super.guid.data5[0], super.guid.data5[1], super.guid.data5[2], 
           super.guid.data5[3], super.guid.data5[4], super.guid.data5[5]);
         super_dirty = TRUE;
@@ -195,67 +200,86 @@ int main(int argc, char *argv[]) {
         _localtime64_s(&timeinfo, &timestamp);
         sprintf((char *) super.volume_label, "LEAN Volume repaired on %02i%s%04i %02i:%02i:%02i", timeinfo.tm_mday, get_date_month_str(timeinfo.tm_mon), 
           timeinfo.tm_year, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-        printf("\n No label found, setting to: \"%s\"", super.volume_label); 
+        printf(" No label found, setting to: \"%s\"\n", super.volume_label); 
         super_dirty = TRUE;
         errors++;
       }
-      // is sector_count > image size
-      printf("\n Volume sector count is %" LL64BIT "i", super.sector_count);
-      if (super.sector_count > img_size) {
-        printf("\n Sector count is larger than actual disk size of %" LL64BIT "i (%" LL64BIT "i).", super.sector_count, img_size);
-        super.sector_count = img_size;
+      // is block_count > image size
+      printf(" Volume block count is %" LL64BIT "i\n", super.block_count);
+      if (super.block_count > img_size) {
+        printf(" Block count is larger than actual disk size of %" LL64BIT "i (%" LL64BIT "i).\n", super.block_count, img_size);
+        super.block_count = img_size;
         super_dirty = TRUE;
         errors++;
       }
-      // Free sector count
-      printf("\n Free sector count is %" LL64BIT "i", super.free_sector_count);
+      // Free block count
+      printf(" Free block count is %" LL64BIT "i\n", super.free_block_count);
       // primary super location
       if (super.primary_super != u) {
-        printf("\n Super->primary_super != %i", u);
+        printf(" Super->primary_super != %i\n", u);
         super.primary_super = u;
         super_dirty = TRUE;
         errors++;
       }
       // Bitmap start
-      printf("\n Bitmap starts at %" LL64BIT "i", super.bitmap_start);
+      printf(" Bitmap starts at %" LL64BIT "i\n", super.bitmap_start);
       // Root start
-      printf("\n Super indicates root inode is at %" LL64BIT "i", super.root_start);
+      printf(" Super indicates root Inode is at %" LL64BIT "i\n", super.root_start);
       // bad_start
-      printf("\n Super indicates bad sector inode is at %" LL64BIT "i", super.bad_start);
-      // reserved[360]
-      if (!is_buf_empty(&super.reserved, 360)) {
-        printf("\n Super->reserved[360] is not zero'd");
-        memset(super.reserved, 0, 360);
+      printf(" Super indicates bad block Inode is at %" LL64BIT "i\n", super.bad_start);
+      // journal_start
+      printf(" Super indicates Journal Inode is at %" LL64BIT "i\n", super.journal_start);
+      
+      // block size
+      printf(" Super indicates Block Size is %i\n", 1 << super.log_block_size);
+      if (super.log_block_size != 9) {
+        puts(" Block Size is not 512.  Stopping...");
+        fclose(fp);
+        return -1;
+      }
+      
+      // reserved0[7]
+      if (!is_buf_empty(&super.reserved0, 7)) {
+        puts(" Super->reserved0[7] is not zero'd");
+        memset(super.reserved0, 0, 7);
+        super_dirty = TRUE;
+        errors++;
+      }
+      // reserved1[344]
+      if (!is_buf_empty(&super.reserved1, 344)) {
+        puts(" Super->reserved1[344] is not zero'd");
+        memset(super.reserved1, 0, 344);
         super_dirty = TRUE;
         errors++;
       }
       // backup super location
-      printf("\n Checking the backup Super Block sector...");
+      puts(" Checking the backup Super Block block...");
       if (read_block(super_buffer, super.backup_super, 1) == 1) {
         s = (struct S_LEAN_SUPER *) super_buffer;
         crc = lean_calc_crc((bit32u *) s, sizeof(struct S_LEAN_SUPER) / sizeof(bit32u));
         if ((s->magic == LEAN_SUPER_MAGIC) && (s->checksum == crc)) {
-          printf("\n  Found backup super at sector: %" LL64BIT "i", super.backup_super);
+          printf("  Found backup super at block: %" LL64BIT "i\n", super.backup_super);
           backup_lba = super.backup_super;
           if (flags & REPAIR_FS_REPAIR) {
-            printf("\n  Restore primary from backup? [Yes|No] ");
+            printf("  Restore primary from backup? [Yes|No] ");
             scanf("%s", temp_str);
             if (strcmp(temp_str, "Yes") == 0) {
               memcpy(&super, s, sizeof(struct S_LEAN_SUPER));
               super_dirty = TRUE;
             }
+            puts("");
           }
         } else
-          printf("\n Did not find valid backup super at sector %" LL64BIT "i", super.backup_super);
+          printf(" Did not find valid backup super at block %" LL64BIT "i\n", super.backup_super);
       } else
-        printf("\n Error reading the backup super sector.");
+        puts(" Error reading the backup super block.");
       // break out of the loop
       break;
     }
   }
   // if u == 33, we didn't find the super, so abort
   if (u == 33) {
-    printf("\n Did not find a valid super block within sectors 1 -> 32.  Aborting.");
+    puts(" Did not find a valid super block within blocks 1 -> 32.  Aborting.");
     fclose(fp);
     return -1;
   }
@@ -265,9 +289,9 @@ int main(int argc, char *argv[]) {
    *
    */
   unsigned band;
-  unsigned sects_band = (1 << super.log_sectors_per_band);
-  unsigned tot_bands = (unsigned) ((super.sector_count + (sects_band - 1)) / sects_band);
-  unsigned sects_bitmap = ((sects_band >> 3) + 511) >> 9; // each bands bitmap size in sectors
+  unsigned sects_band = (1 << super.log_blocks_per_band);
+  unsigned tot_bands = (unsigned) ((super.block_count + (sects_band - 1)) / sects_band);
+  unsigned sects_bitmap = ((sects_band >> 3) + 511) >> 9; // each bands bitmap size in blocks
   unsigned tot_bitmap_size = (tot_bands * (sects_bitmap << 9));  // in bytes
   
   act_bitmap = (bit8u *) malloc(tot_bitmap_size);
@@ -276,7 +300,7 @@ int main(int argc, char *argv[]) {
   /* We create a clean bitmap and mark it as we test the volume.  Then we compare
    *  the new bitmap with the original bitmap and display inconsistancies.
    */
-  // first 33 sectors are reserved for the boot and superblock
+  // first 33 blocks are reserved for the boot and superblock
   new_bitmap[0] = new_bitmap[1] = new_bitmap[2] = new_bitmap[3] = 0xFF;
   new_bitmap[4] = 1;
   
@@ -290,33 +314,33 @@ int main(int argc, char *argv[]) {
   // load the bitmaps
   ptr = act_bitmap;
   for (band = 0; (band < tot_bands); band++) {
-    bit64u bitmap_sector = (sects_band * band);
-    if (band == 0) bitmap_sector = super.bitmap_start;
-    if (((band * sects_band) + sects_bitmap) > super.sector_count)
-      sects_bitmap = (unsigned) (super.sector_count - (band * sects_band));
+    bit64u bitmap_block = (sects_band * band);
+    if (band == 0) bitmap_block = super.bitmap_start;
+    if (((band * sects_band) + sects_bitmap) > super.block_count)
+      sects_bitmap = (unsigned) (super.block_count - (band * sects_band));
     
     // need to set these bits in the new bitmap too
     for (j=0; j<sects_bitmap; j++) {
-      byte = (unsigned) ((bitmap_sector + j) / 8);
-      bit  = (unsigned) ((bitmap_sector + j) % 8);
+      byte = (unsigned) ((bitmap_block + j) / 8);
+      bit  = (unsigned) ((bitmap_block + j) % 8);
       new_bitmap[byte] |= (1 << bit);
     }
     
     // read it in.
-    read_block(ptr, bitmap_sector, sects_bitmap);
+    read_block(ptr, bitmap_block, sects_bitmap);
     ptr += (sects_bitmap << 9);
   }
   
-  // need to mark the end of the bitmap with 1's.  The non-existant sectors
-  for (k=super.sector_count; k<(tot_bitmap_size * 8); k++) {
+  // need to mark the end of the bitmap with 1's.  The non-existant blocks
+  for (k=super.block_count; k<(tot_bitmap_size * 8); k++) {
     byte = (unsigned) (k / 8);
     bit  = (unsigned) (k % 8);
     new_bitmap[byte] |= (1 << bit);
   }
   
-  // now count the set bits (only doing a total of super.sector_count)
+  // now count the set bits (only doing a total of super.block_count)
   unsigned our_free_count = 0;
-  for (u=0; (u < (unsigned) (super.sector_count >> 3)); u++) {
+  for (u=0; (u < (unsigned) (super.block_count >> 3)); u++) {
     if (act_bitmap[u] == 0x00)
       our_free_count += 8;
     else if (act_bitmap[u] == 0xFF)
@@ -328,52 +352,54 @@ int main(int argc, char *argv[]) {
     }
   }
   
-  printf("\n Total bands found: %i", tot_bands);
-  printf("\n Each bands bitmap size in sectors: %i", sects_bitmap);
-  printf("\n Counted %i free sectors.  Super reported %" LL64BIT "i free sectors", our_free_count, super.free_sector_count);
+  printf(" Total bands found: %i\n", tot_bands);
+  printf(" Each bands bitmap size in blocks: %i\n", sects_bitmap);
+  printf(" Counted %i free blocks.  Super reported %" LL64BIT "i free blocks\n", our_free_count, super.free_block_count);
   
   /* Next test would be to load the directories, test its inode, then loop through the entries.
    *  If a directory is found, push onto stack and start with it
    * So that we can push to a stack, or recurse directories, we call the function now
    */
-  printf("\n Checking: \\");
+  puts(" Checking: \\");
   lean_check_directory(super.root_start, "\\", flags);
   
   // compare the actual bitmap and the new bitmap
   count = lean_compare_bitmaps(tot_bitmap_size);
   diags += count;
   bitmap_dirty = (count > 0);
-  printf("\n Found %zi unmarked sectors.", unmarked);
+  printf(" Found %zi unmarked blocks.\n", unmarked);
   
   // if flags indicate to repair, do the following:
   if (flags & REPAIR_FS_REPAIR) {
     // if there was not backup super found, ask to create one.
     if (backup_lba == 0) {
-      printf("\n No Backup Super Block found, create? [Yes|No] ");
+      printf(" No Backup Super Block found, create? [Yes|No] ");
       scanf("%s", temp_str);
+      puts("");
       if (strcmp(temp_str, "Yes") == 0) {
-        // find a free sector
-        bit64u fnd_sector = find_free_bit(new_bitmap, super.sector_count, sects_band - 1, TRUE);
-        if (fnd_sector > 0) {
-          super.backup_super = fnd_sector;
-          super.free_sector_count--;
+        // find a free block
+        bit64u fnd_block = find_free_bit(new_bitmap, super.block_count, sects_band - 1, TRUE);
+        if (fnd_block > 0) {
+          super.backup_super = fnd_block;
+          super.free_block_count--;
           super_dirty = TRUE;
           bitmap_dirty = TRUE;
           super.checksum = lean_calc_crc((bit32u *) &super, sizeof(struct S_LEAN_SUPER) / sizeof(bit32u));
-          write_block(&super, fnd_sector, 1);
+          write_block(&super, fnd_block, 1);
         } else
-          printf("\n Didn't find a free sector for backup Super Block.");
+          puts(" Didn't find a free block for backup Super Block.");
       }
     }
     
     //  - if (super_dirty) write super and backup super. (asking first for backup?)
     if (super_dirty) {
-      printf("\n Writing Super Block to %" LL64BIT "i", super_lba);
+      printf(" Writing Super Block to %" LL64BIT "i\n", super_lba);
       super.checksum = lean_calc_crc((bit32u *) &super, sizeof(struct S_LEAN_SUPER) / sizeof(bit32u));
       write_block(&super, super_lba, 1);
       if (backup_lba > 0) {
-        printf("\n Write Backup to %" LL64BIT "i? [Yes|No] ", backup_lba);
+        printf(" Write Backup to %" LL64BIT "i? [Yes|No] ", backup_lba);
         scanf("%s", temp_str);
+        puts("");
         if (strcmp(temp_str, "Yes") == 0)
           write_block(&super, backup_lba, 1);
       }
@@ -383,13 +409,13 @@ int main(int argc, char *argv[]) {
     if (bitmap_dirty) {
       ptr = new_bitmap;
       for (band = 0; (band < tot_bands); band++) {
-        bit64u bitmap_sector = (sects_band * band);
-        if (band == 0) bitmap_sector = super.bitmap_start;
-        if (((band * sects_band) + sects_bitmap) > super.sector_count)
-          sects_bitmap = (unsigned) (super.sector_count - (band * sects_band));
+        bit64u bitmap_block = (sects_band * band);
+        if (band == 0) bitmap_block = super.bitmap_start;
+        if (((band * sects_band) + sects_bitmap) > super.block_count)
+          sects_bitmap = (unsigned) (super.block_count - (band * sects_band));
         
         // write it.
-        write_block(ptr, bitmap_sector, sects_bitmap);
+        write_block(ptr, bitmap_block, sects_bitmap);
         ptr += (sects_bitmap << 9);
       }
     }
@@ -401,16 +427,16 @@ int main(int argc, char *argv[]) {
   
   fclose(fp);
   
-  printf("\n\n Extent Sectors used: %" LL64BIT "i", tot_sects_used);
-  printf("\n     Total Directors: %i", dirs);
-  printf("\n         Total Files: %i", files);
+  printf("\n Extent Blocks used: %" LL64BIT "i\n", tot_sects_used);
+  printf("     Total Directors: %i\n", dirs);
+  printf("         Total Files: %i\n", files);
   
-  printf("\n");
+  puts("");
   
-  printf("\n        Errors Found: %i", errors);
-  printf("\n   Diagnostics Found: %i", diags);
+  printf("        Errors Found: %i\n", errors);
+  printf("   Diagnostics Found: %i\n", diags);
   
-  printf("\n");
+  puts("");
   return 0;
 }
 
@@ -424,9 +450,6 @@ int main(int argc, char *argv[]) {
  *  If the entry is a directory, it recuses.
  */
 bool lean_check_directory(const bit64u start_cluster, const char *parent, const bit32u flags) {
-  // Get the root inode
-  //  we can't call lean_get_root since we may not have mounted the volume yet.
-  //  however, we can call lean_read_file() once we get the inode
   struct S_LEAN_INODE *inode = (struct S_LEAN_INODE *) malloc(512);
   unsigned ul;
   
@@ -438,17 +461,19 @@ bool lean_check_directory(const bit64u start_cluster, const char *parent, const 
     return TRUE;  // return TRUE so we continue on
   
   // re-allocate the memory block to allow the size of the directory and read it in
-  inode = (struct S_LEAN_INODE *) realloc(inode, (bit32u) (inode->sector_count * 512));
+  inode = (struct S_LEAN_INODE *) realloc(inode, (bit32u) (inode->block_count * 512));
   bit8u *ptr = (bit8u *) inode + LEAN_DATA_OFFSET;
-  for (ul=1; ul<inode->sector_count; ul++) {
-    bit64u sector_num = lean_get_sector_num(inode, ul);
-    read_block(ptr, sector_num, 1);
+  for (ul=1; ul<inode->block_count; ul++) {
+    bit64u block_num = lean_get_block_num(inode, ul);
+    read_block(ptr, block_num, 1);
     ptr += 512;
   }
   
   // parse through the entries.
   unsigned i;
   unsigned cur_offset = LEAN_DATA_OFFSET;
+  if (!(inode->attributes & LEAN_ATTR_INLINEXTATTR))
+    cur_offset = S_LEAN_INODE_SIZE;
   unsigned limit = (unsigned) (inode->file_size + LEAN_DATA_OFFSET);
   bit8u *name;
   char ill_char, buffer[512];
@@ -474,9 +499,9 @@ bool lean_check_directory(const bit64u start_cluster, const char *parent, const 
           name_z[i] = name[i];
         }
         name_z[i] = 0;
-        printf("\n Checking: %s%s", parent, name_z);
+        printf(" Checking: %s%s\n", parent, name_z);
         if (ill_char)
-          printf("\n*Illegal char (%i) in name at position %i", ill_char, i);
+          printf("*Illegal char (%i) in name at position %i\n", ill_char, i);
         
         // don't check or recurse on the . and .. entries
         if (!strcmp(name_z, ".") || !strcmp(name_z, "..")) {
@@ -496,7 +521,7 @@ bool lean_check_directory(const bit64u start_cluster, const char *parent, const 
         } else if (entry->type == LEAN_FT_REG) {
           // read in the inode
           if (read_block(buffer, entry->inode, 1) != 1) {
-            printf("\n*Did not read in Inode at %" LL64BIT "i", entry->inode);
+            printf("*Did not read in Inode at %" LL64BIT "i\n", entry->inode);
             return FALSE;
           }
           lean_check_inode(entry->inode, (struct S_LEAN_INODE *) buffer, flags);
@@ -516,7 +541,7 @@ bool lean_check_directory(const bit64u start_cluster, const char *parent, const 
         
       default:
         // found unknown or illegal type, exit out of this directory
-        printf("\n*Found unknown or illegal type in directory entry.  Type = 0x%02X", entry->type);
+        printf("*Found unknown or illegal type in directory entry.  Type = 0x%02X\n", entry->type);
     }
     
     // if the current rec len is zero, this loop will never exit
@@ -537,13 +562,13 @@ bool lean_check_directory(const bit64u start_cluster, const char *parent, const 
 bool lean_check_inode(const bit64u inode_num, struct S_LEAN_INODE *inode, const bit32u flags) {
   
   struct S_LEAN_INDIRECT indirect;
-  bit64u ul, sector_num, tot_sectors = 0;
+  bit64u ul, block_num, tot_blocks = 0;
   int i, j;
   bit32u crc = lean_calc_crc((bit32u *) inode, S_LEAN_INODE_SIZE / 4);
   __time64_t timestamp;
   struct tm *timeinfo;
   
-  printf("\nInode Number: %" LL64BIT "i", inode_num);
+  printf("Inode Number: %" LL64BIT "i\n", inode_num);
   
   // if the inode's MAGIC doesn't match or the CRC isn't correct, not a valid INODE.
   if ((inode->magic == LEAN_INODE_MAGIC) && (inode->checksum == crc)) {
@@ -554,37 +579,37 @@ bool lean_check_inode(const bit64u inode_num, struct S_LEAN_INODE *inode, const 
     
     // check each extent in this inode
     for (j = 0; j<inode->extent_count; j++) {
-      tot_sectors += inode->extent_size[j];
+      tot_blocks += inode->extent_size[j];
       if ((inode->extent_start[j] > 0) && (inode->extent_size == 0))
-        printf("\n*[%" LL64BIT "i]: Inode Extent has zero count for extent size in extent #%i", inode_num, j);
+        printf("*[%" LL64BIT "i]: Inode Extent has zero count for extent size in extent #%i\n", inode_num, j);
     }
     
     // check the count of indirect extents and see if they point to correct indirects.
     if (inode->indirect_count == 0) {
       // if indirect_count was zero, first and last indirect fiels should also be zero
       if (inode->first_indirect || inode->last_indirect) {
-        printf("\n*[%" LL64BIT "i]: Inode has a count of zero for indirect count, but the first and/or last"
-               "\n  indirect address field is non zero.", inode_num);
+        printf("*[%" LL64BIT "i]: Inode has a count of zero for indirect count, but the first and/or last\n"
+               "  indirect address field is non zero.\n", inode_num);
       }
     } else {
-      // if indirect count > 0, walk through the indirect sectors and check them for validity
+      // if indirect count > 0, walk through the indirect blocks and check them for validity
       i = 0;
-      sector_num = 0;
+      block_num = 0;
       ul = inode->first_indirect;
       while (ul > 0) {
-        sector_num = ul;
+        block_num = ul;
         read_block(&indirect, ul, 1);
         if (!lean_valid_indirect(&indirect)) {
-          printf("\n*[%" LL64BIT "i]: Bad indirect sector at LBA %" LL64BIT "i (%i of %i)", 
+          printf("*[%" LL64BIT "i]: Bad indirect block at LBA %" LL64BIT "i (%i of %i)\n", 
             inode_num, ul, i + 1, inode->indirect_count);
           break;
         }
         
-        // check each extent in this indirect sector
+        // check each extent in this indirect block
         for (j = 0; j<indirect.extent_count; j++) {
-          tot_sectors += indirect.extent_size[j];
+          tot_blocks += indirect.extent_size[j];
           if ((indirect.extent_start[j] > 0) && (indirect.extent_size == 0))
-            printf("\n*[%" LL64BIT "i]: Indirect Extent has zero count for extent size in extent #%i", inode_num, j);
+            printf("*[%" LL64BIT "i]: Indirect Extent has zero count for extent size in extent #%i\n", inode_num, j);
         }
         
         // update and continue
@@ -593,51 +618,51 @@ bool lean_check_inode(const bit64u inode_num, struct S_LEAN_INODE *inode, const 
       }
       
       // print the results of the indirect check
-      printf("\n Indirect Count = %i, counted indirect sectors %i", inode->indirect_count, i);
-      if (sector_num != inode->last_indirect)
-        printf("\n*[%" LL64BIT "i]: Last indirect sector was not sector specified in last_indirect", inode_num);
+      printf(" Indirect Count = %i, counted indirect blocks %i\n", inode->indirect_count, i);
+      if (block_num != inode->last_indirect)
+        printf("*[%" LL64BIT "i]: Last indirect block was not block specified in last_indirect\n", inode_num);
     }
     
     // if the reserved field in the inode is not zero, give error
     if (inode->reserved[0] || inode->reserved[1] || inode->reserved[2])
-      printf("\n*[%" LL64BIT "i]: Inode->reserved non zero... (%02X  %02X  %02X)", inode_num, inode->reserved[0], inode->reserved[1], inode->reserved[2]);
+      printf("*[%" LL64BIT "i]: Inode->reserved non zero... (%02X  %02X  %02X)\n", inode_num, inode->reserved[0], inode->reserved[1], inode->reserved[2]);
     
     // if the links_count is < 1, give error
     if (inode->links_count < 1)
-      printf("\n*[%" LL64BIT "i]: Inode->links_count is zero...", inode_num);
+      printf("*[%" LL64BIT "i]: Inode->links_count is zero...\n", inode_num);
     
-    // check the sector_count field.  It should be the same as all extents checked above.
-    if (inode->sector_count != tot_sectors)
-      printf("\n*[%" LL64BIT "i]: inode->sector_count != counted sectors used... (%" LL64BIT "i, %" LL64BIT "i)", 
-        inode_num, inode->sector_count, tot_sectors);
+    // check the block_count field.  It should be the same as all extents checked above.
+    if (inode->block_count != tot_blocks)
+      printf("*[%" LL64BIT "i]: inode->block_count != counted blocks used... (%" LL64BIT "i, %" LL64BIT "i)\n", 
+        inode_num, inode->block_count, tot_blocks);
     if (flags & REPAIR_FS_VERBOSE)
-      printf("\n Total Sectors used by this Inode: %" LL64BIT "i (bytes: %" LL64BIT "i)", tot_sectors, inode->file_size);
-    tot_sects_used += tot_sectors;
+      printf(" Total blocks used by this Inode: %" LL64BIT "i (bytes: %" LL64BIT "i)\n", tot_blocks, inode->file_size);
+    tot_sects_used += tot_blocks;
     
     // currently the uid and gid should be zeros
     if (inode->uid || inode->gid)
-      printf("\n*[%" LL64BIT "i]: Inode->uid or Inode->gid non zero... (%08X %08X)",
+      printf("*[%" LL64BIT "i]: Inode->uid or Inode->gid non zero... (%08X %08X)\n",
         inode_num, inode->uid, inode->gid);
     
     // if any of the access times is before the creation time, give error
     if ((inode->cre_time > inode->acc_time) || (inode->cre_time > inode->sch_time) || (inode->cre_time > inode->mod_time)) {
-      printf("\n*[%" LL64BIT "i]: creation time for inode is after other access time.", inode_num);
+      printf("*[%" LL64BIT "i]: creation time for inode is after other access time.\n", inode_num);
       if (flags & REPAIR_FS_VERBOSE) {
         timestamp = (time_t) (inode->cre_time / 1000);
         timeinfo = gmtime(&timestamp);
-        printf("\n       Creation: %04i/%02i/%02i %02i:%02i:%02i (yyyy/mm/dd hh:mm:ss)", timeinfo->tm_year, timeinfo->tm_mon,
+        printf("       Creation: %04i/%02i/%02i %02i:%02i:%02i (yyyy/mm/dd hh:mm:ss)\n", timeinfo->tm_year, timeinfo->tm_mon,
           timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
         timestamp = (time_t) (inode->acc_time / 1000);
         timeinfo = gmtime(&timestamp);
-        printf("\n  Last Accessed: %04i/%02i/%02i %02i:%02i:%02i", timeinfo->tm_year, timeinfo->tm_mon, timeinfo->tm_mday,
+        printf("  Last Accessed: %04i/%02i/%02i %02i:%02i:%02i\n", timeinfo->tm_year, timeinfo->tm_mon, timeinfo->tm_mday,
           timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
         timestamp = (time_t) (inode->sch_time / 1000);
         timeinfo = gmtime(&timestamp);
-        printf("\n Status Changed: %04i/%02i/%02i %02i:%02i:%02i", timeinfo->tm_year, timeinfo->tm_mon, timeinfo->tm_mday,
+        printf(" Status Changed: %04i/%02i/%02i %02i:%02i:%02i\n", timeinfo->tm_year, timeinfo->tm_mon, timeinfo->tm_mday,
           timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
         timestamp = (time_t) (inode->mod_time / 1000);
         timeinfo = gmtime(&timestamp);
-        printf("\n  Last Modified: %04i/%02i/%02i %02i:%02i:%02i", timeinfo->tm_year, timeinfo->tm_mon, timeinfo->tm_mday,
+        printf("  Last Modified: %04i/%02i/%02i %02i:%02i:%02i\n", timeinfo->tm_year, timeinfo->tm_mon, timeinfo->tm_mday,
           timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
       }
     }
@@ -647,23 +672,23 @@ bool lean_check_inode(const bit64u inode_num, struct S_LEAN_INODE *inode, const 
      *  We may or may not find the fork again, so this is when
      *   we should recurse (?) and check this forked inode.
      */
-    
-    // Check to see that the bitmap bits are set for each sector in this file's extents
+
+    // Check to see that the bitmap bits are set for each block in this file's extents
     unsigned clear_bits = 0;
-    for (ul=0; ul<inode->sector_count; ul++) {
-      sector_num = lean_get_sector_num(inode, ul);
-      unsigned byte = (unsigned) (sector_num / 8);
-      unsigned bit  = (unsigned) (sector_num % 8);
+    for (ul=0; ul<inode->block_count; ul++) {
+      block_num = lean_get_block_num(inode, ul);
+      unsigned byte = (unsigned) (block_num / 8);
+      unsigned bit  = (unsigned) (block_num % 8);
       if ((act_bitmap[byte] & (1 << bit)) == 0)
         { clear_bits++; unmarked++; }
       new_bitmap[byte] |= (1 << bit);  // set the bit in the new_bitmap so we can compare
     }
     if (clear_bits > 0)
-      printf("\n*[%" LL64BIT "i]: Inode uses %i unallocated sectors.", inode_num, clear_bits);
+      printf("*[%" LL64BIT "i]: Inode uses %i unallocated blocks.\n", inode_num, clear_bits);
     
     return TRUE;
   } else {
-    printf("\n*[%" LL64BIT "i]: Inode doesn't pass MAGIC and/or CRC test", inode_num);
+    printf("*[%" LL64BIT "i]: Inode doesn't pass MAGIC and/or CRC test\n", inode_num);
     return FALSE;
   }
 }
@@ -678,69 +703,69 @@ bool lean_check_inode_attrib(const bit32u attrib, const bit32u flags) {
   int i;
   
   if (flags & REPAIR_FS_VERBOSE) {
-    printf("\n Permissions:");
-    printf("\n  Other: ");
+    puts(" Permissions:");
+    printf("       Other: ");
     i = 0;
-    if (attrib & LEAN_ATTR_IXOTH) { printf("Execute "); i++; }
-    if (attrib & LEAN_ATTR_IWOTH) { printf("Write "); i++; }
-    if (attrib & LEAN_ATTR_IROTH) { printf("Read "); i++; }
-    if (!i)                         printf("None");
+    if (attrib & LEAN_ATTR_IXOTH) { puts("Execute "); i++; }
+    if (attrib & LEAN_ATTR_IWOTH) { puts("Write "); i++; }
+    if (attrib & LEAN_ATTR_IROTH) { puts("Read "); i++; }
+    if (!i)                         puts("None");
     i = 0;
-    printf("\n  Group: ");
-    if (attrib & LEAN_ATTR_IXGRP) { printf("Execute "); i++; }
-    if (attrib & LEAN_ATTR_IWGRP) { printf("Write "); i++; }
-    if (attrib & LEAN_ATTR_IRGRP) { printf("Read "); i++; }
-    if (!i)                         printf("None");
+    printf("  Group: ");
+    if (attrib & LEAN_ATTR_IXGRP) { puts("Execute "); i++; }
+    if (attrib & LEAN_ATTR_IWGRP) { puts("Write "); i++; }
+    if (attrib & LEAN_ATTR_IRGRP) { puts("Read "); i++; }
+    if (!i)                         puts("None");
     i = 0;
-    printf("\n  User: ");
-    if (attrib & LEAN_ATTR_IXUSR) { printf("Execute "); i++; }
-    if (attrib & LEAN_ATTR_IWUSR) { printf("Write "); i++; }
-    if (attrib & LEAN_ATTR_IRUSR) { printf("Read "); i++; }
-    if (!i)                         printf("None");
+    printf("  User: ");
+    if (attrib & LEAN_ATTR_IXUSR) { puts("Execute "); i++; }
+    if (attrib & LEAN_ATTR_IWUSR) { puts("Write "); i++; }
+    if (attrib & LEAN_ATTR_IRUSR) { puts("Read "); i++; }
+    if (!i)                         puts("None");
     
-    if (attrib & LEAN_ATTR_ISUID) printf("Execute as User ID");
-    if (attrib & LEAN_ATTR_ISGID) printf("Execute as Group ID");
+    if (attrib & LEAN_ATTR_ISUID) puts("Execute as User ID");
+    if (attrib & LEAN_ATTR_ISGID) puts("Execute as Group ID");
   }
   
   // if bit 9 is set, give error
   if (attrib & (1 << 9)) {
-    printf("\n*Bit 9 is set...");
+    puts("*Bit 9 is set...");
     ret = FALSE;
   }
   
   // if both ISUID and ISGID are set, give error
   if ((attrib & LEAN_ATTR_ISUID) && (attrib & LEAN_ATTR_ISGID)) {
-    printf("Both Execute as USR/GRP ID's are set.");
+    puts("Both Execute as USR/GRP ID's are set.");
     ret = FALSE;
   }
   
   // print the standard attrib's
   if (flags & REPAIR_FS_VERBOSE) {
-    printf("\n Attributes: ");
-    if (attrib & LEAN_ATTR_HIDDEN)  printf("Hidden ");
-    if (attrib & LEAN_ATTR_SYSTEM)  printf("System ");
-    if (attrib & LEAN_ATTR_ARCHIVE) printf("Archive ");
-    if (attrib & LEAN_ATTR_SYNC_FL) printf("Synchonoys Updates ");
-    if (attrib & LEAN_ATTR_NOATIME_FL) printf("No Last Time Update ");
-    if (attrib & LEAN_ATTR_IMMUTABLE_FL) printf("Unmovable ");
-    if (attrib & LEAN_ATTR_PREALLOC) printf("Keep Preloc's ");
+    printf(" Attributes: ");
+    if (attrib & LEAN_ATTR_HIDDEN)  puts("Hidden ");
+    if (attrib & LEAN_ATTR_SYSTEM)  puts("System ");
+    if (attrib & LEAN_ATTR_ARCHIVE) puts("Archive ");
+    if (attrib & LEAN_ATTR_SYNC_FL) puts("Synchonoys Updates ");
+    if (attrib & LEAN_ATTR_NOATIME_FL) puts("No Last Time Update ");
+    if (attrib & LEAN_ATTR_IMMUTABLE_FL) puts("Unmovable ");
+    if (attrib & LEAN_ATTR_PREALLOC) puts("Keep Preloc's ");
   
-    if (attrib & LEAN_ATTR_INLINEXTATTR) printf("\n EA's are after inode.");
-    else                                 printf("\n File starts after inode data.");
+    if (attrib & LEAN_ATTR_INLINEXTATTR) puts("\n EA's are after inode.");
+    else                                 puts("\n File starts after inode data.");
   }  
   
   // if any of bits 28:20 are set, give error
   if (attrib & ((1<<28) | (1<<27) | (1<<26) | (1<<25) | (1<<24) | (1<<23) | (1<<22) | (1<<21) | (1<<20))) {
-    printf("\n*One or more of Bits 28:20 are set.");
+    puts("*One or more of Bits 28:20 are set.");
     ret = FALSE;
   }
   
   // print file type
   if (flags & REPAIR_FS_VERBOSE) {
-    if (attrib & LEAN_ATTR_IFREG) printf("\n File Type: Regular File.");
-    if (attrib & LEAN_ATTR_IFDIR) printf("\n File Type: Directory.");
-    if (attrib & LEAN_ATTR_IFLNK) printf("\n File Type: Symbolic Link.");
-    if (attrib & LEAN_ATTR_IFFRK) printf("\n File Type: Fork.");
+    if (attrib & LEAN_ATTR_IFREG) puts("\n File Type: Regular File.");
+    if (attrib & LEAN_ATTR_IFDIR) puts("\n File Type: Directory.");
+    if (attrib & LEAN_ATTR_IFLNK) puts("\n File Type: Symbolic Link.");
+    if (attrib & LEAN_ATTR_IFFRK) puts("\n File Type: Fork.");
   }
   
   // if more than one File Type is set, give error
@@ -748,7 +773,7 @@ bool lean_check_inode_attrib(const bit32u attrib, const bit32u flags) {
       ((attrib & LEAN_ATTR_IFDIR) && (attrib & (LEAN_ATTR_IFMT & ~LEAN_ATTR_IFDIR))) ||
       ((attrib & LEAN_ATTR_IFLNK) && (attrib & (LEAN_ATTR_IFMT & ~LEAN_ATTR_IFLNK))) ||
       ((attrib & LEAN_ATTR_IFFRK) && (attrib & (LEAN_ATTR_IFMT & ~LEAN_ATTR_IFFRK)))) {
-    printf("\n*Illegal File Type given: 0x%02X.", (attrib & LEAN_ATTR_IFMT) >> 29);
+    printf("*Illegal File Type given: 0x%02X.\n", (attrib & LEAN_ATTR_IFMT) >> 29);
     ret = FALSE;
   }
   
@@ -785,26 +810,29 @@ unsigned lean_compare_bitmaps(const unsigned tot_bitmap_size) {
   unsigned u, count = 0;
   int i;
   
-  for (u=0; u<tot_bitmap_size; u++)
-    if (act_bitmap[u] != new_bitmap[u])
-      for (i=0; i<8; i++)
+  for (u=0; u<tot_bitmap_size; u++) {
+    if (act_bitmap[u] != new_bitmap[u]) {
+      for (i=0; i<8; i++) {
         if ((act_bitmap[u] & (1<<i)) && !(new_bitmap[u] & (1<<i))) {
-          printf("\n*Found orphand bitmap entry at sector: %i", (u * 8) + i);
+          printf("*Found orphand bitmap entry at block: %i\n", (u * 8) + i);
           count++;
         }
+      }
+    }
+  }
   
-  printf("\n Found %i orphand sectors.", count);
+  printf(" Found %i orphand blocks.\n", count);
   
   // return count of different bits
   return count;
 }
 
-/* This returns the sector number of the starting sector that contains the first byte of 
+/* This returns the block number of the starting block that contains the first byte of 
  *  the requested position
  *  *inode -> the inode of the file
- *  index   = the linear sector offset  ie: f_pos / 512
+ *  index   = the linear block offset  ie: f_pos / 512
  */
-bit64u lean_get_sector_num(struct S_LEAN_INODE *inode, const bit64u index) {
+bit64u lean_get_block_num(struct S_LEAN_INODE *inode, const bit64u index) {
   
   int i;
   bit64u cur_index = 0;
@@ -823,8 +851,8 @@ bit64u lean_get_sector_num(struct S_LEAN_INODE *inode, const bit64u index) {
       read_block(&indirect, next_indirect, 1);
       if (!lean_valid_indirect(&indirect))
         return 0;
-      if ((cur_index + indirect.sector_count) < index) {
-        cur_index += indirect.sector_count;
+      if ((cur_index + indirect.block_count) < index) {
+        cur_index += indirect.block_count;
         count -= indirect.extent_count;
       } else {
         for (i=0; (i < LEAN_INDIRECT_EXTENT_CNT) && count; i++) {
@@ -842,16 +870,16 @@ bit64u lean_get_sector_num(struct S_LEAN_INODE *inode, const bit64u index) {
   return 0;
 }
 
-bit64u find_free_bit(bit8u *bitmap, const bit64u total_sects, bit64u sector, const bool mark_it) {
+bit64u find_free_bit(bit8u *bitmap, const bit64u total_sects, bit64u block, const bool mark_it) {
   unsigned byte, bit;
   
-  for (sector; sector < (total_sects >> 3); sector++) {
-    byte = (unsigned) (sector / 8);
-    bit = (unsigned) (sector % 8);
+  for (block; block < (total_sects >> 3); block++) {
+    byte = (unsigned) (block / 8);
+    bit = (unsigned) (block % 8);
     if ((bitmap[byte] & (1 << bit)) == 0) {
       if (mark_it)
         bitmap[byte] |= (1 << bit);
-      return sector;
+      return block;
     }
   }
   
@@ -884,7 +912,7 @@ void parse_command(int argc, char *argv[], char *filename, bit32u *flags, size_t
                (memcmp(s, "b:", 2) == 0))
         *base_lba = strtoul(s + 2, NULL, 0);
       else
-        printf("\n Unknown switch parameter: /%s", s);
+        printf(" Unknown switch parameter: /%s\n", s);
     } else
       strcpy(filename, s);
   }
