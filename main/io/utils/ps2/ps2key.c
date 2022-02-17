@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -53,7 +53,7 @@
  * of a discussion within one or more of the books mentioned above.
  * 
  * For more information, please visit:
- *             http://www.fysnet.net/osdesign_book_series.htm
+ *             https://www.fysnet.net/osdesign_book_series.htm
  */
 
 /*
@@ -80,7 +80,7 @@
  *       int = bit16s = word = 16-bits (AX)
  *      long = bit32s = dword = 32-bits (DX:AX)
  *
- *  Last updated: 15 July 2020
+ *  Last updated: 12 Feb 2022
  *
  *  Compiled using MS QuickC 2.5
  *
@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
   bool codes_only = FALSE;  // default to no
   
   printf("Detect PS/2 Controller and Keyboard.   v1.00.00\n"
-         "Forever Young Software  --  Copyright 1984-2020\n\n");
+         "Forever Young Software  --  Copyright 1984-2022\n\n");
   
   // for slow machines, don't count so high
   // for fast machines, delay needs to be larger counter
