@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2022
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -53,7 +53,7 @@
  * of a discussion within one or more of the books mentioned above.
  * 
  * For more information, please visit:
- *             http://www.fysnet.net/osdesign_book_series.htm
+ *             https://www.fysnet.net/osdesign_book_series.htm
  */
 
 /*
@@ -68,7 +68,7 @@
  *      int = bit16s = word = 16-bits (AX)
  *     long = bit32s = dword = 32-bits (DX:AX)
  *
- *  Last updated: 15 July 2020
+ *  Last updated: 12 July 2022
  *
  *  Compile using MS QuickC 2.5
  *
@@ -104,7 +104,7 @@ int main(int argc, char *arg[]) {
   int dma, dma16;
   
   printf("Detect Sound Blaster.                v1.00.00\n"
-         "Forever Young Software -- Copyright 1984-2020\n\n");
+         "Forever Young Software -- Copyright 1984-2022\n\n");
   
   base = detect_base();
   if (base == 0) {
@@ -382,7 +382,7 @@ bit8u dma_req(void) {
 /*
  * This code "catches" all IRQ's and returns which IRQ's fired during 
  *  period we set.
- * This code is based on Ethan Brodsky's code: http://www.pobox.com/~ebrodsky/
+ * This code is based on Ethan Brodsky's code: https://www.pobox.com/~ebrodsky/
  *  Thanks Ethan.
  *
  */
