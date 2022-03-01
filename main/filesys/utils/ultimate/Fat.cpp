@@ -1254,7 +1254,7 @@ DWORD CFat::CalcDataClusters(const void *bpb, const int fat_size) {
   struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) bpb;
   struct S_FAT1216_BPB *bpb12 = (struct S_FAT1216_BPB *) bpb;
   DWORD dword0, dword1;
-  
+
   if (fat_size == FS_FAT32) {
     dword0 = bpb32->sectors;
     if (dword0 == 0)
@@ -1264,7 +1264,7 @@ DWORD CFat::CalcDataClusters(const void *bpb, const int fat_size) {
     dword0 = bpb12->sectors;
     if (dword0 == 0)
       dword0 = bpb12->sect_extnd;
-    dword0 = (bpb12->sectors - bpb12->sect_reserved - (bpb12->fats * bpb12->sect_per_fat) - ((bpb12->root_entrys * 32) / bpb12->bytes_per_sect)) / bpb12->sect_per_clust;
+    dword0 = (dword0 - bpb12->sect_reserved - (bpb12->fats * bpb12->sect_per_fat) - ((bpb12->root_entrys * 32) / bpb12->bytes_per_sect)) / bpb12->sect_per_clust;
   }
 
   // Make sure we don't over do it.
@@ -1278,8 +1278,8 @@ DWORD CFat::CalcDataClusters(const void *bpb, const int fat_size) {
   if (dword0 > dword1) {
     if (!m_cluster_mismatch) {
       CString cs;
-      cs.Format("Calculated max cluster count (%i) is more than calculated by the BPB (%i). "
-                "Setting to %i to match BPB.", dword0, dword1, dword1);
+      cs.Format("Calculated max cluster count (%u) is more than calculated by the BPB (%u). "
+                "Setting to %u to match BPB.", dword0, dword1, dword1);
       AfxMessageBox(cs);
       m_cluster_mismatch = TRUE;
     }
