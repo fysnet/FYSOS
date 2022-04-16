@@ -57,20 +57,24 @@
  */
 
 /*
- *  Last updated: 5 Feb 2022
+ *  Last updated: 16 Apr 2022
  */
+
+#define ENDIAN_16U(x)   ((((x) & 0xFF) <<  8) | (((x) & 0xFF00) >> 8))
+#define ENDIAN_32U(x)   ((((x) & 0xFF) << 24) | (((x) & 0xFF00) << 8) | (((x) & 0xFF0000) >> 8) | (((x) & 0xFF000000) >> 24))
 
 #pragma pack(push, 1)
 
 #ifdef _WIN64
-  #define VERSION_INFO "Font Edit\nVersion 1.54.10 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.60.00 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #else
-  #define VERSION_INFO "Font Edit\nVersion 1.54.10 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.60.00 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
 #endif
 
 #define FTYPE_FONT   1
 #define FTYPE_PSFv1  2
 #define FTYPE_PSFv2  3
+#define FTYPE_PF2    4
 
 #define APP_WIDTH       700
 #define APP_WIDTH_WIDE  975
@@ -85,7 +89,7 @@
 #define MAXH  24
 
 // max count of chars we allow (app only, specs allow much more)
-#define MAX_COUNT 1024
+#define MAX_COUNT 65536
 
 // We currently don't have any way to know if we need to extend the memory used for the bitmap
 //  when the user widens a char.  Therefore, we do the following:
@@ -95,7 +99,8 @@
 //  The extreme case would be if the user created a MINW x MAXH x MAX_COUNT set, then 
 //  widened each character to MAXW.  Therefore, the extra needs to be the following:
 //   extra_bits = (((MAXW - MINW) * MAXH) * MAX_COUNT);  // in bits
-// With the current settings above, this amounts to just over 64k of RAM.  Peanuts....
+// With the current settings above, this amounts to just over 4.3Meg of RAM tacked on to the end of the memory buffer.
+//  Even older machines, mid 1990's, will allow this with ease :-)
 #define MAX_EXTRA_MEM (((((MAXW - MINW) * MAXH) * MAX_COUNT) >> 3) + 64)  // 64 extra beyond just to make sure
 
 #define FLAGS_FIXED_WIDTH  (1 << 0)
@@ -119,7 +124,7 @@
 // font matrix structure
 struct FONT_INFO {
   bit32u index;   // Indicies in data of each character
-  bit8u  width;   // Width of character
+  bit8u  width;   // Width of character in pixels
   char   deltax;  // +/- offset to print char 
   char   deltay;  // +/- offset to print char (allows for drop chars, etc)
   char   deltaw;  // +/- offset to combine with width above when moving to the next char
@@ -172,6 +177,23 @@ struct PSFv2_FONT {
   bit32u width;         // max width of glyphs
 };
 
+// Grub Font
+// http://grub.gibibit.com/New_font_format
+
+struct PFF2_CHIX_HEADER {
+  bit32u code_point;
+  bit8u  flags;
+  bit32u offset;
+};
+
+struct PFF2_DATA_HEADER {
+  bit16u width;
+  bit16u height;
+  bit16u x_off;
+  bit16u y_off;
+  bit16u d_width;
+};
+
 #pragma pack(pop)
 
 //  Declare  procedures
@@ -194,6 +216,7 @@ BOOL SaveFileDialog(HWND, LPTSTR, LPCSTR, LPCTSTR, LPCTSTR);
 struct FONT *InitFontData(struct FONT *, const int, const int, const int, const int, const int, const char *);
 void SaveFile(HWND, struct FONT *);
 struct FONT *OpenFile(HWND, struct FONT *);
+struct FONT *OpenPFF2File(HWND hwnd, FILE *fp);
 
 void CompressBitmap(bit8u *, bit8u *, const int, const int);
 bit8u GetBit(bit8u *p, const int i);

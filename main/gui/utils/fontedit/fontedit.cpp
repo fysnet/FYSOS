@@ -74,7 +74,7 @@
  *   When using the Visual Studio IDE, do not edit the resource.rc file within
  *    the IDE's editor.  It will add items that will break this build.
  *
- *  Last updated: 5 Feb 2022
+ *  Last updated: 16 Apr 2022
  *
  *   This code was built with Visual Studio 6.0 (for 32-bit Windows XP)
  *    and Visual Studio 2019 (for 64-bit Windows 10)
@@ -123,7 +123,7 @@ int clipx, clipy, clipw;
 bool isdirty = FALSE;
 bool drawgrid = FALSE;
 bool drawnumbers = TRUE;
-bool hexcodes = TRUE;
+bool hexcodes = FALSE; //TRUE;
 int  ftype = -1;
 bit32u fmode = 0;
 void *hashtable = NULL;
@@ -841,7 +841,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
               isdirty = TRUE;
             } else if (lParam == (LPARAM) hButtonMinus) {
               if (!(font->flags & FLAGS_FIXED_WIDTH)) {
-                if (curw > 0) {
+                if (curw > 1) {
                   // can we narrow the window
                   if (curw == 16)
                     SetWindowPos(hwnd, NULL, 0, 0, APP_WIDTH, APP_GET_HEIGHT, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOZORDER);
@@ -1180,7 +1180,7 @@ BOOL OpenFileDialog(HWND hwnd, LPTSTR pFileName) {
   ofn.lpstrFileTitle = NULL;
   ofn.lpstrTitle = TEXT("Open a Font File.");
   ofn.Flags = OFN_EXPLORER|OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST;
-  ofn.lpstrFilter = TEXT("Font Files (fnt and PSF)\0*.fnt;*.psf;*.psfu\0\0");
+  ofn.lpstrFilter = TEXT("Font Files (fnt and PSF)\0*.fnt;*.psf;*.psfu;*.pf2;\0\0");
   
   ofn.nMaxFile = 500;
   ofn.nMaxFileTitle = MAX_PATH;
@@ -1221,7 +1221,7 @@ struct FONT *InitFontData(struct FONT *font, const int width, const int height, 
   if (font)
     free(font);
   
-  w = ((((width * height) + 7) & ~7) / 8); // bytes needed per char to store the whole char
+  w = (((width * height) + 7) / 8); // bytes needed per char to store the whole char
   sz = sizeof(struct FONT) + ((sizeof(struct FONT_INFO) + w) * count);
   font = (struct FONT *) calloc(sz + MAX_EXTRA_MEM, 1); // plus MAX_EXTRA_MEM to compensate for widening characters
   struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + sizeof(struct FONT));
@@ -1362,6 +1362,7 @@ struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
   
   if (font)
     free(font);
+  font = NULL;
 
   // read in 32 bytes to get either header format
   if (fread(&header, 1, 32, fp) != 32) {
@@ -1397,8 +1398,15 @@ struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
     return font;
   }
 
+  // check to see if it is a GRUB Font file
+  else if (memcmp(header, "FILE\0\0\0\4PFF2", 12) == 0) {
+    ftype = FTYPE_FONT;
+    fmode = 0;
+    return OpenPFF2File(hwnd, fp);
+  }
+
   // check the sig to see which (if any) version it is
-  if ((header[0] == PSF1_MAGIC0) && (header[1] == PSF1_MAGIC1)) {
+  else if ((header[0] == PSF1_MAGIC0) && (header[1] == PSF1_MAGIC1)) {
     ftype = FTYPE_PSFv1;
     fmode = psfv1->mode;
     width = 8;
@@ -1423,6 +1431,7 @@ struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
       unicode_off = psfv2->headersize + (count * charsize);
     if (psfv2->headersize > 32)
       fseek(fp, psfv2->headersize, SEEK_SET);
+
   } else {
     fclose(fp);
     return NULL;
@@ -1496,6 +1505,193 @@ struct FONT *OpenFile(HWND hwnd, struct FONT *font) {
 
   fclose(fp);
   
+  return font;
+}
+
+// Try to open a Grub PFF2 Font file.
+//  ** This is currently experimental and may nor may not work correctly. **
+//
+struct FONT *OpenPFF2File(HWND hwnd, FILE *fp) {
+  struct FONT *font = NULL;
+  bit8u header[32];
+  bit8u *p = header;
+  bit32u size;
+  long int pos = 12; // skip past the "FILE" section
+  char str[128], name[MAX_NAME_LEN];
+
+  // read the next section's header
+  fseek(fp, pos, SEEK_SET);
+  fread(header, 1, 8, fp);
+
+  size_t sz;
+  int width = 0;
+  int height = 0;
+  int count = 0;
+  int i, bytes_per_char;
+  long name_off = 0, chix_off = 0, data_off = 0;
+  bool comp_error = FALSE;  // display compression error only once
+  
+  while (1) {
+    size = * ((bit32u *) &p[4]);
+    size = ENDIAN_32U(size);
+    if (memcmp(p, "NAME", 4) == 0) {
+      name_off = pos;
+    } else if (memcmp(p, "FAMI", 4) == 0) {
+      // currently ignored
+    } else if (memcmp(p, "WEIG", 4) == 0) {
+      // currently ignored
+    } else if (memcmp(p, "SLAN", 4) == 0) {
+      // currently ignored
+    } else if (memcmp(p, "PTSZ", 4) == 0) {
+      // currently ignored
+    } else if (memcmp(p, "MAXW", 4) == 0) {
+      width = (int) * ((bit16u *) &p[8]);
+      width = ENDIAN_16U(width);
+    } else if (memcmp(p, "MAXH", 4) == 0) {
+      height = (int) * ((bit16u *) &p[8]);
+      height = ENDIAN_16U(height);
+    } else if (memcmp(p, "ASCE", 4) == 0) {
+      // currently ignored
+    } else if (memcmp(p, "DESC", 4) == 0) {
+      // currently ignored
+    } else if (memcmp(p, "CHIX", 4) == 0) {
+      chix_off = pos;
+      count = size / sizeof(struct PFF2_CHIX_HEADER);
+    } else if (memcmp(p, "DATA", 4) == 0) {
+      data_off = pos;
+      break;
+    } else {
+      memcpy(name, p, 4);
+      name[4] = '\0';
+      sprintf(str, "unknown section: %s  size: %lu", name, size);
+      MessageBox(hwnd, str, "Error", MB_OK);
+      break;
+    }
+    
+    pos = pos + 8 + size;
+    fseek(fp, pos, SEEK_SET);
+    if (fread(header, 1, 12, fp) != 12)
+      break;
+    p = header;
+  }
+
+  // catch large font files
+  if (count > MAX_COUNT)
+    count = MAX_COUNT;
+
+  if ((width > MAXW) || (height > MAXH)) {
+    sprintf(str, "Width and/or height out of range: %i x %i", width, height);
+    MessageBox(hwnd, str, "Error", MB_OK);
+    fclose(fp);
+    return NULL;
+  }
+
+  // did we find at least the MAXW, MAXH, CHIX, and DATA sections?
+  if (width && height && chix_off && data_off) {
+    struct PFF2_CHIX_HEADER chix;
+    struct PFF2_DATA_HEADER data;
+      
+    bytes_per_char = ((width * height) + 7) / 8;
+    sz = sizeof(struct FONT) + (count * sizeof(struct FONT_INFO)) + (count * bytes_per_char);
+    font = (struct FONT *) calloc(sz, 1); // no need to account for widening chars here.  We are already at the max width.
+
+    memcpy(font->sig, "Font", 4);
+    font->height = height;
+    font->max_width = width;
+    font->info_start = sizeof(struct FONT);
+    font->count = count;
+    font->flags = 0; //FLAGS_FIXED_WIDTH;  // bit 0 = fixed width font
+    
+    // get the starting codepoint from the file
+    fseek(fp, chix_off + 8, SEEK_SET);
+    fread(&chix, 1, sizeof(struct PFF2_CHIX_HEADER), fp);
+    font->start = ENDIAN_32U(chix.code_point);
+
+    // get the name of the font from the file
+    memset(font->name, 0, MAX_NAME_LEN);
+    if (name_off) {
+      fseek(fp, name_off, SEEK_SET);
+      fread(header, 1, 8, fp);
+      size = * ((bit32u *) &header[4]);
+      size = ENDIAN_32U(size);
+      i = (size < MAX_NAME_LEN) ? (int) size : MAX_NAME_LEN - 1;
+      fread(font->name, 1, i, fp);
+    } else
+      strcpy(font->name, "PFF2 Font");
+    
+    struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + sizeof(struct FONT));
+    bit8u *bitmap = (bit8u *) ((bit8u *) info + (count * sizeof(struct FONT_INFO)));
+    bit32u index = 0;
+
+    pos = chix_off + 8;
+    i = 0;
+    while (count--) {
+      fseek(fp, pos, SEEK_SET);
+      fread(&chix, 1, sizeof(struct PFF2_CHIX_HEADER), fp);
+      
+      fseek(fp, ENDIAN_32U(chix.offset), SEEK_SET);
+      fread(&data, 1, sizeof(struct PFF2_DATA_HEADER), fp);
+      
+      // we only support PFF2 fonts that have a consecutively numbered code points.
+      if (ENDIAN_32U(chix.code_point) != (font->start + i)) {
+        sprintf(str, "Only sequentially numbered font files are supported!\nStopping at (zero based) index %i of %i total chars.", font->start + i - 1, font->count);
+        MessageBox(hwnd, str, "Info", MB_OK);
+
+        // since we initially created 'count' number of FONT_INFO blocks, but now
+        //  fall short of that, we need to move the bitmap buffer back toward the
+        //  start of the font file, to start at the new end of FONT_INFO blocks.
+        bit8u *src = (bit8u *) ((bit8u *) info + (font->count * sizeof(struct FONT_INFO)));
+        font->count = font->count - count - 1;
+        bit8u *targ = (bit8u *) ((bit8u *) info + (font->count * sizeof(struct FONT_INFO)));
+        memmove(targ, src, index);
+
+        break;
+      }
+      
+      info[i].index = index;  // Indicies in data of each character
+      info[i].width = ENDIAN_16U(data.width);    // Width of character
+      info[i].deltax = 0; // ENDIAN_16U(data.x_off);   // +/- offset to print char 
+      info[i].deltay = 0; // ENDIAN_16U(data.y_off);   // +/- offset to print char (allows for drop chars, etc)
+      info[i].deltaw = 0; // ENDIAN_16U(data.d_width); // +/- offset to combine with width above when moving to the next char
+      //memset(info[i].resv, 0, 4); // reserved
+      
+      // catch errors in the font file
+      if (info[i].width > width)
+        info[i].width = width;
+      
+      // watch for zero sized chars
+      if ((ENDIAN_16U(data.width) > 0) && (ENDIAN_16U(data.height) > 0)) {
+        bytes_per_char = ((ENDIAN_16U(data.width) * ENDIAN_16U(data.height)) + 7) / 8;
+        if ((chix.flags & 7) == 0)
+          fread(bitmap, 1, bytes_per_char, fp);
+        else {
+          memset(bitmap, 0, bytes_per_char);
+          // not yet implemented by the Font specification
+          // (only display the error once)
+          if (!comp_error) {
+            MessageBox(hwnd, "Found a compressed bitmap entry", "Info", MB_OK);
+            comp_error = TRUE;
+          }
+        }
+      } else {
+        // one of width or height == 0, so create a blank entry
+        info[i].width = width;
+        bytes_per_char = ((width * height) + 7) / 8;
+        memset(bitmap, 0, bytes_per_char);
+      }
+      
+      bitmap += ((info[i].width * height) + 7) / 8;
+      index += ((info[i].width * height) + 7) / 8;
+      i++;
+      
+      pos += sizeof(struct PFF2_CHIX_HEADER);
+    }
+    
+    font->datalen = index; // len of the data section in bytes
+    font->total_size = (bit32u) (bitmap - (bit8u *) font);  // total size of this file in bytes
+  }
+
+  fclose(fp);
   return font;
 }
 
