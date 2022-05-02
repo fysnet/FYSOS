@@ -59,8 +59,27 @@ int main( ... ) {
 void *mmap(size_t size) {
   void *ptr = NULL;
 
+  ///// If you are a beginner starting your kernel:
+  // if you don't have a virtual memory system, or any other memory allocator
+  //  you can simply set-aside a region of physical memory for this.
+  // For example, if you set-aside the physical memory range:
+  //   0x00000000_01000000 -> 0x00000000_01FFFFFF  (16-meg to 32-meg)
+  // and simply return:
+  //  return (void *) 0x00000000_01000000;
+  // this heap allocator will use a 16 meg Bucket.
+  //
+  // As long as you can guarantee that this will be enough,
+  //  meaning that this call will never be called twice, you
+  //  can use this allocator without the mmap() functionality.
+  // i.e.: If 16 meg will be enough for all memory allocation for your
+  //  kernel, simply return a value as above.
+  // however, if it isn't and the call is called twice, the second
+  //  call will overwrite anything the first call created...
   
-  // call the system to get 'size' pages of virtual memory
+  
+  
+  
+  // TODO: call the system to get 'size' pages of virtual memory
 
   
   return ptr;
@@ -76,12 +95,18 @@ void mmap_free(void *ptr, size_t size) {
 void spin_lock(spinlock_t lock) {
 
   // creates a spinlock
+  
+  // if your system is single tasking/threading, you can simply return.
+  // (no need for a spinlock)
 
 }
 
 void spin_unlock(spinlock_t lock) {
 
   // releases a spinlock
+
+  // if your system is single tasking/threading, you can simply return.
+  // (no need for a spinlock)
 
 }
 
