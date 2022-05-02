@@ -28,3 +28,5 @@ Thanks,
 Ben
 
 P.S. The code is currently experimental and may not be completely bug free.  I haven't tested it fully yet.  If you find a bug or a potential bug, please let me know.
+
+P.P.S. This code may be similar to another malloc I once saw.  As I was writing it, things seemed to be a little familiar. Kind of a deja-vu type thing.  If you know of a malloc that is similar, even using the name 'bucket', please let me know.  I can't seem to find the one in question anymore.  It would be interesting to see what I remembered.
