@@ -19,6 +19,7 @@ To use, call the `kernel_heap = malloc_init( some size in bytes );` function to 
 No code is ever just drop-in so you may have to modify it a little to get it to work for you.
 
 This code is just an example.  It **does not** include the alignment, physical contiguous, or HARWARE_ flag functionality.  This is left up to the reader.
+Also note that the malloc() call does not use the standard C set of parameters, though would be somewhat simple to change to match.
 
 If you have any questions or comments, please let me know.  [fys [at] fysnet [dot] net](https://www.fysnet.net/mailme.htm).
 
