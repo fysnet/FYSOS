@@ -45,7 +45,7 @@ int main( ... ) {
 
   kernel_heap = malloc_init( some size in bytes );
 
-  void *ptr = malloc(4096, 0 /* no alignment */, f, MODNAME);
+  void *ptr = malloc(4096, 0 /* no alignment */, MALLOC_FLAGS_NONE, MODNAME);
   if (ptr) {
     // do something with it
 
