@@ -406,7 +406,7 @@ void mfree(void *ptr) {
 
   // if this empties the bucket, shall we remove the bucket?
   struct S_MEMORY_BUCKET *bucket = pebble->parent;
-  if (PEBBLE_IS_FREE(bucket->first) && (bucket->first->next == NULL))
+  if (PEBBLE_IS_FREE(bucket->first) && (bucket->first->prev == NULL) && (bucket->first->next == NULL))
     remove_bucket(bucket);
   else
     bucket_update_largest(bucket);
