@@ -102,7 +102,7 @@ struct S_MEMORY_BUCKET {
 
 
 // local functions
-struct S_MEMORY_BUCKET *create_bucket(size_t size, void *parent);
+struct S_MEMORY_BUCKET *create_bucket(size_t size);
 struct S_MEMORY_PEBBLE *place_pebble(struct S_MEMORY_BUCKET *bucket, struct S_MEMORY_PEBBLE *pebble);
 struct S_MEMORY_PEBBLE *split_pebble(struct S_MEMORY_PEBBLE *pebble, size_t size);
 
