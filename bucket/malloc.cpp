@@ -40,14 +40,14 @@ spinlock_t malloc_spinlock = 0;
 //  with a single Pebble in it.  The pebble will be free.
 HANDLE malloc_init(size_t size) {
 
-  struct S_MEMORY_BUCKET *bucket = create_bucket(size, NULL);
+  struct S_MEMORY_BUCKET *bucket = create_bucket(size);
   
   return bucket;
 }
 
 // allocates a linear block of memory, in 'size' bytes, and creates
 //  a Bucket for this block, with one (free) Pebble.
-struct S_MEMORY_BUCKET *create_bucket(size_t size, void *parent) {
+struct S_MEMORY_BUCKET *create_bucket(size_t size) {
 
   // do we allocate a minimum?
 #ifdef ALLOC_MIN   
@@ -65,8 +65,8 @@ struct S_MEMORY_BUCKET *create_bucket(size_t size, void *parent) {
     bucket->size = size / PAGE_SIZE;  // count of pages used
     bucket->largest = size - sizeof(struct S_MEMORY_BUCKET) - sizeof(struct S_MEMORY_PEBBLE);
 
-    bucket->prev = (struct S_MEMORY_BUCKET *) parent;
-    bucket->next = NULL;  // no more in this direction
+    bucket->prev = NULL;  // these will be assigned by the insert_bucket() call
+    bucket->next = NULL;
     
     struct S_MEMORY_PEBBLE *first = (struct S_MEMORY_PEBBLE *) ((bit8u *) bucket + sizeof(struct S_MEMORY_BUCKET));
     bucket->first = first;
@@ -335,7 +335,7 @@ void *kmalloc(size_t size, bit64u alignment, bit32u flags, char *name) {
   //  so allocate another bucket
   if (ret == NULL) {
     size_t new_size = pebble.size + (sizeof(struct S_MEMORY_BUCKET) + sizeof(struct S_MEMORY_PEBBLE));
-    bucket = create_bucket(new_size, NULL);
+    bucket = create_bucket(new_size);
     if (bucket) {
       insert_bucket(bucket, kernel_heap);
       ret = place_pebble(bucket, &pebble);
