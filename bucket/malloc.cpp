@@ -321,7 +321,7 @@ void *kmalloc(size_t size, bit64u alignment, bit32u flags, char *name) {
 
   struct S_MEMORY_BUCKET *bucket = (struct S_MEMORY_BUCKET *) kernel_heap;
   while (bucket != NULL) {
-    if (bucket->largest >= size) {
+    if (bucket->largest >= pebble.size) {
       ret = place_pebble(bucket, &pebble);
       bucket_update_largest(bucket);
       if (ret != NULL)
@@ -334,7 +334,7 @@ void *kmalloc(size_t size, bit64u alignment, bit32u flags, char *name) {
   // if ret == NULL, we didn't find a bucket large enough, or with enough empty space.
   //  so allocate another bucket
   if (ret == NULL) {
-    size_t new_size = size + (sizeof(struct S_MEMORY_BUCKET) + sizeof(struct S_MEMORY_PEBBLE));
+    size_t new_size = pebble.size + (sizeof(struct S_MEMORY_BUCKET) + sizeof(struct S_MEMORY_PEBBLE));
     bucket = create_bucket(new_size, NULL);
     if (bucket) {
       insert_bucket(bucket, kernel_heap);
