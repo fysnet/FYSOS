@@ -200,6 +200,8 @@ struct S_MEMORY_PEBBLE *split_pebble(struct S_MEMORY_PEBBLE *pebble, size_t size
     pebble->next = new_pebble;
   }
 
+  ////// Ben: This needs to be fixed.  If we don't split the pebble, we don't "place" the pebble.
+  
   return new_pebble;
 }
 
