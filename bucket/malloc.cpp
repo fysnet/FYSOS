@@ -93,8 +93,10 @@ void insert_bucket(struct S_MEMORY_BUCKET *bucket, void *destination) {
 
   if (bucket && dest) {
     bucket->next = dest->next;
-    bucket->prev = dest;
     dest->next = bucket;
+    bucket->prev = dest;
+    if (bucket->next)
+      bucket->next->prev = bucket;
   }
 }
 
