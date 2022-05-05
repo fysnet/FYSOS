@@ -396,8 +396,17 @@ void mfree(void *ptr) {
   spin_lock(&malloc_spinlock);
 
   struct S_MEMORY_PEBBLE *pebble = (struct S_MEMORY_PEBBLE *) ((bit8u *) ptr - sizeof(struct S_MEMORY_PEBBLE));
+  
+  // check that it actually is a pebble
+  if (pebble->magic != MALLOC_MAGIC_PEBBLE) {
+    spin_unlock(&malloc_spinlock);
+    return;
+  }
+  
+  // mark it as free
   pebble->lflags = PEBBLE_FLAG_FREE;
-
+  
+  // see if we can absorb any of the neighbors
   pebble = melt_prev(pebble);
   absorb_next(pebble);
 
