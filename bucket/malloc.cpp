@@ -8,7 +8,7 @@
  *   permission from the author.
  *
  *  You may modify and use it in your own projects as long as they are
- *   for non-profit only and if distributed, have the same requirements.
+ *   for non-profit only and if distributed, have these same requirements.
  *  Any project for profit that uses this code must have written 
  *   permission from the author.
  *
@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  1 May 2022
+ * Last update:  4 May 2022 (May the 4th be with you!)
  *
  */
 
@@ -58,7 +58,7 @@ struct S_MEMORY_BUCKET *create_bucket(size_t size) {
   // size must be a even number of pages
   size = (size + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1);
 
-  struct S_MEMORY_BUCKET *bucket = (struct S_MEMORY_BUCKET *) mmap(size / PAGE_SIZE, MALLOC_FLAGS_NONE);
+  struct S_MEMORY_BUCKET *bucket = (struct S_MEMORY_BUCKET *) mmap(size / PAGE_SIZE, MALLOC_FLAGS_VIRTUAL);
   if (bucket != NULL) {
     bucket->magic = MALLOC_MAGIC_BUCKET;
     bucket->lflags = BUCKET_FLAG_FIRST;
@@ -72,7 +72,7 @@ struct S_MEMORY_BUCKET *create_bucket(size_t size) {
     bucket->first = first;
 
     first->magic = MALLOC_MAGIC_PEBBLE;
-    first->sflags = MALLOC_FLAGS_NONE;
+    first->sflags = MALLOC_FLAGS_VIRTUAL;
     first->lflags = PEBBLE_FLAG_FREE;
     first->padding = 0;
     first->size = bucket->largest;
@@ -91,13 +91,8 @@ struct S_MEMORY_BUCKET *create_bucket(size_t size) {
 void insert_bucket(struct S_MEMORY_BUCKET *bucket, void *destination) {
   struct S_MEMORY_BUCKET *dest = (struct S_MEMORY_BUCKET *) destination;
 
-  if (bucket && dest) {
-    bucket->next = dest->next;
-    dest->next = bucket;
-    bucket->prev = dest;
-    if (bucket->next)
-      bucket->next->prev = bucket;
-  }
+  if (bucket && dest)
+    UPDATE_NODE(bucket, dest);
 }
 
 // remove a bucket
@@ -366,7 +361,7 @@ void *realloc(void *ptr, size_t size) {
   }
   
   if (ptr == NULL)
-    return kmalloc(size, 0 /* not used */, MALLOC_FLAGS_NONE, MODNAME);
+    return kmalloc(size, 0 /* not used */, MALLOC_FLAGS_VIRTUAL, MODNAME);
 
   spin_lock(&malloc_spinlock);
 

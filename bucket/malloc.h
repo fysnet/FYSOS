@@ -8,7 +8,7 @@
  *   permission from the author.
  *
  *  You may modify and use it in your own projects as long as they are
- *   for non-profit only and if distributed, have the same requirements.
+ *   for non-profit only and if distributed, have these same requirements.
  *  Any project for profit that uses this code must have written 
  *   permission from the author.
  *
@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  1 May 2022
+ * Last update:  4 May 2022 (May the 4th be with you!)
  *
  */
 
@@ -95,11 +95,20 @@ struct S_MEMORY_BUCKET {
 
 #pragma pack(pop)
 
+#define UPDATE_NODE(p0, p1)    \
+ {                             \
+    (p0)->next = (p1)->next;   \
+    (p1)->next = (p0);         \
+    (p0)->prev = (p1);         \
+    if ((p0)->next)            \
+      (p0)->next->prev = (p0); \
+}
+
+
 #define malloc(s, f, n)      kmalloc((s), 1, (f) & ~MALLOC_FLAGS_CLEAR, n)
 #define calloc(s, f, n)      kmalloc((s), 1, (f) | MALLOC_FLAGS_CLEAR, n)
 #define amalloc(s, a, f, n)  kmalloc((s), (a), (f) & ~MALLOC_FLAGS_CLEAR, n)
 #define acalloc(s, a, f, n)  kmalloc((s), (a), (f) | MALLOC_FLAGS_CLEAR, n)
-
 
 // local functions
 struct S_MEMORY_BUCKET *create_bucket(size_t size);
