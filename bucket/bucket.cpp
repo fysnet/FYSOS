@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  1 May 2022
+ * Last update:  5 May 2022
  *
  */
 
@@ -37,6 +37,12 @@
 define MALLOC_HARDWARE32       (MALLOC_FLAGS_LOW4GIG | MALLOC_FLAGS_PHYSICAL | MALLOC_FLAGS_CLEAR)
 #define MALLOC_HARDWARE64      (                       MALLOC_FLAGS_PHYSICAL | MALLOC_FLAGS_CLEAR)
 
+//  A few comments about the code:
+// there are a few non-standard typedef's within this code.
+// for example, the HANDLE typedef is simply a 'void *'.
+// a few others in malloc.cpp are bit64u and bit32u.  These are simply 64-bit and 32-bit unsigned integers.
+// in fact, the double-forwardslash found at the beginning of this line is considered non-standard.
+//  therefore, you might wish to modify it to use /*  and   */
 
 // kernel's memory heap
 HANDLE kernel_heap = NULL;
@@ -45,7 +51,7 @@ int main( ... ) {
 
   kernel_heap = malloc_init( some size in bytes );
 
-  void *ptr = malloc(4096, 0 /* no alignment */, MALLOC_FLAGS_NONE, MODNAME);
+  void *ptr = malloc(4096, 0 /* no alignment */, MALLOC_FLAGS_VIRTUAL, MODNAME);
   if (ptr) {
     // do something with it
 
