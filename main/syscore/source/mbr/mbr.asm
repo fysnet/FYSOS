@@ -506,8 +506,8 @@ read_packet     dup 32,0                ; read packet
            db  0,2,0          ; chs (first Cyl, first Head, second Sector) (LBA 1)
            db  0E0h           ; partition type (FYSOS eMBR)
            db  0FFh,0FFh,0FEh ; ending CHS
-           dd  63             ; starting LBA
-           dd  (204624-63)    ; size in sectors
+           dd  1              ; starting LBA
+           dd  (204624-1)     ; size in sectors
            
            ; remaining 3 partition entry's are empty
            dup (16*3),0       ; three 16-byte partitions
