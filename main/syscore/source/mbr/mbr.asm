@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2020
+ ;                             Copyright (c) 1984-2022
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -89,10 +89,10 @@
  ;
  ; This code also assumes you will not be on a floppy disk.
  ;
- ;  Last updated: 19 July 2020
+ ;  Last updated: 24 Sept 2022
  ;
  ;  Assembled using (NBASM v00.26.74) (http://www.fysnet/newbasic.htm)
- ;   nbasm usbboot
+ ;   nbasm mbr
  ;
 
 outfile 'mbr.bin'    ; name of the file to create
@@ -506,8 +506,8 @@ read_packet     dup 32,0                ; read packet
            db  0,2,0          ; chs (first Cyl, first Head, second Sector) (LBA 1)
            db  0E0h           ; partition type (FYSOS eMBR)
            db  0FFh,0FFh,0FEh ; ending CHS
-           dd  1              ; starting LBA
-           dd  (204624-1)     ; size in sectors
+           dd  63             ; starting LBA
+           dd  (204624-63)    ; size in sectors
            
            ; remaining 3 partition entry's are empty
            dup (16*3),0       ; three 16-byte partitions
