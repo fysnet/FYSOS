@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2020
+ ;                             Copyright (c) 1984-2022
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -64,7 +64,7 @@
  ;    This code uses instructions that are valid for a 386 or later 
  ;    Intel x86 or compatible CPU.
  ;
- ;  Last updated: 19 July 2020
+ ;  Last updated: 24 Sept 2022
  ;
  ;  Assembled using (NBASM v00.26.74) (http://www.fysnet/newbasic.htm)
  ;   nbasm embr
@@ -1696,7 +1696,7 @@ tot_entries  dw  0    ; total entries
 
 
 menu_start  db        'ÕÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ  FYS OS (aka Konan) Multi-boot EMBR v0.94.00  ÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¸'
-            db  13,10,'³                (C)opyright Forever Young Software 1984-2014                 ³'
+            db  13,10,'³                (C)opyright Forever Young Software 1984-2022                 ³'
             db  13,10,'³    ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿ ³'
             db  13,10,'³    ³                                                                      ',24,' ³'
             db  13,10,'³    ³                                                                      ° ³'
