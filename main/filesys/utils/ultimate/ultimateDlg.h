@@ -197,6 +197,10 @@ public:
   LARGE_INTEGER GetFileLength(HANDLE hFile);
   DWORD64 GetFileSectCount(void);
   BOOL SetFileLength(HANDLE hFile, const DWORD64 Size);
+
+  int  DoError(CString csStr);
+  int  m_MaxErrorCount;
+
   long ReadFromFile(void *buffer, DWORD64 lba, long count);
   void WriteToFile(void *buffer, DWORD64 lba, long count);
   void ReadBlocks(void *buffer, DWORD64 base, DWORD64 block, DWORD block_size, long count);

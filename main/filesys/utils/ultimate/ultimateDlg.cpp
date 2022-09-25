@@ -153,6 +153,7 @@ CUltimateDlg::CUltimateDlg(CWnd* pParent /*=NULL*/)
   m_FYSCount = 0;
   m_UCount = 0;
   m_overwrite_okay = FALSE;
+  m_MaxErrorCount = 0;
 
   m_vdi_blocks = NULL;
 }
@@ -1327,6 +1328,24 @@ BOOL CUltimateDlg::SetFileLength(HANDLE hFile, const DWORD64 Size) {
   return ret;
 }
 
+// only display an error if we are under the max allowed to display from the Settings menu
+int CUltimateDlg::DoError(CString csStr) {
+
+  int max_count = AfxGetApp()->GetProfileInt("Settings", "MaxErrorCount", 10);
+  int ret = 0;
+
+  if (m_MaxErrorCount < max_count)
+    ret = AfxMessageBox(csStr);
+
+  m_MaxErrorCount++;
+
+  if (m_MaxErrorCount == max_count)
+    AfxMessageBox("Error Count has reached Settings:MaxCount.\n"
+                  "This error will not be displayed further.");
+
+  return ret;
+}
+
 long CUltimateDlg::ReadFromFile(void *buffer, DWORD64 lba, long count) {
   LARGE_INTEGER large_int;
   CString cs;
@@ -1343,7 +1362,7 @@ long CUltimateDlg::ReadFromFile(void *buffer, DWORD64 lba, long count) {
       // if we will be reading from past end of file, give an error
       if ((large_int.QuadPart + (count * m_sect_size)) > m_file_length.QuadPart) {
         cs.Format("ReadFromFile: Error trying to read outside of image file...(%I64i  %i)", lba, count);
-        AfxMessageBox(cs);
+        DoError(cs);
         return 0;
       }
       
