@@ -481,7 +481,7 @@ bool CLean::Format(const BOOL AskForBoot) {
       m_super_block_loc = 32;
   } else
     m_super_block_loc = 1;
-  BYTE *buffer = (BYTE *) calloc(m_block_size * (m_super_block_loc + 1), 1);
+  BYTE *buffer = (BYTE *) calloc(m_block_size * ((size_t) m_super_block_loc + 1), 1);
 
   if (!m_hard_format)
     ReceiveFromDialog(&m_super); // bring from Dialog
@@ -687,7 +687,7 @@ void CLean::OnUpdateCode() {
   CFile bsfile;
   CString cs;
   
-  BYTE *existing = (BYTE *) calloc(m_super_block_loc * m_block_size, 1);
+  BYTE *existing = (BYTE *) calloc((size_t) m_super_block_loc * m_block_size, 1);
   
   // first, read in what we already have (at least the first block)
   dlg->ReadBlocks(existing, m_lba, 0, m_block_size, 1);
@@ -714,7 +714,7 @@ void CLean::OnUpdateCode() {
       if (filesize > (m_super_block_loc * m_block_size)) {
         cs.Format("Boot sector must be <= %i bytes", (m_super_block_loc * m_block_size));
         AfxMessageBox(cs);
-        filesize = (m_super_block_loc * m_block_size);
+        filesize = ((size_t) m_super_block_loc * m_block_size);
       }
       bsfile.Read(existing, (UINT) filesize);
       bsfile.Close();
@@ -725,7 +725,7 @@ void CLean::OnUpdateCode() {
       memcpy(existing + S_FYSOSSIG_OFFSET, &s_sig, sizeof(struct S_FYSOSSIG));
     
     // write it
-    dlg->WriteBlocks(existing, m_lba, 0, m_block_size, m_super_block_loc);
+    dlg->WriteBlocks(existing, m_lba, 0, m_block_size, (long) m_super_block_loc);
 
     AfxMessageBox("Update Successful...");
   }
@@ -1596,7 +1596,8 @@ BOOL CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
   // allocate the extents for it, returning a "struct S_LEAN_BLOCKS"
   AllocateExtentBuffer(&extents, LEAN_DEFAULT_COUNT);
   // Calculate how many actual bytes we will use
-  TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : sizeof(struct S_LEAN_INODE));
+  TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : sizeof(struct S_LEAN_INODE)) + 
+    ((size_t) m_super.pre_alloc_count * m_block_size); 
   if (AppendToExtents(&extents, TotSize, 0, TRUE) == -1) {
     FreeExtentBuffer(&extents);
     free(buffer);
@@ -1637,7 +1638,7 @@ BOOL CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
   
   // allocate the extents for the folder, returning a "struct S_LEAN_BLOCKS"
   AllocateExtentBuffer(&extents, LEAN_INODE_EXTENT_CNT);
-  if (AppendToExtents(&extents, (m_super.pre_alloc_count + 1) * m_block_size, 0, TRUE) == -1) {
+  if (AppendToExtents(&extents, ((size_t) m_super.pre_alloc_count + 1) * m_block_size, 0, TRUE) == -1) {
     FreeExtentBuffer(&extents);
     return FALSE;
   }
@@ -2149,7 +2150,6 @@ int CLean::WriteFileExtents(const struct S_LEAN_BLOCKS *extents, struct S_LEAN_I
       used = FALSE;
     }
     
-    indirect->block_count = 0;
     while (count < extents->extent_count) {
       if (!used) {
         // initialize the indirect block
@@ -2163,12 +2163,14 @@ int CLean::WriteFileExtents(const struct S_LEAN_BLOCKS *extents, struct S_LEAN_I
         dlg->ReadBlocks(indirect_buffer, m_lba, this_block, m_block_size, 1);
       
       // write to the indirect extents
+      indirect->block_count = 0;
       for (i=0; (i<max_extents) && (count<extents->extent_count); i++) {
         extent_start[i] = extents->extent_start[count];
         extent_size[i] = extents->extent_size[count];
         indirect->block_count += extents->extent_size[count];
         count++;
       }
+
       indirect->extent_count = i;
       inode->indirect_count++;
 
@@ -2300,13 +2302,13 @@ void CLean::BuildInode(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD Attrib
   inode->attributes = Attrib;
   inode->file_size = Size;
   if (Attrib & LEAN_ATTR_EAS_IN_INODE)
-    inode->block_count = 1 + ((Size + (m_block_size - 1)) / m_block_size);
+    inode->block_count = (m_super.pre_alloc_count + 1) + ((Size + (m_block_size - 1)) / m_block_size);
   else {
     if (Size > (m_block_size - sizeof(struct S_LEAN_INODE))) {
       DWORD64 s = Size - (m_block_size - sizeof(struct S_LEAN_INODE));
-      inode->block_count = 1 + ((s + (m_block_size - 1)) / m_block_size);
+      inode->block_count = (m_super.pre_alloc_count + 1) + ((s + (m_block_size - 1)) / m_block_size);
     } else
-      inode->block_count = 1;
+      inode->block_count = (m_super.pre_alloc_count + 1);
   }
   inode->acc_time = 
     inode->sch_time = 

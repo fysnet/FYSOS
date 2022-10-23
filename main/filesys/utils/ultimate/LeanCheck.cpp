@@ -74,18 +74,24 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
-unsigned lcErrorCount, lcDirCount, lcFileCount, lcDelFileCount,
-         lcCluster_cnt, lcVolCount;
-bool lc_entry_error;
-DWORD *lcClusters;
+unsigned lcErrorCount, lcDirCount, lcFileCount;
 CString lcInfo;
+
+// for the link count stuff
+struct CLeanCheckInodes {
+  DWORD64 inode;
+  int count;
+  int reserved;  // to align next entry on 64-bit address
+};
+struct CLeanCheckInodes *lcInodes;
+unsigned lcInodeArraySize, lcInodeCount;
+
 
 void CLean::OnLeanCheck() {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   int j;
   unsigned i, pos;
   CString cs;
-  BYTE *buffer;
   BYTE *superblock = (BYTE *) malloc(m_block_size);
   struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) superblock;
   BOOL super_dirty = FALSE;
@@ -96,13 +102,12 @@ void CLean::OnLeanCheck() {
   // clear the globals 
   // (if we don't, we will add to what was shown last time)
   lcErrorCount = 0;
-  lcCluster_cnt = 0;
-  lcDirCount = 0;
+  lcDirCount = 1;  // first will be the root
   lcFileCount = 0;
-  lcDelFileCount = 0;
-  lcVolCount = 0;
-  lc_entry_error = FALSE;
   lcInfo.Empty();
+  lcInodes = NULL;
+  lcInodeArraySize = 0;
+  lcInodeCount = 0;
   
   CModeless modeless;
   modeless.m_Title = "Checking LEAN";
@@ -120,7 +125,7 @@ void CLean::OnLeanCheck() {
   // therefore, we can rely on the fact that m_super_block_loc should be correct.
   // *** most of these checks are redundant.  We can't get to here ***
   // *** without these values being correct in the first place.    ***
-  dlg->ReadBlocks(super, m_lba, m_super_block_loc, m_block_size, 1);
+  dlg->ReadBlocks(superblock, m_lba, m_super_block_loc, m_block_size, 1);
   
   // How about the check sum
   DWORD crc = 0, *p = (DWORD *) super;
@@ -179,53 +184,52 @@ void CLean::OnLeanCheck() {
 
   // is the total blocks count within range?
   if (super->block_count != m_tot_blocks) {
-    cs.Format("Block Count is %li, should be %li.\r\n", super->block_count, m_tot_blocks);
+    cs.Format("Block Count is %I64i, should be %I64i.\r\n", super->block_count, m_tot_blocks);
     lcInfo += cs;
     lcErrorCount++;
   }
   
   // check the primarySuper field.  It should == m_super_block_loc
-  if (super->primary_super != (DWORD64) m_super_block_loc) {
-    cs.Format("Super Location is %li, should be %li.\r\n", super->primary_super, m_super_block_loc);
+  if (super->primary_super != m_super_block_loc) {
+    cs.Format("Super Location is %I64i, should be %I64i.\r\n", super->primary_super, m_super_block_loc);
     lcInfo += cs;
     lcErrorCount++;
   }
 
   // the bitmapStart field should be no less than m_super_block_loc 
   if (super->bitmap_start <= m_super_block_loc) {
-    cs.Format("Bitmap Start Location is %li, should be at least %li.\r\n", super->bitmap_start, m_super_block_loc + 1);
+    cs.Format("Bitmap Start Location is %I64i, should be at least %I64i.\r\n", super->bitmap_start, m_super_block_loc + 1);
     lcInfo += cs;
     lcErrorCount++;
   }
   
   // the rootInode field should be no less than m_super_block_loc
   if (super->bitmap_start <= m_super_block_loc) {
-    cs.Format("Root Start Location is %li, should be at least %li.\r\n", super->root_start, m_super_block_loc + 1);
+    cs.Format("Root Start Location is %I64i, should be at least %I64i.\r\n", super->root_start, m_super_block_loc + 1);
     lcInfo += cs;
     lcErrorCount++;
   }
   
-  // check if reserved is not zeros???
-  // the size depends on log_block_size
-  //if (!IsBufferEmpty(super->reserved, 351)) {
-  //  lcInfo += "Reserved field should be zeros...\r\n";
-  //  lcErrorCount++;
-  //}
+  // check if reserved is not zeros
+  if (!IsBufferEmpty((BYTE *) super + sizeof(struct S_LEAN_SUPER), (size_t) m_super_block_loc - sizeof(struct S_LEAN_SUPER))) {
+    lcInfo += "Reserved field should be zeros...\r\n";
+    lcErrorCount++;
+  }
   
   ////////////////////////////////////////////////////////////////////
   // Check 2: get free block count from band bitmaps.
   lcInfo += "Checking the Bitmaps\r\n";
-  const DWORD64 band_size = ((DWORD64) 1 << m_super.log_blocks_per_band); // blocks per band
+  const DWORD64 band_size = ((DWORD64) 1 << super->log_blocks_per_band); // blocks per band
   const unsigned bitmap_size = (unsigned) (band_size / m_block_size / 8); // blocks per bitmap
   const unsigned bytes_bitmap = bitmap_size * m_block_size;
-  const unsigned tot_bands = (unsigned) ((m_super.block_count + (band_size - 1)) / band_size);
-  buffer = (BYTE *) malloc(bitmap_size * m_block_size);
+  const unsigned tot_bands = (unsigned) ((super->block_count + (band_size - 1)) / band_size);
+  BYTE *buffer = (BYTE *) malloc(bitmap_size * m_block_size);
   DWORD64 bitmap_block, FreeCount = 0;
   DWORD64 total_count = m_tot_blocks;  // only count up to total_blocks.  Don't count anything after that.
 
   for (i=0; i<tot_bands; i++) {
     // read in a bitmap
-    bitmap_block = (i==0) ? m_super.bitmap_start : (band_size * i);
+    bitmap_block = (i==0) ? super->bitmap_start : (band_size * i);
     dlg->ReadBlocks(buffer, m_lba, bitmap_block, m_block_size, bitmap_size);
     pos = 0;
     
@@ -245,8 +249,8 @@ void CLean::OnLeanCheck() {
   }
   
   if (FreeCount != super->free_block_count) {
-    cs.Format("Found %li free blocks.  Super states %li.\r\n", FreeCount, super->free_block_count);
-    // ask to update super.  Remember to update m_super.free_sectors member
+    cs.Format("Error: Found %I64i free blocks.  Super states %I64i.\r\n", FreeCount, super->free_block_count);
+    // ask to update super.  Remember to update super->free_sectors member
     //if (AfxMessageBox("Freeblock Count doesn't match.\r\nUpdate Super->FreeblockCount field?", MB_YESNO, 0) == IDYES) {
     //  super->free_block_count = FreeCount;
     //  super->CRC = 
@@ -256,22 +260,40 @@ void CLean::OnLeanCheck() {
     //}
     lcErrorCount++;
   } else
-    cs.Format("Found %li free blocks.\r\n", FreeCount);
+    cs.Format("Found %I64i free blocks.\r\n", FreeCount);
   lcInfo += cs;
   
   free(buffer);
   
   ////////////////////////////////////////////////////////////////////
   // Check 3: 
-  //   TODO:
-  //
+  //   Check all of the inodes in the system:
   
-  
-  //  when transversing through the files, keep an array of Inodes and their link counts.
-  //  when an inode references an inode in this array, update the link count.
-  //  then transverse through the files again, checking against the inode->link_count field.
-  
-  
+  // check the root's Inode and if it is good, parse the directory(s)
+  lcInfo += "Checking the Root Inode\r\n";
+  if (LeanCheckInode(super->root_start, TRUE) == 0) {
+    lcInfo += "Checking Inodes\r\n";
+    struct S_LEAN_DIRENTRY *root;
+    DWORD64 root_size = 0;
+    root = (struct S_LEAN_DIRENTRY *) ReadFile(super->root_start, &root_size);
+    if (root) {
+      LeanCheckDir(root, root_size, "/");
+      free(root);
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////
+  // Check 4: 
+  // we now have a list of all the inodes used in the system
+  // read back these inodes and check to see that their link count matches what we found
+  lcInfo += "\r\nChecking Link Counts\r\n";
+  LeanCheckLinkCount();
+  if (lcInodes != NULL)
+    free(lcInodes);
+
+  // display count of files and directorys found
+  cs.Format("\r\n  Found %i directories with %i files...\r\n", lcDirCount, lcFileCount);
+  lcInfo += cs;
   
   // write back the super?
   if (super_dirty)
@@ -292,7 +314,344 @@ void CLean::OnLeanCheck() {
   
   // "free" the memory used by the CString
   lcInfo.Empty();
+  free(superblock);
   
   // re-enable the button
   GetDlgItem(ID_CHECK)->EnableWindow(TRUE);
+}
+
+BOOL CLean::LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CString path) {
+  struct S_LEAN_DIRENTRY *cur = root, *sub;
+  DWORD64 filesize;
+  CString cs, name;
+  BOOL IsDot;
+  
+  while (((unsigned char *) cur < ((unsigned char *) root + root_size))) {
+    if (cur->rec_len == 0)
+      break;
+    
+    // retrieve the name.
+    name.Empty();
+    for (int i=0; i<cur->name_len; i++)
+      name += cur->name[i];
+    
+    IsDot = ((name == ".") || (name == ".."));
+    
+    switch (cur->type) {
+      case LEAN_FT_DIR:  // File type: directory
+        lcErrorCount += LeanCheckInode(cur->inode, TRUE);
+        if (!IsDot) {
+          sub = (struct S_LEAN_DIRENTRY *) ReadFile(cur->inode, &filesize);
+          if (sub) {
+            cs.Format("%s%s (LEAN_FT_DIR)\r\n", path, name);
+            lcInfo += cs;
+            cs.Format("%s%s/", path, name);
+            LeanCheckDir(sub, filesize, cs);
+            free(sub);
+            lcDirCount++;
+          }
+        }
+        break;
+      case LEAN_FT_REG: // File type: regular file
+        cs.Format("%s%s (LEAN_FT_REG)\r\n", path, name);
+        lcInfo += cs;
+        lcErrorCount += LeanCheckInode(cur->inode, TRUE);
+        lcFileCount++;
+        break;
+      case LEAN_FT_LNK: // File type: symbolic link
+        // LeanCheckInode(cur->inode, TRUE);
+        break;
+      case LEAN_FT_FRK: // File type: fork
+        // LeanCheckInode(cur->inode, FALSE);
+        break;
+      case LEAN_FT_MT:  // File type: Empty
+        break;
+    }
+    
+    cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) cur + (cur->rec_len * 16));
+  }
+
+  return TRUE;
+}
+
+// returns TRUE if a valid Inode, returns FALSE if there was an error
+int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE *buffer = (BYTE *) malloc(m_block_size);
+  struct S_LEAN_INODE *inode = (struct S_LEAN_INODE *) buffer;
+  int errors = 0;
+  CString cs;
+  DWORD dword;
+  DWORD64 qword = 0, blocks_used = 0;
+
+  // read in the inode
+  dlg->ReadBlocks(inode, m_lba, block, m_block_size, 1);
+
+  // check to see if inode->magic = 'NODE';
+  if (inode->magic != LEAN_INODE_MAGIC) {
+    cs.Format("Inode %I64i: Magic value is not 0x%08X (0x%08X)\r\n", block, LEAN_INODE_MAGIC, inode->magic);
+    lcInfo += cs;
+    errors++;
+  }
+  
+  // check to see if crc is correct
+  dword = LeanCalcCRC(inode, LEAN_INODE_SIZE);
+  if (inode->checksum != dword) {
+    cs.Format("Inode %I64i: CRC value is not 0x%08X (0x%08X)\r\n", block, dword, inode->checksum);
+    lcInfo += cs;
+    errors++;
+  }
+
+  // if either of the above is in error, we don't continue
+  if (errors > 0) {
+    free(buffer);
+    return errors;
+  }
+  
+  // add it to our inode array
+  LeanCheckAddInode(block);
+  
+  // the extent count must be greater than zero and less than or equal to LEAN_INODE_EXTENT_CNT
+  if ((inode->extent_count == 0) || (inode->extent_count > LEAN_INODE_EXTENT_CNT)) {
+    cs.Format("Inode %I64i: Illegal Extent Count value %i\r\n", block, inode->extent_count);
+    lcInfo += cs;
+    errors++;
+  }
+  
+  // No Error: Check that the reserved field is zero
+  if (inode->reserved[0] || inode->reserved[1] || inode->reserved[2]) {
+    cs.Format("Inode %I64i: reserved[3] member not zero\r\n", block);
+    lcInfo += cs;
+  }
+
+  // No Error: The uid and gid fields shoule be zero
+  if (inode->uid || inode->gid) {
+    cs.Format("Inode %I64i: The uod or gid member(s) are not zero\r\n", block);
+    lcInfo += cs;
+  }
+  
+  // if any bit from 20 to 28 in the attributes member is non-zero, give error
+  if (inode->attributes & (0x1FF << 20)) {
+    cs.Format("Inode %I64i: Reserved bits in attribute are non-zero (0x%08X)\r\n", block, inode->attributes);
+    lcInfo += cs;
+    errors++;
+  }
+
+  // if any of the dates are zero, give error
+  if (!inode->acc_time || !inode->sch_time || !inode->mod_time || !inode->cre_time) {
+    cs.Format("Inode %I64i: One or more time stamps are zero\r\n", block);
+    lcInfo += cs;
+    errors++;
+  }
+
+  // check the Indirects?
+  if (inode->first_indirect > 0) {
+    // if the last indirect value is zero, we are in error
+    if (inode->last_indirect == 0) {
+      cs.Format("Inode %I64i: First Indirect is non-zero but Last Indirect is zero\r\n", block);
+      lcInfo += cs;
+      errors++;
+    } else {
+      errors += LeanCheckIndirect(block, inode->first_indirect, &dword, &qword);
+      // does the found count of indirects match the inode->indirectCount field?
+      if (inode->indirect_count != dword) {
+        cs.Format("Inode %I64i: Indirect Count (%i) doesn't match Inode member of %i\r\n", block, dword, inode->indirect_count);
+        lcInfo += cs;
+        errors++;
+      }
+    }
+  }
+  
+  //  Check that the actual count of blocks used (from direct extents and indirect extents) match inode->block_count
+  for (int i=0; (i<LEAN_INODE_EXTENT_CNT) && (i<inode->extent_count); i++)
+    blocks_used += inode->extent_size[i];
+  if (inode->block_count != (blocks_used + qword)) {
+    cs.Format("Inode %I64i: Blocks Used Count (%I64i) doesn't match Inode (%I64i)\r\n", block, blocks_used + qword, inode->block_count);
+    lcInfo += cs;
+    errors++;
+  }
+
+  //  Check that the the inode->file_size field doesn't exceed the block count used
+  if (inode->file_size > ((blocks_used + qword) * m_block_size)) {
+    cs.Format("Inode %I64i: File size (%I64i) is larger than allocated blocks (%I64i) for inode\r\n", block, inode->file_size, ((blocks_used + qword) * m_block_size));
+    lcInfo += cs;
+    errors++;
+  }
+  
+  //  Check the fork as a valid inode (must not contain a fork itself)
+  if (allow_fork && inode->fork)
+    errors += LeanCheckInode(inode->fork, FALSE);
+  if (!allow_fork && inode->fork) {
+    cs.Format("Inode %I64i: Fork has fork\r\n", block);
+    lcInfo += cs;
+    errors++;
+  }
+
+  // free the buffer used
+  free(buffer);
+
+  return errors;
+}
+
+// returns TRUE if a valid Indirect, returns FALSE if there was an error
+// check all indirect blocks until 'next' is zero or we find an invalid entry
+int CLean::LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count, DWORD64 *blocks_used) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE *buffer = (BYTE *) malloc(m_block_size);
+  struct S_LEAN_INDIRECT *indirect = (struct S_LEAN_INDIRECT *) buffer;
+  int errors = 0;
+  CString cs;
+  DWORD dword, return_count = 0;
+  DWORD64 prev = 0, block_count = 0;
+  int extent_max = (m_block_size - LEAN_INDIRECT_SIZE) / 12;  // max count of extents an indirect can have
+  int m_reserved2_size = m_block_size - LEAN_INDIRECT_SIZE - (extent_max * 12); // a count (if any) of bytes after the last indirect (a block size of 4096 will have a few)
+  
+  while ((block != 0) && (errors == 0)) {
+    // read in the indirect
+    dlg->ReadBlocks(indirect, m_lba, block, m_block_size, 1);
+
+    // check to see if indirect->magic = 'INDX';
+    if (indirect->magic != LEAN_INDIRECT_MAGIC) {
+      cs.Format("Indirect %I64i: Magic value is not 0x%08X (0x%08X)\r\n", block, LEAN_INDIRECT_MAGIC, indirect->magic);
+      lcInfo += cs;
+      errors++;
+    }
+    
+    // check to see if crc is correct
+    dword = LeanCalcCRC(indirect, m_block_size);
+    if (indirect->checksum != dword) {
+      cs.Format("Indirect %I64i: CRC value is not 0x%08X (0x%08X)\r\n", block, dword, indirect->checksum);
+      lcInfo += cs;
+      errors++;
+    }
+
+    // if either of the above is in error, we don't continue
+    if (errors > 0) {
+      free(buffer);
+      return errors;
+    }
+    
+    // check that the ExtentCount member is at least 1 and if NextIndirect is non-zero, it must be max_count of extents.
+    if (indirect->extent_count == 0) {
+      cs.Format("Indirect %I64i: ExtentCount = 0\r\n", block);
+      lcInfo += cs;
+      errors++;
+    }
+    if ((indirect->next_indirect > 0) && (indirect->extent_count != extent_max)) {
+      cs.Format("Indirect %I64i: ExtentCount = %i, should be %i since this is not the last Indirect in list.\r\n", block, indirect->extent_count, extent_max);
+      lcInfo += cs;
+      errors++;
+    }
+
+    // does the number of extent blocks used match block_count?
+    if (indirect->extent_count > 0) {
+      DWORD32 *ptr = (DWORD32 *) ((BYTE *) indirect + LEAN_INDIRECT_SIZE + (extent_max * sizeof(DWORD64)));
+      DWORD64 count = 0;
+      for (WORD i=0; i<indirect->extent_count; i++)
+        count += ptr[i];
+      if (count != indirect->block_count) {
+        cs.Format("Indirect %I64i: BlockCount = %I64i, Calculated = %I64i\r\n", block, indirect->block_count, count);
+        lcInfo += cs;
+        errors++;
+      }
+      block_count += count;
+    }
+
+    // check that the Inode member is correct
+    if (indirect->inode != inode_num) {
+      cs.Format("Indirect %I64i: Inode = %I64i, Found = %I64i\r\n", block, inode_num, indirect->inode);
+      lcInfo += cs;
+      errors++;
+    }
+    
+    // check that the ThisBlock member is correct
+    if (indirect->this_block != block) {
+      cs.Format("Indirect %I64i: ThisBlock = %I64i, Found = %I64i\r\n", block, block, indirect->this_block);
+      lcInfo += cs;
+      errors++;
+    }
+
+    // check that the Prev member points to the last one we checked.
+    if (indirect->prev_indirect != prev) {
+      cs.Format("Indirect %I64i: PrevIndirect = %I64i, Found = %I64i\r\n", block, prev, indirect->prev_indirect);
+      lcInfo += cs;
+      errors++;
+    }
+
+    // NoError: Simply display if the reserved areas are not zero
+    BYTE *resv2 = buffer + LEAN_INDIRECT_SIZE + (extent_max * 12);
+    if ((indirect->reserved0[0] != 0) || (indirect->reserved0[1] != 0) || (indirect->reserved1 != 0) ||
+       ((m_reserved2_size > 0) && !IsBufferEmpty(resv2, m_reserved2_size))) {
+      cs.Format("Indirect %I64i: One or more reserved areas are not zero\r\n", block);
+      lcInfo += cs;
+    }
+
+    // next indirect in list
+    prev = block;
+    block = indirect->next_indirect;
+    return_count++;
+  }
+
+  if (ret_count)
+    *ret_count = return_count;
+  if (blocks_used)
+    *blocks_used = block_count;
+
+  free(buffer);
+
+  return errors;
+}
+
+// add an Inode to our array of inodes
+//  we first check to see if the inode is already in the array.
+//  if so, increment the count
+//  else, add to the end of the array
+void CLean::LeanCheckAddInode(DWORD64 block) {
+  void *ptr = NULL;
+  unsigned i;
+
+  // is the inode already in the list?
+  for (i=0; i<lcInodeCount; i++) {
+    if (lcInodes[i].inode == block) {
+      lcInodes[i].count++;
+      return;
+    }
+  }
+
+  // do we need to create/enlarge the array?
+  if (lcInodeCount >= lcInodeArraySize) {
+    lcInodeArraySize += 1024;
+    ptr = realloc(lcInodes, lcInodeArraySize * sizeof(struct CLeanCheckInodes));
+    if (ptr == NULL)
+      return;
+    lcInodes = (struct CLeanCheckInodes *) ptr;
+  }
+
+  // add the inode
+  lcInodes[lcInodeCount].inode = block;
+  lcInodes[lcInodeCount].count = 1;
+  
+  lcInodeCount++;
+}
+
+void CLean::LeanCheckLinkCount(void) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE *buffer = (BYTE *) malloc(m_block_size);
+  struct S_LEAN_INODE *inode = (struct S_LEAN_INODE *) buffer;
+  CString cs;
+  unsigned i;
+
+  for (i=0; i<lcInodeCount; i++) {
+    // read in the inode
+    dlg->ReadBlocks(inode, m_lba, lcInodes[i].inode, m_block_size, 1);
+
+    if (inode->links_count != lcInodes[i].count) {
+      cs.Format("Inode %I64i: Inode's link count (%i) should be %i\r\n", lcInodes[i].inode, inode->links_count, lcInodes[i].count);
+      lcInfo += cs;
+      lcErrorCount++;
+    }
+  }
+
+  // free the buffer used
+  free(buffer);
 }

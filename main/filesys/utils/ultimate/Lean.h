@@ -337,7 +337,7 @@ public:
   BOOL      m_too_many;
   
   struct S_LEAN_SUPER m_super;
-  DWORD   m_super_block_loc;  // zero based block of super block within this partition
+  DWORD64 m_super_block_loc;  // zero based block of super block within this partition
   DWORD   m_free_block_cnt;
   
   BOOL    m_isvalid;
@@ -355,7 +355,14 @@ public:
   BOOL    m_ESs_in_Inode;
 
   BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
-  
+
+  // Check Lean stuff
+  BOOL LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CString path);
+  int  LeanCheckInode(DWORD64 block, const BOOL allow_fork);
+  int  LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count, DWORD64 *blocks_used);
+  void LeanCheckAddInode(DWORD64 block);
+  void LeanCheckLinkCount(void);
+
 // Overrides
   // ClassWizard generate virtual function overrides
   //{{AFX_VIRTUAL(CLean)
@@ -405,6 +412,7 @@ protected:
   DECLARE_MESSAGE_MAP()
 
 };
+
 
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.

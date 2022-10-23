@@ -69,6 +69,7 @@
 #include "LeanEntry.h"
 #include "LeanTime.h"
 #include "LeanEAs.h"
+#include "LeanIndirect.h"
 
 #include "Attribute.h"
 
@@ -141,6 +142,7 @@ BEGIN_MESSAGE_MAP(CLeanEntry, CDialog)
   ON_BN_CLICKED(IDC_MOD_TIME_NOW, OnModTimeNow)
   ON_BN_CLICKED(IDC_SCH_TIME_NOW, OnSchTimeNow)
   ON_BN_CLICKED(IDEAS, OnEas)
+  ON_BN_CLICKED(IDINDIRECTS, OnIndirects)
   ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
@@ -177,6 +179,10 @@ BOOL CLeanEntry::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
 
     case IDEAS:
       strTipText = "View/Modify Extended Attributes";
+      break;
+
+    case IDINDIRECTS:
+      strTipText = "View Indirect Structure(s)";
       break;
 
     case ID_APPLY:
@@ -248,8 +254,13 @@ BOOL CLeanEntry::OnInitDialog() {
   } else
     GetDlgItem(IDC_ENTRY_NAME)->EnableWindow(FALSE);
   
+  // if there are no indirects, don't enable the button
+  GetDlgItem(IDINDIRECTS)->EnableWindow(m_inode.first_indirect != 0);
+
   // send to the dialog
   UpdateData(FALSE);
+  cs.Format("Lean Inode: Block %I64i", m_inode_num);
+  SetWindowText(cs);
 
   EnableToolTips(TRUE);
 
@@ -521,6 +532,19 @@ void CLeanEntry::OnEas() {
     m_mod_time.Format("%I64i", m_inode.mod_time);
   }
   UpdateData(FALSE); // Send to dialog
+}
+
+void CLeanEntry::OnIndirects() {
+
+  CLeanIndirect Indirect;
+  
+  Indirect.m_current_indirect = m_inode.first_indirect;
+  Indirect.m_parent = m_parent;
+  Indirect.m_entry_parent = this;
+  Indirect.DoModal();
+  
+  // ben
+
 }
 
 // "Apply" button was pressed

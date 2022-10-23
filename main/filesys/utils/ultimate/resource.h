@@ -7,6 +7,7 @@
 #define ID_NEXT                         3
 #define IDNEXT                          4
 #define ID_PREV                         4
+#define IDINDIRECTS                     4
 #define IDFATENTRIES                    5
 #define IDLFN_CLEAR                     6
 #define IDDOUCASE                       6
@@ -92,6 +93,7 @@
 #define IDD_VDI                         196
 #define IDD_FYSFS_FORMAT                197
 #define IDD_FSZ                         198
+#define IDD_LEAN_INDIRECT               199
 #define IDC_IMAGE_BAR                   1002
 #define IDC_PAGES                       1005
 #define IDC_TABS                        1007
@@ -246,6 +248,7 @@
 #define IDC_ENTRY_MAGIC                 1119
 #define IDC_ENTRY_LFN_ATTRIB            1120
 #define IDC_ENTRY_EXT_COUNT             1120
+#define IDC_ENTRY_CRC2                  1120
 #define IDC_ENTRY_LFN_RESV              1121
 #define IDC_ENTRY_RESVD                 1121
 #define IDC_ENTRY_SFN_CRC               1122
@@ -269,10 +272,13 @@
 #define IDC_EXT_SIZE                    1135
 #define IDC_CRC_UPDATE                  1136
 #define IDC_ATTRIBUTE                   1137
+#define IDC_MAGIC_UPDATE                1137
 #define IDC_ACC_TIME_NOW                1138
+#define IDC_BLOCK_UPDATE                1138
 #define IDC_LIST                        1139
 #define IDC_SCH_TIME_NOW                1139
 #define IDC_FLAGS_B                     1139
+#define IDC_THIS_BLOCK                  1139
 #define IDC_MOD_TIME_NOW                1140
 #define IDC_LEAN_TIME                   1140
 #define IDC_D_RUN_LIST_B                1140
@@ -963,9 +969,21 @@
 #define IDC_FSZ_SUPER_CRC_UPDATE        1628
 #define IDC_CAPTION                     1628
 #define IDC_FSZ_ENCRYPT_NAME            1629
+#define IDC_ENTRY_BLOCK_COUNT           1629
 #define IDC_FSZ_ENC_MASK_DO             1630
+#define IDC_ENTRY_INODE                 1630
 #define IDC_FREE_SIZE_STR               1631
+#define IDC_ENTRY_THIS_BLOCK            1631
 #define IDC_EDIT                        1632
+#define IDC_ENTRY_PREV_INDIRECT         1632
+#define IDC_ENTRY_NEXT_INDIRECT         1633
+#define IDC_ENTRY_EXTENT_COUNT          1634
+#define IDC_THIS_BLOCK_UPDATE           1635
+#define IDC_RESV0_UPDATE                1636
+#define IDC_RESV1_UPDATE                1637
+#define IDC_RESV2_UPDATE                1638
+#define IDC_ENTRY_RESERVED2_STATIC      1639
+#define IDC_INDIRECT_STATUS             1640
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
@@ -985,7 +1003,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        203
 #define _APS_NEXT_COMMAND_VALUE         32785
-#define _APS_NEXT_CONTROL_VALUE         1629
+#define _APS_NEXT_CONTROL_VALUE         1641
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
