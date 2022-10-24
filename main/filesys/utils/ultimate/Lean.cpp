@@ -462,7 +462,7 @@ bool CLean::Format(const BOOL AskForBoot) {
   format.m_pre_alloc_count = (8-1);
   format.m_block_size = dlg->m_sect_size;
   if (!m_hard_format) {
-    format.m_journal = TRUE;
+    //format.m_journal = TRUE;
     format.m_pre_alloc_count = m_super.pre_alloc_count;
   }
   if (format.DoModal() != IDOK)
@@ -2018,12 +2018,20 @@ int CLean::AppendToExtents(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD64 
 
   for (i=0; i<count; i++) {
     block = GetFreeBlock(block, MarkIt);
+    
+    // if incrementing Extents->extent_size[cnt] will be greater than will fit in a DWORD sized then move to next one
+    // Ben: For debugging purposes, we can change the 0xFFFF to 32 to create a few Indirects for each (large) file.
+    if (extents->extent_size[cnt] == MAXDWORD32 /*32*/) {
+      cnt++;
+      if (cnt >= extents->allocated_count)
+        ReAllocateExtentBuffer(extents, extents->allocated_count + LEAN_DEFAULT_COUNT);
+    }
+    
     if (extents->extent_size[cnt] == 0) {
       extents->extent_start[cnt] = block;
       extents->extent_size[cnt]++;
     } else if (block == (extents->extent_start[cnt] + extents->extent_size[cnt])) {
       extents->extent_size[cnt]++;
-      // TODO: if Extents->extent_size[cnt] > DWORD sized then cnt++, etc
     } else {
       cnt++;
       if (cnt >= extents->allocated_count)
@@ -2371,13 +2379,42 @@ void CLean::DeleteInode(DWORD64 Inode) {
       FreeExtents(&extents);
       FreeExtentBuffer(&extents);
     }
+
+    // we need to free the indirects as well.
+    if (inode->first_indirect > 0)
+      DeleteIndirects(inode->first_indirect);
     
-    // also clear the inode or parts of it???
+    // (For debugging purposes) also clear the inode or parts of it
     memset(inode, 0, sizeof(struct S_LEAN_INODE));
   }
   
   dlg->WriteBlocks(inode, m_lba, Inode, m_block_size, 1);
   free(inode);
+}
+
+void CLean::DeleteIndirects(DWORD64 block) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  struct S_LEAN_INDIRECT *indirect = (struct S_LEAN_INDIRECT *) malloc(m_block_size);
+  DWORD64 block_num = block;
+
+  while (block_num > 0) {
+    MarkBlock(block_num, FALSE);
+    
+    // read in the indirect to get the next one.
+    dlg->ReadBlocks(indirect, m_lba, block_num, m_block_size, 1);
+    if (!ValidIndirect(indirect))
+      break;
+    block = indirect->next_indirect;
+    
+    // (For debugging purposes) also clear the indirect
+    memset(indirect, 0, m_block_size);
+    dlg->WriteBlocks(indirect, m_lba, block_num, m_block_size, 1);
+
+    // next block number or zero
+    block_num = block;
+  }
+
+  free(indirect);
 }
 
 void CLean::OnLeanEntry() {

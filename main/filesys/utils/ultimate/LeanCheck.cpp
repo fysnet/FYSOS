@@ -211,7 +211,7 @@ void CLean::OnLeanCheck() {
   }
   
   // check if reserved is not zeros
-  if (!IsBufferEmpty((BYTE *) super + sizeof(struct S_LEAN_SUPER), (size_t) m_super_block_loc - sizeof(struct S_LEAN_SUPER))) {
+  if (!IsBufferEmpty((BYTE *) super + sizeof(struct S_LEAN_SUPER), (int) ((size_t) m_super_block_loc - sizeof(struct S_LEAN_SUPER)))) {
     lcInfo += "Reserved field should be zeros...\r\n";
     lcErrorCount++;
   }
@@ -250,14 +250,6 @@ void CLean::OnLeanCheck() {
   
   if (FreeCount != super->free_block_count) {
     cs.Format("Error: Found %I64i free blocks.  Super states %I64i.\r\n", FreeCount, super->free_block_count);
-    // ask to update super.  Remember to update super->free_sectors member
-    //if (AfxMessageBox("Freeblock Count doesn't match.\r\nUpdate Super->FreeblockCount field?", MB_YESNO, 0) == IDYES) {
-    //  super->free_block_count = FreeCount;
-    //  super->CRC = 
-    //  super_dirty = TRUE;
-    //  m_free_blocks.Format("%I64i", FreeCount);
-    //  UpdateData(FALSE); // send to Dialog
-    //}
     lcErrorCount++;
   } else
     cs.Format("Found %I64i free blocks.\r\n", FreeCount);

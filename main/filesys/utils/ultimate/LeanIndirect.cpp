@@ -109,8 +109,7 @@ CLeanIndirect::~CLeanIndirect() {
     free(m_indirect_buffer);
 }
 
-void CLeanIndirect::DoDataExchange(CDataExchange* pDX)
-{
+void CLeanIndirect::DoDataExchange(CDataExchange* pDX) {
 	CDialog::DoDataExchange(pDX);
   //{{AFX_DATA_MAP(CLeanEntry)
   DDX_Control(pDX, IDC_EXT_START, m_ext_start);
@@ -156,9 +155,71 @@ BEGIN_MESSAGE_MAP(CLeanIndirect, CDialog)
   ON_EN_CHANGE(IDC_ENTRY_RESERVED1, OnChangeItem)
   ON_EN_CHANGE(IDC_ENTRY_RESERVED2, OnChangeItem)
 
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
+/////////////////////////////////////////////////////////////////////////////
+// CLeanEntry message handlers
+BOOL CLeanIndirect::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
+  UNREFERENCED_PARAMETER(id);
+  UNREFERENCED_PARAMETER(pResult);
+
+  // need to handle both ANSI and UNICODE versions of the message
+  TOOLTIPTEXTA *pTTTA = (TOOLTIPTEXTA *) pNMHDR;
+  CString strTipText;
+  UINT_PTR nID = pNMHDR->idFrom;  // idFrom is actually the HWND of the tool
+
+  if (pNMHDR->code == TTN_NEEDTEXTA && (pTTTA->uFlags & TTF_IDISHWND))
+    nID = ::GetDlgCtrlID((HWND)nID);
+
+  // Make sure that all strings are less than 80 chars
+  switch (nID) {
+    case IDC_CRC_UPDATE:
+      strTipText = "Recalculate CRC of Indirect";
+      break;
+    case IDC_MAGIC_UPDATE:
+      strTipText = "Set to the correct Magic value";
+      break;
+    case IDC_BLOCK_UPDATE:
+      strTipText = "Recalculate Used Blocks";
+      break;
+    case IDC_THIS_BLOCK_UPDATE:
+      strTipText = "Set to This Block value";
+      break;
+    case IDC_RESV0_UPDATE:
+    case IDC_RESV1_UPDATE:
+    case IDC_RESV2_UPDATE:
+      strTipText = "Zero this Reserved Area";
+      break;
+
+    case IDPREV:
+      strTipText = "Previous Indirect in this linked list";
+      break;
+    case IDNEXT:
+      strTipText = "Next Indirect in this linked list";
+      break;
+
+    case IDC_EXT_START:
+      strTipText = "Extent Starts for this Indirect";
+      break;
+    case IDC_EXT_SIZE:
+      strTipText = "Extent Sizes for this Indirect";
+      break;
+
+    case IDOK:
+      strTipText = "Save modifications and exit";
+      break;
+    case IDCANCEL:
+      strTipText = "Disregard modifications and exit";
+      break;
+  }
+
+  strncpy(pTTTA->szText, strTipText, 79);
+  pTTTA->szText[79] = '\0';  // make sure it is null terminated
+
+  return TRUE; // message was handled
+}
 
 // CLeanIndirect message handlers
 BOOL CLeanIndirect::OnInitDialog() {
@@ -174,6 +235,8 @@ BOOL CLeanIndirect::OnInitDialog() {
   GetDlgItem(IDC_ENTRY_RESERVED2_STATIC)->ShowWindow(m_reserved2_size > 0);
   GetDlgItem(IDC_ENTRY_RESERVED2)->ShowWindow(m_reserved2_size > 0);
   GetDlgItem(IDC_RESV2_UPDATE)->ShowWindow(m_reserved2_size > 0);
+
+  EnableToolTips(TRUE);
 
   return TRUE;
 }

@@ -327,6 +327,7 @@ public:
   void IncrementLinkCount(DWORD64 Inode);
   void DecrementLinkCount(DWORD64 Inode);
   void DeleteInode(DWORD64 Inode);
+  void DeleteIndirects(DWORD64 Inode);
 
   void AllocateExtentBuffer(struct S_LEAN_BLOCKS *extents, const unsigned count);
   void ReAllocateExtentBuffer(struct S_LEAN_BLOCKS *extents, const unsigned count);

@@ -102,6 +102,8 @@ public:
   int  m_reserved2_size;
   int  m_extent_max;
 
+  BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
+
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
 
