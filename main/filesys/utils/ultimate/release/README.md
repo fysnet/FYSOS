@@ -1,11 +1,11 @@
 ## Utimate: The ultimate image browser
 
-These are the Windows Executables for the [Ultimate](http://www.fysnet.net/ultimate/index.htm) utility.
+These are the Windows Executables for the [Ultimate](https://www.fysnet.net/ultimate/index.htm) utility.
 
 ## Last Update:
 Current version: **00.60.10** and is dated: **24 Oct 2022**<br />
 \(64-bit version may require [Updated DLLs](https://support.microsoft.com/en-gb/help/2977003/the-latest-supported-visual-c-downloads)\)<br />
-[Revision History](http://www.fysnet.net/ultimate/todo.htm)
+[Revision History](https://www.fysnet.net/ultimate/todo.htm)
 
 ## Please note:
 <pre>
@@ -24,7 +24,7 @@ Current version: **00.60.10** and is dated: **24 Oct 2022**<br />
 </pre>
 
 ## Home page
-The home page for this utility is at [http://www.fysnet.net/ultimate/index.htm](http://www.fysnet.net/ultimate/index.htm)<br />
+The home page for this utility is at [https://www.fysnet.net/ultimate/index.htm](http://www.fysnet.net/ultimate/index.htm)<br />
 There you will see examples and help files for this utility.
 
 ## Description:
