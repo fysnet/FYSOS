@@ -263,7 +263,7 @@ void CLean::OnLeanCheck() {
   
   // check the root's Inode and if it is good, parse the directory(s)
   lcInfo += "Checking the Root Inode\r\n";
-  if (LeanCheckInode(super->root_start, TRUE) == 0) {
+  if (LeanCheckInode(super->root_start, TRUE, FALSE) == 0) {
     lcInfo += "Checking Inodes\r\n";
     struct S_LEAN_DIRENTRY *root;
     DWORD64 root_size = 0;
@@ -331,7 +331,7 @@ BOOL CLean::LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CStrin
     
     switch (cur->type) {
       case LEAN_FT_DIR:  // File type: directory
-        lcErrorCount += LeanCheckInode(cur->inode, TRUE);
+        lcErrorCount += LeanCheckInode(cur->inode, TRUE, TRUE);
         if (!IsDot) {
           sub = (struct S_LEAN_DIRENTRY *) ReadFile(cur->inode, &filesize);
           if (sub) {
@@ -347,14 +347,14 @@ BOOL CLean::LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CStrin
       case LEAN_FT_REG: // File type: regular file
         cs.Format("%s%s (LEAN_FT_REG)\r\n", path, name);
         lcInfo += cs;
-        lcErrorCount += LeanCheckInode(cur->inode, TRUE);
+        lcErrorCount += LeanCheckInode(cur->inode, TRUE, TRUE);
         lcFileCount++;
         break;
       case LEAN_FT_LNK: // File type: symbolic link
-        // LeanCheckInode(cur->inode, TRUE);
+        // LeanCheckInode(cur->inode, TRUE, TRUE);
         break;
       case LEAN_FT_FRK: // File type: fork
-        // LeanCheckInode(cur->inode, FALSE);
+        // LeanCheckInode(cur->inode, FALSE, TRUE);
         break;
       case LEAN_FT_MT:  // File type: Empty
         break;
@@ -367,11 +367,11 @@ BOOL CLean::LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CStrin
 }
 
 // returns TRUE if a valid Inode, returns FALSE if there was an error
-int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork) {
+int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_to_list) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE *buffer = (BYTE *) malloc(m_block_size);
   struct S_LEAN_INODE *inode = (struct S_LEAN_INODE *) buffer;
-  int errors = 0;
+  int i, cnt, errors = 0;
   CString cs;
   DWORD dword;
   DWORD64 qword = 0, blocks_used = 0;
@@ -401,7 +401,8 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork) {
   }
   
   // add it to our inode array
-  LeanCheckAddInode(block);
+  if (add_to_list)
+    LeanCheckAddInode(block);
   
   // the extent count must be greater than zero and less than or equal to LEAN_INODE_EXTENT_CNT
   if ((inode->extent_count == 0) || (inode->extent_count > LEAN_INODE_EXTENT_CNT)) {
@@ -454,8 +455,16 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork) {
     }
   }
   
+  // check that all blocks in the extent(s) are marked used
+  cnt = LeanCheckExtents(&inode->extent_start[0], (unsigned int) inode->extent_count, LEAN_INODE_EXTENT_CNT);
+  if (cnt > 0) {
+    cs.Format("Inode %I64i: Found %i used blocks marked free in bitmap(s)\r\n", block, cnt);
+    lcInfo += cs;
+    errors++;
+  }
+
   //  Check that the actual count of blocks used (from direct extents and indirect extents) match inode->block_count
-  for (int i=0; (i<LEAN_INODE_EXTENT_CNT) && (i<inode->extent_count); i++)
+  for (i=0; (i<LEAN_INODE_EXTENT_CNT) && (i<inode->extent_count); i++)
     blocks_used += inode->extent_size[i];
   if (inode->block_count != (blocks_used + qword)) {
     cs.Format("Inode %I64i: Blocks Used Count (%I64i) doesn't match Inode (%I64i)\r\n", block, blocks_used + qword, inode->block_count);
@@ -472,7 +481,7 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork) {
   
   //  Check the fork as a valid inode (must not contain a fork itself)
   if (allow_fork && inode->fork)
-    errors += LeanCheckInode(inode->fork, FALSE);
+    errors += LeanCheckInode(inode->fork, FALSE, TRUE);
   if (!allow_fork && inode->fork) {
     cs.Format("Inode %I64i: Fork has fork\r\n", block);
     lcInfo += cs;
@@ -491,7 +500,7 @@ int CLean::LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count,
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE *buffer = (BYTE *) malloc(m_block_size);
   struct S_LEAN_INDIRECT *indirect = (struct S_LEAN_INDIRECT *) buffer;
-  int errors = 0;
+  int cnt, errors = 0;
   CString cs;
   DWORD dword, return_count = 0;
   DWORD64 prev = 0, block_count = 0;
@@ -547,6 +556,14 @@ int CLean::LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count,
         errors++;
       }
       block_count += count;
+
+      // check that all blocks in the extent(s) are marked used
+      cnt = LeanCheckExtents((BYTE *) indirect + LEAN_INDIRECT_SIZE, (unsigned int) indirect->extent_count, extent_max);
+      if (cnt > 0) {
+        cs.Format("Indirect %I64i: Found %i used blocks marked free in bitmap(s)\r\n", block, cnt);
+        lcInfo += cs;
+        errors++;
+      }
     }
 
     // check that the Inode member is correct
@@ -592,6 +609,50 @@ int CLean::LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count,
   free(buffer);
 
   return errors;
+}
+
+// checks a set of extents and returns the count of blocks used that are marked free in the bitmap(s)
+int CLean::LeanCheckExtents(void *extents, unsigned int count, unsigned int extent_max) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE *bitmap = NULL;
+  DWORD last_band = 0xFFFFFFFF, band;
+  DWORD64 lba, bitmap_block = 0;
+  unsigned int i, extent;
+  int fnd_count = 0;  // count of blocks used but marked free
+  
+  const DWORD64 band_size = ((DWORD64) 1 << m_super.log_blocks_per_band); // blocks per band
+  const unsigned bitmap_size = (unsigned) (band_size >> 12);     // blocks per bitmap
+
+  // create the buffer
+  bitmap = (BYTE *) malloc(bitmap_size * m_block_size);
+
+  // point to the extent
+  DWORD64 *extent_start = (DWORD64 *) extents;
+  DWORD32 *extent_size = (DWORD32 *) ((BYTE *) extents + (extent_max * sizeof(DWORD64)));
+
+  for (extent=0; extent<count; extent++) {
+    for (i=0; i<extent_size[extent]; i++) {
+      lba = extent_start[extent] + i;
+      band = (DWORD) (lba >> m_super.log_blocks_per_band);
+      // are we in the same band as the last one, or do we need to calculate it, load it
+      if (band != last_band) {
+        last_band = band;
+        bitmap_block = (band==0) ? m_super.bitmap_start : (band * band_size);
+        dlg->ReadBlocks(bitmap, m_lba, bitmap_block, m_block_size, bitmap_size);
+      }
+      // calculate block in this band, byte, and bit within bitmap for 'block'
+      unsigned block_in_this_band = (unsigned) (lba & ((1 << m_super.log_blocks_per_band) - 1));
+      unsigned byte = block_in_this_band / 8;
+      unsigned bit = block_in_this_band % 8;
+      if (!(bitmap[byte] & (1 << bit)))
+        fnd_count++;
+    }
+  }
+
+  // free the buffer
+  free(bitmap);
+
+  return fnd_count;
 }
 
 // add an Inode to our array of inodes

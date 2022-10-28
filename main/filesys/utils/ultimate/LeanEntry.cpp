@@ -535,16 +535,12 @@ void CLeanEntry::OnEas() {
 }
 
 void CLeanEntry::OnIndirects() {
-
   CLeanIndirect Indirect;
   
   Indirect.m_current_indirect = m_inode.first_indirect;
   Indirect.m_parent = m_parent;
   Indirect.m_entry_parent = this;
   Indirect.DoModal();
-  
-  // ben
-
 }
 
 // "Apply" button was pressed
@@ -597,15 +593,39 @@ void CLeanEntry::OnOK() {
             cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + Offset);
             int len = m_name.GetLength();
             if (len <= ((cur->rec_len * 16) - LEAN_DIRENTRY_NAME)) {
+              // TODO: can we divide it into two entries now??
               memcpy(cur->name, m_name, len);
               cur->name_len = len;
             } else {
-              AfxMessageBox("TODO: name is larger than what will fit in this current spot");
-              // TODO: name is larger than what will fit in this current spot
-              //  need to find another spot...
+              // name is larger than what will fit in this current spot
+              //  need to expand existing spot (i.e.: enlarge file and move all data toward the new end)
+              if (len > 4068) // rare, but catch anyway.
+                len = 4068;
+              int old_len = cur->rec_len;
+              int new_len = ((len + LEAN_DIRENTRY_NAME + 15) / 16);
+              int tail_len = (int) (RootSize - Offset - (old_len * 16));
+              RootSize += ((new_len - old_len) * 16);
+              void *new_root = malloc((size_t) RootSize);
+              memcpy(new_root, root, Offset + LEAN_DIRENTRY_NAME);
+
+              cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) new_root + Offset);
+              memcpy(cur->name, m_name, len);
+              cur->rec_len = (BYTE) new_len;
+              cur->name_len = len;
+
+              if (tail_len > 0)
+                memcpy((BYTE *) new_root + Offset + (new_len * 16), (BYTE *) root + Offset + (old_len * 16), tail_len);
+              
+              free(root);
+              root = (struct S_LEAN_DIRENTRY *) new_root;
             }
+            
+            // write the file back to the image
             m_parent->WriteFile(root, &extents, RootSize);
             free(root);
+
+            // refresh the "system"
+            m_parent->Start(m_parent->m_lba, m_parent->m_size, m_parent->m_color, m_parent->m_index, FALSE);
           }
           m_parent->FreeExtentBuffer(&extents);
         }

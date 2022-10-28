@@ -359,8 +359,9 @@ public:
 
   // Check Lean stuff
   BOOL LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CString path);
-  int  LeanCheckInode(DWORD64 block, const BOOL allow_fork);
+  int  LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_to_list);
   int  LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count, DWORD64 *blocks_used);
+  int  LeanCheckExtents(void *extents, unsigned int count, unsigned int extent_max);
   void LeanCheckAddInode(DWORD64 block);
   void LeanCheckLinkCount(void);
 

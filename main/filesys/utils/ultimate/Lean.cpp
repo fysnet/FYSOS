@@ -564,7 +564,7 @@ bool CLean::Format(const BOOL AskForBoot) {
   struct S_LEAN_INODE *root = (struct S_LEAN_INODE *) calloc(2 * m_block_size, 1);
   root->magic = LEAN_INODE_MAGIC;
   root->extent_count = 1;
-  memset(root->reserved, 0, 3);
+  //memset(root->reserved, 0, 3);
   root->links_count = 2;  // the "." and ".." entries
   root->uid = 0;
   root->gid = 0;
@@ -1097,13 +1097,13 @@ void CLean::WriteFile(void *buffer, struct S_LEAN_BLOCKS *extents, DWORD64 Size)
   // before we write the extents, do we need to append any?
   if (Size > allocated_space)
     AppendToExtents(extents, Size - allocated_space, 0, TRUE);
-  // TODO:
-  //if (Size < allocated_space)
+  // TODO: if (Size < allocated_space)
   //  TruncateExtents(extents, allocated_space - Size, 0, TRUE);
   WriteFileExtents(extents, inode);
 
   // update the inode (just incase we need to)
   inode->file_size = Size;
+  inode->block_count = extents->block_count;
 
   BYTE *block = (BYTE *) malloc(m_block_size);
   unsigned i = 0, j = 1; // The first write needs to skip the inode (j = 1)
@@ -2020,8 +2020,8 @@ int CLean::AppendToExtents(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD64 
     block = GetFreeBlock(block, MarkIt);
     
     // if incrementing Extents->extent_size[cnt] will be greater than will fit in a DWORD sized then move to next one
-    // Ben: For debugging purposes, we can change the 0xFFFF to 32 to create a few Indirects for each (large) file.
-    if (extents->extent_size[cnt] == MAXDWORD32 /*32*/) {
+    // For debugging purposes, we can change the 0xFFFF to 32 to create a few Indirects for each (large) file.
+    if (extents->extent_size[cnt] == MAXDWORD /*32*/) {
       cnt++;
       if (cnt >= extents->allocated_count)
         ReAllocateExtentBuffer(extents, extents->allocated_count + LEAN_DEFAULT_COUNT);
@@ -2043,6 +2043,7 @@ int CLean::AppendToExtents(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD64 
   
   // update the count of extents used
   extents->extent_count = cnt + 1;
+  extents->block_count += count;
 
   // return this count
   return extents->extent_count;
