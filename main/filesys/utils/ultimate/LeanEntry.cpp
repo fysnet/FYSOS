@@ -221,8 +221,9 @@ BOOL CLeanEntry::OnInitDialog() {
   m_last_indirect.Format("%I64i", m_inode.last_indirect);
   m_fork.Format("%I64i", m_inode.fork);
   
+  m_ext_start.ResetContent();
   m_parent->ReadFileExtents(&extents, m_inode_num);
-  for (i=0; i<extents.extent_count; i++) {
+  for (i=0; i<m_inode.extent_count && i<LEAN_INODE_EXTENT_CNT; i++) {
     cs.Format("%I64i", extents.extent_start[i]);
     m_ext_start.AddString(cs);
     cs.Format("%i", extents.extent_size[i]);

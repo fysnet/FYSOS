@@ -190,6 +190,7 @@ BEGIN_MESSAGE_MAP(CUltimateDlg, CDialog)
   ON_COMMAND(ID_FILE_EXIT, OnFileExit)
   ON_COMMAND(ID_HELP_INDEX, OnHelpHelp)
   ON_COMMAND(ID_HELP_ABOUT, OnHelpAbout)
+  ON_COMMAND(ID_TOOLS_CREATE_INFO, OnCreateInfoFile)
   ON_BN_CLICKED(IDC_SECT_SIZE_512, OnChangeSectSize)
   ON_BN_CLICKED(IDC_SECT_SIZE_1024, OnChangeSectSize)
   ON_BN_CLICKED(IDC_SECT_SIZE_2048, OnChangeSectSize)
@@ -625,6 +626,7 @@ int CUltimateDlg::GetString(char *buffer, CString &str) {
 
 // if there is a text file with the same name + ".info", parse the file
 //  to get some parameters
+// ( https://www.fysnet.net/ultimate/help/infofile.html )
 BOOL CUltimateDlg::FileOpenInfo(CString csPath) {
   CFile file;
   char *buffer, *pos;
@@ -702,6 +704,41 @@ BOOL CUltimateDlg::FileOpenInfo(CString csPath) {
   free(buffer);
 
   return ret;
+}
+
+// create a new .info file for this image file.
+//  *** will overwrite any existing .info file ***
+void CUltimateDlg::OnCreateInfoFile() {
+  CFile file;
+  CString cs, csText;
+
+  if (AfxMessageBox("This will create an .info settings file for this image file.\r\n"
+                    " If the .info file already exists, it will be truncated!\r\n"
+                    " Proceed?", MB_YESNO, 0) != IDYES) {
+    return;
+  }
+
+  csText  = "# This is the .info Companion File for the image: ";
+  csText += m_cur_file;
+  csText += "\r\n\n";
+
+  csText += "# First parameter we will specify is the sector size parameter.\r\n";
+  cs.Format("sector-size = %i  # may use 512, 1024, 2048, or 4096 only\r\n", m_sect_size);
+  csText += cs;
+  csText += "\r\n";
+  
+  csText += "# Set/Clear the Readonly flag.\r\n";
+  if (IsDlgButtonChecked(IDC_FORCE_READONLY))
+    csText += "read-only = 1      # 1 = set = read only  (anything else is an error)\r\n";
+  else
+    csText += "# read-only = 0      # 1 = set = read only  (anything else is an error)\r\n";
+  csText += "\r\n";
+
+  // now write the text to the file
+  if (file.Open(m_cur_file + ".info", CFile::modeCreate | CFile::modeWrite | CFile::typeText | CFile::shareExclusive, NULL) != 0) {
+    file.Write((LPCTSTR) csText, csText.GetLength());
+    file.Close();
+  }
 }
 
 void CUltimateDlg::OnFileOpen() {
@@ -1257,6 +1294,7 @@ void CUltimateDlg::OnInitMenuPopup(CMenu *pMenu, UINT nIndex, BOOL bSysMenu) {
   pMenu->EnableMenuItem(ID_APPEND_VHD, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_TOOLS_ADDHYBRIDCDROM, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_TOOLS_VIEWVDIHEADER, !m_bIsOpen ? MF_ENABLED : MF_GRAYED);
+  pMenu->EnableMenuItem(ID_TOOLS_CREATE_INFO, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   
   if (!bSysMenu) {
     // get the first string in the list
@@ -1336,9 +1374,9 @@ int CUltimateDlg::DoError(CString csStr) {
 
   if (m_MaxErrorCount < max_count)
     ret = AfxMessageBox(csStr);
-
+  
   m_MaxErrorCount++;
-
+  
   if (m_MaxErrorCount == max_count)
     AfxMessageBox("Error Count has reached Settings:MaxCount.\n"
                   "This error will not be displayed further.");

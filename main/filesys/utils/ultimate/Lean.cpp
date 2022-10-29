@@ -82,13 +82,6 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
-//// TODO:
-////   - Apply
-////   - Starting block in AppendToExtents
-////   - 
-////   - 
-////   - 
-
 /////////////////////////////////////////////////////////////////////////////
 // CLean property page
 
@@ -203,6 +196,8 @@ BEGIN_MESSAGE_MAP(CLean, CPropertyPage)
   ON_BN_CLICKED(IDC_SHOW_DEL, OnShowDeleted)
   ON_BN_CLICKED(IDC_DEL_CLEAR, OnDelClear)
   ON_BN_CLICKED(IDC_EAS_IN_INODE, OnEAsInInode)
+  ON_BN_CLICKED(ID_SAVE_SUPER, OnSaveSuper)
+  ON_BN_CLICKED(ID_RESTORE_SUPER, OnRestoreSuper)
   ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTA, 0, 0xFFFF, OnToolTipNotify)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
@@ -1710,6 +1705,78 @@ void CLean::OnEAsInInode() {
   AfxGetApp()->WriteProfileInt("Settings", "LEANEAsInInode", m_ESs_in_Inode = IsDlgButtonChecked(IDC_EAS_IN_INODE));
 }
 
+// copy the Primary Superblock to the Backup Superblock
+void CLean::OnSaveSuper() {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  
+  ReceiveFromDialog(&m_super); // bring from Dialog
+
+  // do a few checks just to make sure we are okay
+  if ((m_super.backup_super <= m_super_block_loc) || 
+      (m_super.backup_super >= m_tot_blocks)) {
+    AfxMessageBox("Backup Superblock location is in error.");
+    return;
+  }
+
+  BYTE *buffer = (BYTE *) calloc(m_block_size, 1);
+  
+  memcpy(buffer, &m_super, sizeof(struct S_LEAN_SUPER));
+  
+  // write the block
+  dlg->WriteBlocks(buffer, m_lba, m_super.backup_super, m_block_size, 1);
+
+  free(buffer);
+
+  // make sure the bitmap is marked for this block
+  MarkBlock(m_super.backup_super, TRUE);
+
+  AfxMessageBox("Backup Superblock stored.");
+}
+
+// copy the Backup Superblock to the Primary Superblock
+// ** May need to reload the image since the Root Inode might be different **
+void CLean::OnRestoreSuper() {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+
+  if (AfxMessageBox("This will copy the Backup Superblock to the Primary Superblock"
+                    " and reload the image.  Continue?", MB_YESNO, 0) != IDYES)
+    return;
+  
+  ReceiveFromDialog(&m_super); // bring from Dialog
+
+  // do a few checks just to make sure we are okay
+  if ((m_super.backup_super <= m_super_block_loc) || 
+      (m_super.backup_super >= m_tot_blocks)) {
+    AfxMessageBox("Backup Superblock location is in error.");
+    return;
+  }
+
+  BYTE *buffer = (BYTE *) malloc(m_block_size);
+  
+  // read the block
+  dlg->ReadBlocks(buffer, m_lba, m_super.backup_super, m_block_size, 1);
+
+  // check that the block size is the same
+  struct S_LEAN_SUPER *backup = (struct S_LEAN_SUPER *) buffer;
+  if (backup->log_block_size != m_super.log_block_size) {
+    if (AfxMessageBox("The log_block_size fields do not match. Continue?", MB_YESNO, 0) != IDYES) {
+      free(buffer);
+      return;
+    }
+  }
+  
+  // write the block
+  dlg->WriteBlocks(buffer, m_lba, m_super.primary_super, m_block_size, 1);
+
+  free(buffer);
+
+  AfxMessageBox("Primary Superblock stored.\r\n"
+                "Ready to Reload image...");
+  
+  // reload the file
+  SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
+}
+
 // the user change the status of the "Delete Clear" Check box
 void CLean::OnDelClear() {
   AfxGetApp()->WriteProfileInt("Settings", "LEANDelClear", m_del_clear = IsDlgButtonChecked(IDC_DEL_CLEAR));
@@ -2020,8 +2087,8 @@ int CLean::AppendToExtents(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD64 
     block = GetFreeBlock(block, MarkIt);
     
     // if incrementing Extents->extent_size[cnt] will be greater than will fit in a DWORD sized then move to next one
-    // For debugging purposes, we can change the 0xFFFF to 32 to create a few Indirects for each (large) file.
-    if (extents->extent_size[cnt] == MAXDWORD /*32*/) {
+    // Ben: For debugging purposes, we can change the 0xFFFF to 32 to create a few Indirects for each (large) file.
+    if (extents->extent_size[cnt] == MAXDWORD /* 32 */) {
       cnt++;
       if (cnt >= extents->allocated_count)
         ReAllocateExtentBuffer(extents, extents->allocated_count + LEAN_DEFAULT_COUNT);

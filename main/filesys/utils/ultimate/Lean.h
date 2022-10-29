@@ -401,6 +401,8 @@ protected:
   afx_msg void OnGuidCreate();
   afx_msg void OnShowDeleted();
   afx_msg void OnEAsInInode();
+  afx_msg void OnSaveSuper();
+  afx_msg void OnRestoreSuper();
   afx_msg void OnDelClear();
   afx_msg void OnLeanDelete();
   afx_msg void OnExpand();

@@ -267,6 +267,7 @@ public:  // protected:
   afx_msg void OnToolsHybridCDROM();
   afx_msg void OnHelpHelp();
   afx_msg void OnHelpAbout();
+  afx_msg void OnCreateInfoFile();
   afx_msg void OnChangeSectSize();
   afx_msg void OnRecentFileMenu(UINT uID);
   afx_msg void OnInitMenuPopup(CMenu *pMenu, UINT nIndex, BOOL bSysMenu);

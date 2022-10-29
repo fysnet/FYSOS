@@ -803,7 +803,10 @@
 #define IDC_MFT_CLUSTER                 1499
 #define ID_JOURNAL_INODE                1499
 #define IDC_MFT_MIRROR_CLUST            1500
+#define ID_SAVE_SUPER                   1500
 #define IDC_CLUSTER_REC_SIZE            1501
+#define ID_SAVE_SUPER2                  1501
+#define ID_RESTORE_SUPER                1501
 #define IDC_CLUSTER_INDEX_BLOCK         1502
 #define IDC_CLUSTER_REC_SIZE_DISP       1503
 #define IDC_SHOW_SYS_MFT                1504
@@ -996,13 +999,15 @@
 #define ID_APPEND_VHD                   32782
 #define ID_TOOLS_ADDHYBRIDCDROM         32783
 #define ID_TOOLS_VIEWVDIHEADER          32784
+#define ID_TOOLS_CREATE                 32785
+#define ID_TOOLS_CREATE_INFO            32786
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        203
-#define _APS_NEXT_COMMAND_VALUE         32785
+#define _APS_NEXT_COMMAND_VALUE         32787
 #define _APS_NEXT_CONTROL_VALUE         1641
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

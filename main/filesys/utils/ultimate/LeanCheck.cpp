@@ -123,8 +123,8 @@ void CLean::OnLeanCheck() {
   //  compliant super block and m_super_block_loc value or we won't get
   //  to the point where we can click on the "CHECK" button.
   // therefore, we can rely on the fact that m_super_block_loc should be correct.
-  // *** most of these checks are redundant.  We can't get to here ***
-  // *** without these values being correct in the first place.    ***
+  // *** most of these checks are redundant.  We can't get to here
+  //     without these values being correct in the first place.    ***
   dlg->ReadBlocks(superblock, m_lba, m_super_block_loc, m_block_size, 1);
   
   // How about the check sum
@@ -255,10 +255,34 @@ void CLean::OnLeanCheck() {
     cs.Format("Found %I64i free blocks.\r\n", FreeCount);
   lcInfo += cs;
   
+  ////////////////////////////////////////////////////////////////////
+  // Check 3: 
+  // before we free the buffer, and since it will be plenty large enough to hold a single block,
+  //  let's see if the backup superblock is valid and matches the first.
+  struct S_LEAN_SUPER *backup = (struct S_LEAN_SUPER *) buffer;
+  dlg->ReadBlocks(backup, m_lba, super->backup_super, m_block_size, 1);
+  crc = 0; p = (DWORD *) backup;
+  for (i=1; i<m_block_size / sizeof(DWORD); i++)
+    crc = (crc << 31) + (crc >> 1) + p[i];
+  if ((crc == backup->checksum) && (backup->magic == LEAN_SUPER_MAGIC)) {
+    cs.Format("Found Backup Superblock at %I64i.\r\n", super->backup_super);
+    lcInfo += cs;
+    // now see if the backup matches the primary
+    if (memcmp(super, backup, m_block_size) != 0) {
+      lcInfo += "Error: Backup Superblock does not match Primary Superblock.\r\n";
+      lcErrorCount++;
+    }
+  } else {
+    cs.Format("Did not find valid Backup Superblock at %I64i.\r\n", super->backup_super);
+    lcInfo += cs;
+    lcErrorCount++;
+  }
+  
+  // free the bitmap/backup buffer
   free(buffer);
   
   ////////////////////////////////////////////////////////////////////
-  // Check 3: 
+  // Check 4: 
   //   Check all of the inodes in the system:
   
   // check the root's Inode and if it is good, parse the directory(s)
@@ -275,7 +299,7 @@ void CLean::OnLeanCheck() {
   }
 
   ////////////////////////////////////////////////////////////////////
-  // Check 4: 
+  // Check 5: 
   // we now have a list of all the inodes used in the system
   // read back these inodes and check to see that their link count matches what we found
   lcInfo += "\r\nChecking Link Counts\r\n";
