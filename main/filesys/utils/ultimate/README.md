@@ -28,7 +28,7 @@ There you will see examples and help files for this utility.
 - [ ] Currently the code uses a "static" memory allocation scheme to allocate each partition.
 This uses up space in the executable as well as limiting the count of partitions it will allow.  I would like to change this to allocate memory instead.  This will free up .EXE size, as well as remove the limit of partitions it will allow.
 - [ ] There are items within each partition "type" that I need to fix or add to.
-- [ ] The current code release is for both 32- and 64-bit Windows with no code modification.  However, for the "About" dialog to display the correct version, you must add _WIN64 to your resource predifined definitions for 64-bit. See [Line 81 in ultimate.rc](https://github.com/fysnet/FYSOS/blob/master/main/filesys/utils/ultimate/ultimate.rc#L81) for more information.
+- [ ] The current code release is for both 32- and 64-bit Windows with no code modification.  However, for the "About" dialog to display the correct version, you must modify the description for 32-bit. See [Line 81 in ultimate.rc](https://github.com/fysnet/FYSOS/blob/master/main/filesys/utils/ultimate/ultimate.rc#L81).
 
 ## To Build
 - [X] 64-bit Windows: Using Microsoft Visual Studio (2019), create an empty workspace.  Add all of the files in this folder and then the 'res' folder.  Add the _WIN64 definition to your resource settings. Rebuild Solution.
