@@ -126,40 +126,40 @@ struct S_LEAN_INODE {
 };
 
 //attributes:
-#define  LEAN_ATTR_IXOTH        (1 << 0)  // Other: execute permission 
-#define  LEAN_ATTR_IWOTH        (1 << 1)  // Other: write permission 
-#define  LEAN_ATTR_IROTH        (1 << 2)  // Other: read permission 
-#define  LEAN_ATTR_IXGRP        (1 << 3)  // Group: execute permission 
-#define  LEAN_ATTR_IWGRP        (1 << 4)  // Group: write permission 
-#define  LEAN_ATTR_IRGRP        (1 << 5)  // Group: read permission 
-#define  LEAN_ATTR_IXUSR        (1 << 6)  // Owner: execute permission 
-#define  LEAN_ATTR_IWUSR        (1 << 7)  // Owner: write permission 
-#define  LEAN_ATTR_IRUSR        (1 << 8)  // Owner: read permission 
-//       LEAN_ATTR_             (1 << 9)  // reserved
-#define  LEAN_ATTR_ISUID        (1 << 10) // Other: execute as user id
-#define  LEAN_ATTR_ISGID        (1 << 11) // Other: execute as group id 
-#define  LEAN_ATTR_HIDDEN       (1 << 12) // Don't show in directory listing 
-#define  LEAN_ATTR_SYSTEM       (1 << 13) // Warn that this is a system file 
-#define  LEAN_ATTR_ARCHIVE      (1 << 14) // File changed since last backup 
-#define  LEAN_ATTR_SYNC_FL      (1 << 15) // Synchronous updates 
-#define  LEAN_ATTR_NOATIME_FL   (1 << 16) // Don't update last access time 
-#define  LEAN_ATTR_IMMUTABLE_FL (1 << 17) // Don't move file blocks 
-#define  LEAN_ATTR_PREALLOC     (1 << 18) // Keep any preallocated blocks beyond fileSize when the file is closed
-#define  LEAN_ATTR_EAS_IN_INODE (1 << 19) // Remaining bytes after the inode structure are reserved for inline extended attributes
-//       LEAN_ATTR_             (1 << 20)  // reserved
-//       LEAN_ATTR_             (1 << 21)  // reserved
-//       LEAN_ATTR_             (1 << 22)  // reserved
-//       LEAN_ATTR_             (1 << 23)  // reserved
-//       LEAN_ATTR_             (1 << 24)  // reserved
-//       LEAN_ATTR_             (1 << 25)  // reserved
-//       LEAN_ATTR_             (1 << 26)  // reserved
-//       LEAN_ATTR_             (1 << 27)  // reserved
-//       LEAN_ATTR_             (1 << 28)  // reserved
-#define  LEAN_ATTR_IFMT         (7 << 29) // Bit mask to extract the file type 
-#define  LEAN_ATTR_IFREG        (1 << 29) // File type: regular file 
-#define  LEAN_ATTR_IFDIR        (2 << 29) // File type: directory 
-#define  LEAN_ATTR_IFLNK        (3 << 29) // File type: symbolic link 
-#define  LEAN_ATTR_IFFRK        (4 << 29) // File type: fork 
+#define  LEAN_ATTR_IXOTH          (1 << 0)  // Other: execute permission 
+#define  LEAN_ATTR_IWOTH          (1 << 1)  // Other: write permission 
+#define  LEAN_ATTR_IROTH          (1 << 2)  // Other: read permission 
+#define  LEAN_ATTR_IXGRP          (1 << 3)  // Group: execute permission 
+#define  LEAN_ATTR_IWGRP          (1 << 4)  // Group: write permission 
+#define  LEAN_ATTR_IRGRP          (1 << 5)  // Group: read permission 
+#define  LEAN_ATTR_IXUSR          (1 << 6)  // Owner: execute permission 
+#define  LEAN_ATTR_IWUSR          (1 << 7)  // Owner: write permission 
+#define  LEAN_ATTR_IRUSR          (1 << 8)  // Owner: read permission 
+//       LEAN_ATTR_               (1 << 9)  // reserved
+#define  LEAN_ATTR_ISUID          (1 << 10) // Other: execute as user id
+#define  LEAN_ATTR_ISGID          (1 << 11) // Other: execute as group id 
+#define  LEAN_ATTR_HIDDEN         (1 << 12) // Don't show in directory listing 
+#define  LEAN_ATTR_SYSTEM         (1 << 13) // Warn that this is a system file 
+#define  LEAN_ATTR_ARCHIVE        (1 << 14) // File changed since last backup 
+#define  LEAN_ATTR_SYNC_FL        (1 << 15) // Synchronous updates 
+#define  LEAN_ATTR_NOATIME_FL     (1 << 16) // Don't update last access time 
+#define  LEAN_ATTR_IMMUTABLE_FL   (1 << 17) // Don't move file blocks 
+#define  LEAN_ATTR_PREALLOC       (1 << 18) // Keep any preallocated blocks beyond fileSize when the file is closed
+#define  LEAN_ATTR_EAS_IN_INODE   (1 << 19) // Remaining bytes after the inode structure are reserved for inline extended attributes
+//       LEAN_ATTR_               (1 << 20)  // reserved
+//       LEAN_ATTR_               (1 << 21)  // reserved
+//       LEAN_ATTR_               (1 << 22)  // reserved
+//       LEAN_ATTR_               (1 << 23)  // reserved
+//       LEAN_ATTR_               (1 << 24)  // reserved
+//       LEAN_ATTR_               (1 << 25)  // reserved
+//       LEAN_ATTR_               (1 << 26)  // reserved
+//       LEAN_ATTR_               (1 << 27)  // reserved
+//       LEAN_ATTR_               (1 << 28)  // reserved
+#define  LEAN_ATTR_IFMT   ((DWORD) 7 << 29) // Bit mask to extract the file type 
+#define  LEAN_ATTR_IFREG  ((DWORD) 1 << 29) // File type: regular file 
+#define  LEAN_ATTR_IFDIR  ((DWORD) 2 << 29) // File type: directory 
+#define  LEAN_ATTR_IFLNK  ((DWORD) 3 << 29) // File type: symbolic link 
+#define  LEAN_ATTR_IFFRK  ((DWORD) 4 << 29) // File type: fork 
 
 #define LEAN_INDIRECT_SIZE   56
 struct S_LEAN_INDIRECT {
@@ -390,6 +390,7 @@ protected:
   afx_msg void OnLeanCopy();
   afx_msg void OnLeanView();
   afx_msg void OnLeanInsert();
+  afx_msg void OnLeanInsertSymbolic();
   afx_msg void OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult);
   afx_msg void OnLeanEntry();
   afx_msg void OnFysosSig();

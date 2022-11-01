@@ -73,6 +73,7 @@
 #include "LeanEntry.h"
 #include "LeanFormat.h"
 #include "LeanJournal.h"
+#include "LeanSymbolic.h"
 
 #include "Attribute.h"
 
@@ -176,6 +177,7 @@ BEGIN_MESSAGE_MAP(CLean, CPropertyPage)
   ON_BN_CLICKED(ID_COPY, OnLeanCopy)
   ON_BN_CLICKED(ID_VIEW, OnLeanView)
   ON_BN_CLICKED(ID_INSERT, OnLeanInsert)
+  ON_BN_CLICKED(ID_INSERT_SYMBOLIC, OnLeanInsertSymbolic)
   ON_NOTIFY(TVN_SELCHANGED, IDC_DIR_TREE, OnSelchangedDirTree)
   ON_BN_CLICKED(ID_ENTRY, OnLeanEntry)
   ON_BN_CLICKED(ID_FYSOS_SIG, OnFysosSig)
@@ -351,7 +353,7 @@ void CLean::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
 
   GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
   GetDlgItem(ID_COPY)->EnableWindow((hItem != NULL) && items->CanCopy);
-  GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & ITEM_IS_FILE));
+  GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & (ITEM_IS_FILE | ITEM_IS_SYMBOLIC)));
   GetDlgItem(ID_INSERT)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));
   GetDlgItem(ID_DELETE)->EnableWindow(hItem != NULL);
   
@@ -947,9 +949,9 @@ void CLean::ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM 
         break;
       case LEAN_FT_LNK: // File type: symbolic link
         name += " (Link)";
-        hItem = m_dir_tree.Insert(name, ITEM_IS_FORK, IMAGE_FORKED, IMAGE_FORKED, parent);
+        hItem = m_dir_tree.Insert(name, ITEM_IS_SYMBOLIC, IMAGE_FORKED, IMAGE_FORKED, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, cur->inode, 0, 0, (DWORD) ((BYTE *) cur - (BYTE *) root), FALSE);
+        SaveItemInfo(hItem, cur->inode, 0, ITEM_IS_SYMBOLIC, (DWORD) ((BYTE *) cur - (BYTE *) root), FALSE);
         break;
       case LEAN_FT_FRK: // File type: fork
         name += " (Fork)";
@@ -1555,6 +1557,66 @@ void CLean::OnLeanInsert() {
   
   wait.Restore();
   //AfxMessageBox("Files transferred.");
+}
+
+// insert an Inode in the currently selected directory, giving it a Symbolic type and data
+void CLean::OnLeanInsertSymbolic() {
+  struct S_LEAN_BLOCKS extents;
+  DWORD64 Size, TotSize;
+  DWORD Attrib = IsDlgButtonChecked(IDC_EAS_IN_INODE) ? LEAN_ATTR_EAS_IN_INODE : 0;  // Allow user to specify if EAS_IN_INODE or not on new creation.
+
+  CLeanSymbolic Symbolic;
+  if (Symbolic.DoModal() == IDCANCEL)
+    return;
+
+  // length of the symbolic name (file data)
+  Size = Symbolic.m_symbolic_name.GetLength();
+
+  // get the item from the tree control
+  HTREEITEM hItem = m_dir_tree.GetSelectedItem();
+  struct S_LEAN_ITEMS *items = (struct S_LEAN_ITEMS *) m_dir_tree.GetDataStruct(hItem);
+  if (items) {
+    // if we don't have enough room on the image, error and return
+    DWORD blocks_needed = (DWORD) ((Size + m_block_size - 1) / (size_t) m_block_size);
+    if (blocks_needed > m_free_block_cnt) {
+      CString cs;
+      cs.Format("Not enough room left in image. Blocks needed = %i", blocks_needed - m_free_block_cnt);
+      AfxMessageBox(cs);
+      return;
+    }
+    
+    // allocate the extents for it, returning a "struct S_LEAN_BLOCKS"
+    AllocateExtentBuffer(&extents, LEAN_DEFAULT_COUNT);
+    // Calculate how many actual bytes we will use
+    TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : sizeof(struct S_LEAN_INODE)) + 
+      ((size_t) m_super.pre_alloc_count * m_block_size); 
+    if (AppendToExtents(&extents, TotSize, 0, TRUE) == -1) {
+      FreeExtentBuffer(&extents);
+      return;
+    }
+    
+    // create a root entry in the folder
+    int r = AllocateRoot(Symbolic.m_file_name, items->Inode, extents.extent_start[0], LEAN_FT_LNK);
+    if (r == -1) {
+      FreeExtentBuffer(&extents);
+      return;
+    }
+    
+    // create an Inode at extents.extent_start[0]
+    BuildInode(&extents, Size, LEAN_ATTR_IFLNK | Attrib);
+    
+    // copy the file to our system
+    WriteFile((void *) (LPCTSTR) Symbolic.m_symbolic_name, &extents, Size);
+    
+    // free the buffers
+    FreeExtentBuffer(&extents);
+    
+    // update our running count of free clusters
+    m_free_block_cnt = CalcFreeBlocks();
+  }
+  
+  // refresh the "system"
+  Start(m_lba, m_size, m_color, m_index, FALSE);
 }
 
 // Inode = starting inode of folder to insert to

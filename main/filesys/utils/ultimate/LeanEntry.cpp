@@ -297,10 +297,10 @@ struct S_ATTRIBUTES lean_attrbs[] = {
   { LEAN_ATTR_IMMUTABLE_FL,  LEAN_ATTR_IMMUTABLE_FL, 16, "Don't move file sectors"        , {-1, } },
   { LEAN_ATTR_PREALLOC,      LEAN_ATTR_PREALLOC,     17, "Keep any preallocated sectors"  , {-1, } },
   { LEAN_ATTR_EAS_IN_INODE,  LEAN_ATTR_EAS_IN_INODE, 18, "bytes after inode are EA's"     , {-1, } },
-  { LEAN_ATTR_IFREG,         LEAN_ATTR_IFREG,        19, "*File type: regular file"       , {20, 21, 22, -1, } },
-  { LEAN_ATTR_IFDIR,         LEAN_ATTR_IFDIR,        20, "*File type: directory"          , {19, 21, 22, -1, } },
-  { LEAN_ATTR_IFLNK,         LEAN_ATTR_IFLNK,        21, "*File type: symbolic link"      , {19, 20, 22, -1, } },
-  { (DWORD) LEAN_ATTR_IFFRK, (DWORD) LEAN_ATTR_IFFRK,        22, "*File type: fork"               , {19, 20, 21, -1, } },
+  { LEAN_ATTR_IFREG,         LEAN_ATTR_IFMT,        19, "*File type: regular file"       , {20, 21, 22, -1, } },
+  { LEAN_ATTR_IFDIR,         LEAN_ATTR_IFMT,        20, "*File type: directory"          , {19, 21, 22, -1, } },
+  { LEAN_ATTR_IFLNK,         LEAN_ATTR_IFMT,        21, "*File type: symbolic link"      , {19, 20, 22, -1, } },
+  { LEAN_ATTR_IFFRK,         LEAN_ATTR_IFMT,        22, "*File type: fork"               , {19, 20, 21, -1, } },
   { 0,                            (DWORD) -1,        -1, NULL                             , {-1, } }
 };
 
@@ -314,7 +314,7 @@ void CLeanEntry::OnAttribute() {
   dlg.m_attrib = convert32(cs);
   dlg.m_attributes = lean_attrbs;
   if (dlg.DoModal() == IDOK) {
-    cs.Format("0x%08X", dlg.m_attrib);
+    cs.Format("0x%08X", (DWORD) dlg.m_attrib);
     SetDlgItemText(IDC_ENTRY_ATTRBS, cs);
   }
 }

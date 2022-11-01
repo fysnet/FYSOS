@@ -101,9 +101,10 @@
 
 #define COLOR_MBR_EMPTY  RGB(113,111,100)
 
-#define ITEM_IS_FILE    (1<<0)
-#define ITEM_IS_FOLDER  (1<<1)
-#define ITEM_IS_FORK    (1<<2)
+#define ITEM_IS_FILE     (1<<0)
+#define ITEM_IS_FOLDER   (1<<1)
+#define ITEM_IS_FORK     (1<<2)
+#define ITEM_IS_SYMBOLIC (1<<3)
 
 /////////////////////////////////////////////////////////////////////////////
 // CUltimateDlg dialog

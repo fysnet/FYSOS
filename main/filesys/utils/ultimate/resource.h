@@ -94,6 +94,7 @@
 #define IDD_FYSFS_FORMAT                197
 #define IDD_FSZ                         198
 #define IDD_LEAN_INDIRECT               199
+#define IDD_LEAN_SYMBOLIC               200
 #define IDC_IMAGE_BAR                   1002
 #define IDC_PAGES                       1005
 #define IDC_TABS                        1007
@@ -808,6 +809,7 @@
 #define ID_SAVE_SUPER2                  1501
 #define ID_RESTORE_SUPER                1501
 #define IDC_CLUSTER_INDEX_BLOCK         1502
+#define ID_INSERT_SYMBOLIC              1502
 #define IDC_CLUSTER_REC_SIZE_DISP       1503
 #define IDC_SHOW_SYS_MFT                1504
 #define ID_SEARCH                       1505
@@ -987,6 +989,9 @@
 #define IDC_RESV2_UPDATE                1638
 #define IDC_ENTRY_RESERVED2_STATIC      1639
 #define IDC_INDIRECT_STATUS             1640
+#define IDC_SYMBOL_NAME                 1641
+#define IDC_SYMBOL_NAME2                1642
+#define IDC_SYMBOL_DATA                 1642
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
@@ -1006,9 +1011,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        203
+#define _APS_NEXT_RESOURCE_VALUE        204
 #define _APS_NEXT_COMMAND_VALUE         32787
-#define _APS_NEXT_CONTROL_VALUE         1641
+#define _APS_NEXT_CONTROL_VALUE         1642
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
