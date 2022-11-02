@@ -74,7 +74,7 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
-unsigned lcErrorCount, lcDirCount, lcFileCount;
+int lcErrorCount, lcDiagCount, lcDirCount, lcFileCount;
 CString lcInfo;
 
 // for the link count stuff
@@ -102,6 +102,7 @@ void CLean::OnLeanCheck() {
   // clear the globals 
   // (if we don't, we will add to what was shown last time)
   lcErrorCount = 0;
+  lcDiagCount = 0;
   lcDirCount = 1;  // first will be the root
   lcFileCount = 0;
   lcInfo.Empty();
@@ -168,18 +169,25 @@ void CLean::OnLeanCheck() {
   if (super->state & ~0x3) {
     cs.Format("State should have all high bits clear. (0x%08X)\r\n", super->state);
     lcInfo += cs;
+    lcDiagCount++;
+  }
+  // the Unmounted bit in the state field should be set since we are unmounted.
+  if (super->state != 0x01) {
+    cs.Format("State should be 0x00000001 (No error and Unmounted). (0x%08X)\r\n", super->state);
+    lcInfo += cs;
+    lcDiagCount++;
   }
   
-  // error if GUID is zero?
+  // diagnostic error if GUID is zero?
   if (IsBufferEmpty(&super->guid, 16)) {
     lcInfo += "Super GUID should not be zeros...\r\n";
-    lcErrorCount++;
+    lcDiagCount++;
   }
 
-  // error if label is empty?
+  // diagnostic error if label is empty?
   if (IsBufferEmpty(super->volume_label, 64)) {
     lcInfo += "Volume Label should not be zeros...\r\n";
-    lcErrorCount++;
+    lcDiagCount++;
   }
 
   // is the total blocks count within range?
@@ -213,7 +221,7 @@ void CLean::OnLeanCheck() {
   // check if reserved is not zeros
   if (!IsBufferEmpty((BYTE *) super + sizeof(struct S_LEAN_SUPER), (int) ((size_t) m_super_block_loc - sizeof(struct S_LEAN_SUPER)))) {
     lcInfo += "Reserved field should be zeros...\r\n";
-    lcErrorCount++;
+    lcDiagCount++;
   }
   
   ////////////////////////////////////////////////////////////////////
@@ -315,7 +323,8 @@ void CLean::OnLeanCheck() {
   if (super_dirty)
     dlg->WriteBlocks(super, m_lba, m_super_block_loc, m_block_size, 1);
   
-  cs.Format("\r\n  Found %i errors\r\n", lcErrorCount);
+  cs.Format("\r\n  Found %i errors\r\n"
+                "  Found %i diagnostics\r\n", lcErrorCount, lcDiagCount);
   lcInfo += cs;
   lcInfo += "\r\nUse the COPY button to copy all to the clipboard or the DONE button to exit\r\n";
   
@@ -340,9 +349,9 @@ BOOL CLean::LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CStrin
   struct S_LEAN_DIRENTRY *cur = root, *sub;
   DWORD64 filesize;
   CString cs, name;
-  BOOL IsDot;
+  BOOL IsDot, err = FALSE;
   
-  while (((unsigned char *) cur < ((unsigned char *) root + root_size))) {
+  while ((((unsigned char *) cur < ((unsigned char *) root + root_size))) && !err) {
     if (cur->rec_len == 0)
       break;
     
@@ -375,13 +384,22 @@ BOOL CLean::LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CStrin
         lcFileCount++;
         break;
       case LEAN_FT_LNK: // File type: symbolic link
-        // LeanCheckInode(cur->inode, TRUE, TRUE);
+        cs.Format("%s%s (LEAN_FT_LNK)\r\n", path, name);
+        lcInfo += cs;
+        lcErrorCount += LeanCheckInode(cur->inode, TRUE, TRUE);
+        lcFileCount++;
         break;
-      case LEAN_FT_FRK: // File type: fork
-        // LeanCheckInode(cur->inode, FALSE, TRUE);
-        break;
+      // should not find a Fork in a directory listing
+      //case LEAN_FT_FRK: // File type: fork
+      //  LeanCheckInode(cur->inode, FALSE, TRUE);
+      //  break;
       case LEAN_FT_MT:  // File type: Empty
         break;
+      default:
+        cs.Format("Unknown directory entry type found: %i\r\nStopping...", cur->type);
+        lcInfo += cs;
+        lcFileCount++;
+        err = TRUE;  // break out of loop
     }
     
     cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) cur + (cur->rec_len * 16));
@@ -398,7 +416,7 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_t
   int i, cnt, errors = 0;
   CString cs;
   DWORD dword;
-  DWORD64 qword = 0, blocks_used = 0;
+  DWORD64 qword = 0, blocks_used = 0, blocks_needed;
 
   // read in the inode
   dlg->ReadBlocks(inode, m_lba, block, m_block_size, 1);
@@ -451,7 +469,7 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_t
   if (inode->attributes & (0x1FF << 20)) {
     cs.Format("Inode %I64i: Reserved bits in attribute are non-zero (0x%08X)\r\n", block, inode->attributes);
     lcInfo += cs;
-    errors++;
+    lcDirCount++;
   }
 
   // if any of the dates are zero, give error
@@ -502,6 +520,14 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_t
     lcInfo += cs;
     errors++;
   }
+
+  //  Check that if the iaPrealloc flag is clear, did the driver dump the preallocated blocks off the end?
+  blocks_needed = (((inode->attributes & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : LEAN_INODE_SIZE) + inode->file_size + (m_block_size - 1)) / m_block_size;
+  if (!(inode->attributes & LEAN_ATTR_PREALLOC) && (blocks_needed < blocks_used)) {
+    cs.Format("Diag: Attributes::iaPrealloc == 0, but file has %i extra blocks appended to it.\r\n", (int) (blocks_used - blocks_needed));
+    lcInfo += cs;
+    lcDiagCount++;
+  }
   
   //  Check the fork as a valid inode (must not contain a fork itself)
   if (allow_fork && inode->fork)
@@ -551,10 +577,8 @@ int CLean::LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count,
     }
 
     // if either of the above is in error, we don't continue
-    if (errors > 0) {
-      free(buffer);
-      return errors;
-    }
+    if (errors > 0)
+      break;
     
     // check that the ExtentCount member is at least 1 and if NextIndirect is non-zero, it must be max_count of extents.
     if (indirect->extent_count == 0) {

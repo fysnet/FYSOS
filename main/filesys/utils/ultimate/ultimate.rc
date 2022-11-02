@@ -78,7 +78,7 @@ CAPTION "About ultimate"
 FONT 8, "MS Sans Serif"
 BEGIN
     CONTROL         IDD_SFS,IDC_STATIC,"Static",SS_BITMAP,11,10,20,20
-    LTEXT           "Ultimate   00.60.25 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
+    LTEXT           "Ultimate   00.60.27 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
     LTEXT           "Copyright (C)  Forever Young Software 1984-2022",IDC_STATIC,46,27,175,8
     DEFPUSHBUTTON   "OK",IDOK,178,7,50,14,WS_GROUP
     LTEXT           "http://www.fysnet.net",IDC_STATIC,46,38,175,8
@@ -2992,6 +2992,8 @@ IDB_DEVICE              BITMAP                  "res\\device.bmp"
 IDB_FOLDER_HIDDEN       BITMAP                  "res\\folder_hidden.bmp"
 
 IDB_FILE_HIDDEN         BITMAP                  "res\\file_hidden.bmp"
+
+IDB_SYMBOLIC            BITMAP                  "res\\symbolic.bmp"
 
 
 /////////////////////////////////////////////////////////////////////////////

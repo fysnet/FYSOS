@@ -74,6 +74,7 @@
 #define IMAGE_DEVICE  5
 #define IMAGE_FOLDER_HIDDEN  6
 #define IMAGE_FILE_HIDDEN    7
+#define IMAGE_SYMBOLIC    8
 
 class CMyImageList : public CImageList {
   DECLARE_DYNCREATE(CMyImageList)

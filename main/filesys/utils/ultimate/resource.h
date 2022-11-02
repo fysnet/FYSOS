@@ -50,6 +50,8 @@
 #define IDD_EMBR                        145
 #define IDB_FILE_HIDDEN                 145
 #define IDD_EMBR_ENTRY                  146
+#define IDB_FORKED1                     146
+#define IDB_SYMBOLIC                    146
 #define IDD_FAT32_INFO                  147
 #define IDD_FAT32_ENTRY                 148
 #define IDD_FYSFS                       149

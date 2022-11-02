@@ -456,7 +456,7 @@ bool CLean::Format(const BOOL AskForBoot) {
   CLeanFormat format;
   format.m_journal = FALSE;
   format.m_eas_after_inode = FALSE;
-  format.m_pre_alloc_count = (8-1);
+  format.m_pre_alloc_count = (dlg->m_sect_size == 4096) ? (2-1) : (8-1); // 4096-byte blocks use 2 prealloc's, else 8 prealloc's
   format.m_block_size = dlg->m_sect_size;
   if (!m_hard_format) {
     //format.m_journal = TRUE;
@@ -949,18 +949,23 @@ void CLean::ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM 
         break;
       case LEAN_FT_LNK: // File type: symbolic link
         name += " (Link)";
-        hItem = m_dir_tree.Insert(name, ITEM_IS_SYMBOLIC, IMAGE_FORKED, IMAGE_FORKED, parent);
+        hItem = m_dir_tree.Insert(name, ITEM_IS_SYMBOLIC, IMAGE_SYMBOLIC, IMAGE_SYMBOLIC, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
         SaveItemInfo(hItem, cur->inode, 0, ITEM_IS_SYMBOLIC, (DWORD) ((BYTE *) cur - (BYTE *) root), FALSE);
         break;
-      case LEAN_FT_FRK: // File type: fork
-        name += " (Fork)";
-        hItem = m_dir_tree.Insert(name, ITEM_IS_FORK, IMAGE_FORKED, IMAGE_FORKED, parent);
-        if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, cur->inode, 0, 0, (DWORD) ((BYTE *) cur - (BYTE *) root), FALSE);
-        break;
+      // should not encounter a fork.  A fork should not be referenced in a directory
+      //case LEAN_FT_FRK: // File type: fork
+      //  name += " (Fork)";
+      //  hItem = m_dir_tree.Insert(name, ITEM_IS_FORK, IMAGE_FORKED, IMAGE_FORKED, parent);
+      //  if (hItem == NULL) { m_too_many = TRUE; return; }
+      //  SaveItemInfo(hItem, cur->inode, 0, 0, (DWORD) ((BYTE *) cur - (BYTE *) root), FALSE);
+      //  break;
       case LEAN_FT_MT:  // File type: Empty
         break;
+      default:
+        name.Format("Unknown directory entry type found: %i\r\nStopping...", cur->type);
+        AfxMessageBox(name);
+        m_too_many = TRUE; // break out of the while loop
     }
     
     cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) cur + (cur->rec_len * 16));
@@ -1577,7 +1582,7 @@ void CLean::OnLeanInsertSymbolic() {
   struct S_LEAN_ITEMS *items = (struct S_LEAN_ITEMS *) m_dir_tree.GetDataStruct(hItem);
   if (items) {
     // if we don't have enough room on the image, error and return
-    DWORD blocks_needed = (DWORD) ((Size + m_block_size - 1) / (size_t) m_block_size);
+    DWORD64 blocks_needed = ((((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : LEAN_INODE_SIZE) + Size + (m_block_size - 1)) / m_block_size);
     if (blocks_needed > m_free_block_cnt) {
       CString cs;
       cs.Format("Not enough room left in image. Blocks needed = %i", blocks_needed - m_free_block_cnt);
@@ -1588,8 +1593,7 @@ void CLean::OnLeanInsertSymbolic() {
     // allocate the extents for it, returning a "struct S_LEAN_BLOCKS"
     AllocateExtentBuffer(&extents, LEAN_DEFAULT_COUNT);
     // Calculate how many actual bytes we will use
-    TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : sizeof(struct S_LEAN_INODE)) + 
-      ((size_t) m_super.pre_alloc_count * m_block_size); 
+    TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : sizeof(struct S_LEAN_INODE)); 
     if (AppendToExtents(&extents, TotSize, 0, TRUE) == -1) {
       FreeExtentBuffer(&extents);
       return;
@@ -1637,7 +1641,7 @@ BOOL CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
   Size = file.GetLength();  // TODO: use long version
 
   // if we don't have enough room on the image, error and return
-  DWORD blocks_needed = (DWORD) ((Size + m_block_size - 1) / (size_t) m_block_size);
+  DWORD64 blocks_needed = ((((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : LEAN_INODE_SIZE) + Size + (m_block_size - 1)) / m_block_size);
   if (blocks_needed > m_free_block_cnt) {
     file.Close();
     CString cs;
@@ -1653,8 +1657,7 @@ BOOL CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
   // allocate the extents for it, returning a "struct S_LEAN_BLOCKS"
   AllocateExtentBuffer(&extents, LEAN_DEFAULT_COUNT);
   // Calculate how many actual bytes we will use
-  TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : sizeof(struct S_LEAN_INODE)) + 
-    ((size_t) m_super.pre_alloc_count * m_block_size); 
+  TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : sizeof(struct S_LEAN_INODE)); 
   if (AppendToExtents(&extents, TotSize, 0, TRUE) == -1) {
     FreeExtentBuffer(&extents);
     free(buffer);
@@ -1708,7 +1711,7 @@ BOOL CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
   }
 
   // create an Inode at extents.extent_start[0]
-  BuildInode(&extents, 0, LEAN_ATTR_IFDIR | Attrib);
+  BuildInode(&extents, 0, LEAN_ATTR_IFDIR | LEAN_ATTR_PREALLOC | Attrib);
 
   // add the . and .. entries
   CString csDots = ".";
@@ -1771,7 +1774,8 @@ void CLean::OnEAsInInode() {
 void CLean::OnSaveSuper() {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   
-  ReceiveFromDialog(&m_super); // bring from Dialog
+  // first apply current values
+  OnLeanApply();  // updates m_super for us
 
   // do a few checks just to make sure we are okay
   if ((m_super.backup_super <= m_super_block_loc) || 
@@ -1891,6 +1895,7 @@ void CLean::OnLeanDelete() {
 
 void CLean::DeleteFolder(HTREEITEM hItem) {
   HTREEITEM hChildItem, hDeleteItem;
+  struct S_LEAN_ITEMS *items;
   CString csPath, csName;
   int IsDir;
   
@@ -1910,8 +1915,12 @@ void CLean::DeleteFolder(HTREEITEM hItem) {
   }
   
   // don't allow to delete root
-  if (m_dir_tree.GetParentItem(hItem) != NULL)
+  hDeleteItem = m_dir_tree.GetParentItem(hItem);
+  if (hDeleteItem != NULL) {
+    items = (struct S_LEAN_ITEMS *) m_dir_tree.GetDataStruct(hDeleteItem);
+    DecrementLinkCount(items->Inode);
     DeleteFile(hItem);
+  }
 }
 
 void CLean::DeleteFile(HTREEITEM hItem) {
@@ -2427,6 +2436,7 @@ int CLean::AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attri
 void CLean::BuildInode(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD Attrib) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   struct S_LEAN_INODE *inode;
+  const DWORD64 pre_alloc_count = ((Attrib & LEAN_ATTR_PREALLOC) ? (m_super.pre_alloc_count + 1) : 0) + 1; // +1 for the Inode
   
   CTime time = CTime::GetCurrentTime();
   const INT64 now = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
@@ -2440,13 +2450,13 @@ void CLean::BuildInode(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD Attrib
   inode->attributes = Attrib;
   inode->file_size = Size;
   if (Attrib & LEAN_ATTR_EAS_IN_INODE)
-    inode->block_count = (m_super.pre_alloc_count + 1) + ((Size + (m_block_size - 1)) / m_block_size);
+    inode->block_count = pre_alloc_count + ((Size + (m_block_size - 1)) / m_block_size);
   else {
     if (Size > (m_block_size - sizeof(struct S_LEAN_INODE))) {
       DWORD64 s = Size - (m_block_size - sizeof(struct S_LEAN_INODE));
-      inode->block_count = (m_super.pre_alloc_count + 1) + ((s + (m_block_size - 1)) / m_block_size);
+      inode->block_count = pre_alloc_count + ((s + (m_block_size - 1)) / m_block_size);
     } else
-      inode->block_count = (m_super.pre_alloc_count + 1);
+      inode->block_count = pre_alloc_count;
   }
   inode->acc_time = 
     inode->sch_time = 

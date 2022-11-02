@@ -82,6 +82,7 @@ UINT MyImageList[] = {
   IDB_DEVICE,
   IDB_FOLDER_HIDDEN,
   IDB_FILE_HIDDEN,
+  IDB_SYMBOLIC,
   
   0xFFFFFFFF  // last marker
 };
