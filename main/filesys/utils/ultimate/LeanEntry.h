@@ -96,6 +96,8 @@ public:
   CString	m_uid;
   CString	m_entry_crc;
   CString	m_name;
+  BOOL    m_hidden;
+  BOOL    m_undelete;
   //}}AFX_DATA
   
   struct S_LEAN_INODE m_inode;
@@ -122,6 +124,7 @@ protected:
   afx_msg void OnSelchangeExtSize();
   afx_msg void OnAttribute();
   afx_msg void OnCrcUpdate();
+  afx_msg void OnRsvdUpdate();
   afx_msg void OnAccTimeNow();
   afx_msg void OnCreTimeNow();
   afx_msg void OnModTimeNow();

@@ -362,15 +362,15 @@ BOOL CLean::LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CStrin
     
     IsDot = ((name == ".") || (name == ".."));
     
-    switch (cur->type) {
+    switch (cur->type & 0x7) {
       case LEAN_FT_DIR:  // File type: directory
         lcErrorCount += LeanCheckInode(cur->inode, TRUE, TRUE);
         if (!IsDot) {
           sub = (struct S_LEAN_DIRENTRY *) ReadFile(cur->inode, &filesize);
           if (sub) {
-            cs.Format("%s%s (LEAN_FT_DIR)\r\n", path, name);
+            cs.Format("%s%s (LEAN_FT_DIR)\r\n", (LPCTSTR) path, (LPCTSTR) name);
             lcInfo += cs;
-            cs.Format("%s%s/", path, name);
+            cs.Format("%s%s/", (LPCTSTR) path, (LPCTSTR) name);
             LeanCheckDir(sub, filesize, cs);
             free(sub);
             lcDirCount++;
@@ -378,13 +378,13 @@ BOOL CLean::LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CStrin
         }
         break;
       case LEAN_FT_REG: // File type: regular file
-        cs.Format("%s%s (LEAN_FT_REG)\r\n", path, name);
+        cs.Format("%s%s (LEAN_FT_REG)\r\n", (LPCTSTR) path, (LPCTSTR) name);
         lcInfo += cs;
         lcErrorCount += LeanCheckInode(cur->inode, TRUE, TRUE);
         lcFileCount++;
         break;
       case LEAN_FT_LNK: // File type: symbolic link
-        cs.Format("%s%s (LEAN_FT_LNK)\r\n", path, name);
+        cs.Format("%s%s (LEAN_FT_LNK)\r\n", (LPCTSTR) path, (LPCTSTR) name);
         lcInfo += cs;
         lcErrorCount += LeanCheckInode(cur->inode, TRUE, TRUE);
         lcFileCount++;
@@ -393,6 +393,12 @@ BOOL CLean::LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CStrin
       //case LEAN_FT_FRK: // File type: fork
       //  LeanCheckInode(cur->inode, FALSE, TRUE);
       //  break;
+      case LEAN_FT_DELETED: // File type: deleted for undelete
+        cs.Format("%s%s (LEAN_FT_DELETED)\r\n", (LPCTSTR) path, (LPCTSTR) name);
+        lcInfo += cs;
+        lcErrorCount += LeanCheckInode(cur->inode, TRUE, TRUE);
+        lcFileCount++;
+        break;
       case LEAN_FT_MT:  // File type: Empty
         break;
       default:

@@ -126,19 +126,20 @@ struct S_LEAN_INODE {
 };
 
 //attributes:
-#define  LEAN_ATTR_IXOTH          (1 << 0)  // Other: execute permission 
-#define  LEAN_ATTR_IWOTH          (1 << 1)  // Other: write permission 
-#define  LEAN_ATTR_IROTH          (1 << 2)  // Other: read permission 
-#define  LEAN_ATTR_IXGRP          (1 << 3)  // Group: execute permission 
-#define  LEAN_ATTR_IWGRP          (1 << 4)  // Group: write permission 
-#define  LEAN_ATTR_IRGRP          (1 << 5)  // Group: read permission 
-#define  LEAN_ATTR_IXUSR          (1 << 6)  // Owner: execute permission 
-#define  LEAN_ATTR_IWUSR          (1 << 7)  // Owner: write permission 
-#define  LEAN_ATTR_IRUSR          (1 << 8)  // Owner: read permission 
-//       LEAN_ATTR_               (1 << 9)  // reserved
+#define  LEAN_ATTR_IXOTH          (1 <<  0) // Other: execute permission 
+#define  LEAN_ATTR_IWOTH          (1 <<  1) // Other: write permission 
+#define  LEAN_ATTR_IROTH          (1 <<  2) // Other: read permission 
+#define  LEAN_ATTR_IXGRP          (1 <<  3) // Group: execute permission 
+#define  LEAN_ATTR_IWGRP          (1 <<  4) // Group: write permission 
+#define  LEAN_ATTR_IRGRP          (1 <<  5) // Group: read permission 
+#define  LEAN_ATTR_IXUSR          (1 <<  6) // Owner: execute permission 
+#define  LEAN_ATTR_IWUSR          (1 <<  7) // Owner: write permission 
+#define  LEAN_ATTR_IRUSR          (1 <<  8) // Owner: read permission 
+#define  LEAN_ATTR_ISVTX          (1 <<  9) // Other: restrict rename/delete to owner
 #define  LEAN_ATTR_ISUID          (1 << 10) // Other: execute as user id
 #define  LEAN_ATTR_ISGID          (1 << 11) // Other: execute as group id 
-#define  LEAN_ATTR_HIDDEN         (1 << 12) // Don't show in directory listing 
+#define  LEAN_ATTR_AFMT           (7 << 12) // Bit mask to extract the file attributes (the next three items)
+//       LEAN_ATTR_               (1 << 12) // reserved
 #define  LEAN_ATTR_SYSTEM         (1 << 13) // Warn that this is a system file 
 #define  LEAN_ATTR_ARCHIVE        (1 << 14) // File changed since last backup 
 #define  LEAN_ATTR_SYNC_FL        (1 << 15) // Synchronous updates 
@@ -188,11 +189,13 @@ struct S_LEAN_DIRENTRY {
 };                  // 4 to make it 16 bytes for first para.  Not limited to 4 bytes.
 
 // type:
-#define LEAN_FT_MT    0 // File type: Empty
-#define LEAN_FT_REG   1 // File type: regular file
-#define LEAN_FT_DIR   2 // File type: directory
-#define LEAN_FT_LNK   3 // File type: symbolic link
-#define LEAN_FT_FRK   4 // File type: fork
+#define LEAN_FT_FMT     (LEAN_ATTR_IFMT  >> 29) // Mask to get file type
+#define LEAN_FT_MT                          0   // File type: Empty
+#define LEAN_FT_REG     (LEAN_ATTR_IFREG >> 29) // File type: regular file
+#define LEAN_FT_DIR     (LEAN_ATTR_IFDIR >> 29) // File type: directory
+#define LEAN_FT_LNK     (LEAN_ATTR_IFLNK >> 29) // File type: symbolic link
+#define LEAN_FT_DELETED                     5   // File type: marked as deleted
+#define LEAN_FA_HIDDEN                 (1 << 7) // File attribute: hidden
 
 ///////////////////////////////////////////////////////////////////////////////////
 // Journals
@@ -291,7 +294,7 @@ public:
   
   void Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, BOOL IsNewTab);
   BOOL DetectLeanFS(void);
-  BOOL DetectLeanFSOld(void);
+  WORD DetectLeanFSOld(void);
   DWORD GetNewColor(int index);
   
   void ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM parent);
@@ -351,6 +354,7 @@ public:
   DWORD   m_block_size;
   DWORD64 m_tot_blocks;
 
+  BOOL    m_show_hidden;
   BOOL    m_show_del;
   BOOL    m_del_clear;
   BOOL    m_ESs_in_Inode;
@@ -400,6 +404,7 @@ protected:
   afx_msg void OnLeanFreeUpdate();
   afx_msg void OnKillfocusLeanGuid();
   afx_msg void OnGuidCreate();
+  afx_msg void OnShowHidden();
   afx_msg void OnShowDeleted();
   afx_msg void OnEAsInInode();
   afx_msg void OnSaveSuper();

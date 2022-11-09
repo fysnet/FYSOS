@@ -102,6 +102,8 @@ CLeanEntry::CLeanEntry(CWnd* pParent /*=NULL*/)
   m_uid = _T("");
   m_entry_crc = _T("");
   m_name = _T("");
+  m_hidden = 0;
+  m_undelete = 0;
   //}}AFX_DATA_INIT
 }
 
@@ -128,6 +130,8 @@ void CLeanEntry::DoDataExchange(CDataExchange* pDX) {
   DDX_Text(pDX, IDC_ENTRY_UID, m_uid);
   DDX_Text(pDX, IDC_ENTRY_CRC, m_entry_crc);
   DDX_Text(pDX, IDC_ENTRY_NAME, m_name);
+  DDX_Check(pDX, IDC_HIDDEN, m_hidden);
+  DDX_Check(pDX, IDC_UNDELETE, m_undelete);
   //}}AFX_DATA_MAP
 }
 
@@ -137,6 +141,7 @@ BEGIN_MESSAGE_MAP(CLeanEntry, CDialog)
   ON_LBN_SELCHANGE(IDC_EXT_SIZE, OnSelchangeExtSize)
   ON_BN_CLICKED(IDC_ATTRIBUTE, OnAttribute)
   ON_BN_CLICKED(IDC_CRC_UPDATE, OnCrcUpdate)
+  ON_BN_CLICKED(IDC_RSVD_UPDATE, OnRsvdUpdate)
   ON_BN_CLICKED(IDC_ACC_TIME_NOW, OnAccTimeNow)
   ON_BN_CLICKED(IDC_CRE_TIME_NOW, OnCreTimeNow)
   ON_BN_CLICKED(IDC_MOD_TIME_NOW, OnModTimeNow)
@@ -175,6 +180,14 @@ BOOL CLeanEntry::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
     case IDC_MOD_TIME_NOW:
     case IDC_CRE_TIME_NOW:
       strTipText = "Adjust Timestamp";
+      break;
+
+    case IDC_HIDDEN:
+      strTipText = "Mark entry as hidden";
+      break;
+
+    case IDC_UNDELETE:
+      strTipText = "Mark entry deleted (for undelete)";
       break;
 
     case IDEAS:
@@ -220,6 +233,13 @@ BOOL CLeanEntry::OnInitDialog() {
   m_first_ind.Format("%I64i", m_inode.first_indirect);
   m_last_indirect.Format("%I64i", m_inode.last_indirect);
   m_fork.Format("%I64i", m_inode.fork);
+
+  cs.Format("%02X %02X %02X", m_inode.reserved[0], m_inode.reserved[1], m_inode.reserved[2]);
+  SetDlgItemText(IDC_ENTRY_RESVD, (LPCTSTR) cs);
+
+  // set the spin control of the LinksCount for up button goes positive, down button goes negative.
+  CSpinButtonCtrl *spin = (CSpinButtonCtrl *) GetDlgItem(IDC_SPIN1);
+  spin->SetRange(0, UD_MAXVAL);
   
   m_ext_start.ResetContent();
   m_parent->ReadFileExtents(&extents, m_inode_num);
@@ -247,6 +267,8 @@ BOOL CLeanEntry::OnInitDialog() {
             cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + Offset);
             memcpy(m_name.GetBuffer(cur->name_len + 1), cur->name, cur->name_len);
             m_name.ReleaseBuffer(cur->name_len);
+            m_hidden = (cur->type & LEAN_FA_HIDDEN) > 0;
+            m_undelete = (cur->type & 0x7F) == LEAN_FT_DELETED;
             free(root);
           }
         }
@@ -287,20 +309,21 @@ struct S_ATTRIBUTES lean_attrbs[] = {
   { LEAN_ATTR_IXUSR,         LEAN_ATTR_IXUSR,         6, "Owner: execute permission"      , {-1, } },
   { LEAN_ATTR_IWUSR,         LEAN_ATTR_IWUSR,         7, "Owner: write permission"        , {-1, } },
   { LEAN_ATTR_IRUSR,         LEAN_ATTR_IRUSR,         8, "Owner: read permission"         , {-1, } },
-  { LEAN_ATTR_ISUID,         LEAN_ATTR_ISUID,         9, "*Other: execute as user id"     , {10, -1, } },
-  { LEAN_ATTR_ISGID,         LEAN_ATTR_ISGID,        10, "*Other: execute as group id"    , { 9, -1, } },
-  { LEAN_ATTR_HIDDEN,        LEAN_ATTR_HIDDEN,       11, "Don't show in directory listing", {-1, } },
-  { LEAN_ATTR_SYSTEM,        LEAN_ATTR_SYSTEM,       12, "Warn that this is a system file", {-1, } },
-  { LEAN_ATTR_ARCHIVE,       LEAN_ATTR_ARCHIVE,      13, "File changed since last backup" , {-1, } },
-  { LEAN_ATTR_SYNC_FL,       LEAN_ATTR_SYNC_FL,      14, "Synchronous updates"            , {-1, } },
-  { LEAN_ATTR_NOATIME_FL,    LEAN_ATTR_NOATIME_FL,   15, "Don't update last access time"  , {-1, } },
-  { LEAN_ATTR_IMMUTABLE_FL,  LEAN_ATTR_IMMUTABLE_FL, 16, "Don't move file sectors"        , {-1, } },
-  { LEAN_ATTR_PREALLOC,      LEAN_ATTR_PREALLOC,     17, "Keep any preallocated sectors"  , {-1, } },
-  { LEAN_ATTR_EAS_IN_INODE,  LEAN_ATTR_EAS_IN_INODE, 18, "bytes after inode are EA's"     , {-1, } },
-  { LEAN_ATTR_IFREG,         LEAN_ATTR_IFMT,        19, "*File type: regular file"       , {20, 21, 22, -1, } },
-  { LEAN_ATTR_IFDIR,         LEAN_ATTR_IFMT,        20, "*File type: directory"          , {19, 21, 22, -1, } },
-  { LEAN_ATTR_IFLNK,         LEAN_ATTR_IFMT,        21, "*File type: symbolic link"      , {19, 20, 22, -1, } },
-  { LEAN_ATTR_IFFRK,         LEAN_ATTR_IFMT,        22, "*File type: fork"               , {19, 20, 21, -1, } },
+  { LEAN_ATTR_ISVTX,         LEAN_ATTR_ISVTX,         9, "*Other: restrict rename/delete" , {-1, } },
+  { LEAN_ATTR_ISUID,         LEAN_ATTR_ISUID,        10, "*Other: execute as user id"     , {10, -1, } },
+  { LEAN_ATTR_ISGID,         LEAN_ATTR_ISGID,        11, "*Other: execute as group id"    , { 9, -1, } },
+  {        (1 << 12),              (1 << 12),        12, "reserved"                       , {-1, } },
+  { LEAN_ATTR_SYSTEM,        LEAN_ATTR_SYSTEM,       13, "Warn that this is a system file", {-1, } },
+  { LEAN_ATTR_ARCHIVE,       LEAN_ATTR_ARCHIVE,      14, "File changed since last backup" , {-1, } },
+  { LEAN_ATTR_SYNC_FL,       LEAN_ATTR_SYNC_FL,      15, "Synchronous updates"            , {-1, } },
+  { LEAN_ATTR_NOATIME_FL,    LEAN_ATTR_NOATIME_FL,   16, "Don't update last access time"  , {-1, } },
+  { LEAN_ATTR_IMMUTABLE_FL,  LEAN_ATTR_IMMUTABLE_FL, 17, "Don't move file sectors"        , {-1, } },
+  { LEAN_ATTR_PREALLOC,      LEAN_ATTR_PREALLOC,     18, "Keep any preallocated sectors"  , {-1, } },
+  { LEAN_ATTR_EAS_IN_INODE,  LEAN_ATTR_EAS_IN_INODE, 19, "bytes after inode are EA's"     , {-1, } },
+  { LEAN_ATTR_IFREG,         LEAN_ATTR_IFMT,        20, "*File type: regular file"       , {21, 22, 23, -1, } },
+  { LEAN_ATTR_IFDIR,         LEAN_ATTR_IFMT,        21, "*File type: directory"          , {20, 22, 23, -1, } },
+  { LEAN_ATTR_IFLNK,         LEAN_ATTR_IFMT,        22, "*File type: symbolic link"      , {20, 21, 23, -1, } },
+  { LEAN_ATTR_IFFRK,         LEAN_ATTR_IFMT,        23, "*File type: fork"               , {20, 21, 22, -1, } },
   { 0,                            (DWORD) -1,        -1, NULL                             , {-1, } }
 };
 
@@ -343,6 +366,11 @@ void CLeanEntry::OnCrcUpdate() {
   DWORD crc = m_parent->LeanCalcCRC(&m_inode, LEAN_INODE_SIZE);
   m_entry_crc.Format("0x%08X", crc);
   SetDlgItemText(IDC_ENTRY_CRC, m_entry_crc);
+}
+
+void CLeanEntry::OnRsvdUpdate() {
+  memset(m_inode.reserved, 0, 3);
+  SetDlgItemText(IDC_ENTRY_RESVD, "00 00 00");
 }
 
 void CLeanEntry::OnAccTimeNow() {
@@ -576,7 +604,7 @@ void CLeanEntry::OnOK() {
     if (AfxMessageBox("Checksum not correct. Update?", MB_YESNO, 0) == IDYES)
       m_inode.checksum = crc;
   
-  // Save the filename of this entry
+  // Save the filename of this entry (and the new attributes?)
   if (m_hItem) {
     struct S_LEAN_ITEMS *items = (struct S_LEAN_ITEMS *) m_parent->m_dir_tree.GetDataStruct(m_hItem);
     if (items != NULL) {
@@ -608,25 +636,30 @@ void CLeanEntry::OnOK() {
               RootSize += ((new_len - old_len) * 16);
               void *new_root = malloc((size_t) RootSize);
               memcpy(new_root, root, Offset + LEAN_DIRENTRY_NAME);
-
+              
               cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) new_root + Offset);
               memcpy(cur->name, m_name, len);
               cur->rec_len = (BYTE) new_len;
               cur->name_len = len;
-
+              
               if (tail_len > 0)
                 memcpy((BYTE *) new_root + Offset + (new_len * 16), (BYTE *) root + Offset + (old_len * 16), tail_len);
               
               free(root);
               root = (struct S_LEAN_DIRENTRY *) new_root;
             }
-            
+
+            // update the directory type from the attributes
+            // the user could have possibly changed the attributes in the inode, so we need to update the respected values for the directory
+            if (m_undelete)
+              cur->type = LEAN_FT_DELETED;
+            else
+              cur->type = (BYTE) (((m_hidden) ? LEAN_FA_HIDDEN : 0) |
+                                  ((m_inode.attributes & LEAN_ATTR_IFMT) >> 29));
+
             // write the file back to the image
             m_parent->WriteFile(root, &extents, RootSize);
             free(root);
-
-            // refresh the "system"
-            m_parent->Start(m_parent->m_lba, m_parent->m_size, m_parent->m_color, m_parent->m_index, FALSE);
           }
           m_parent->FreeExtentBuffer(&extents);
         }
@@ -639,6 +672,9 @@ void CLeanEntry::OnOK() {
   memcpy(buffer, &m_inode, sizeof(struct S_LEAN_INODE));
   dlg->WriteBlocks(buffer, m_parent->m_lba, m_inode_num, m_parent->m_block_size, 1);
   free(buffer);
+
+  // to refresh the display tree (the user may have updated the filename and/or attribute)
+  m_parent->Start(m_parent->m_lba, m_parent->m_size, m_parent->m_color, m_parent->m_index, FALSE);
 
   CDialog::OnOK();
 }

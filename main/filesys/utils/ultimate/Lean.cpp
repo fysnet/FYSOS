@@ -107,6 +107,7 @@ CLean::CLean() : CPropertyPage(CLean::IDD) {
   m_version = _T("");
   m_journal_lba = _T("");
   m_log_block_size = _T("");
+  m_show_hidden = FALSE;
   m_show_del = FALSE;
   m_del_clear = FALSE;
   m_ESs_in_Inode = FALSE;
@@ -156,7 +157,8 @@ void CLean::DoDataExchange(CDataExchange* pDX) {
   DDX_Text(pDX, IDC_LEAN_VERSION, m_version);
   DDV_MaxChars(pDX, m_version, 16);
   DDX_Text(pDX, IDC_JOURNAL_LBA, m_journal_lba);
-  DDX_Check(pDX, IDC_SHOW_DEL, m_show_del);
+  DDX_Check(pDX, IDC_SHOW_HIDDEN, m_show_hidden);
+  DDX_Check(pDX, IDC_SHOW_DELETED, m_show_del);
   DDX_Check(pDX, IDC_DEL_CLEAR, m_del_clear);
   DDX_Check(pDX, IDC_EAS_IN_INODE, m_ESs_in_Inode);
   //}}AFX_DATA_MAP
@@ -195,7 +197,8 @@ BEGIN_MESSAGE_MAP(CLean, CPropertyPage)
   ON_BN_CLICKED(ID_ERASE, OnErase)
   ON_BN_CLICKED(ID_VIEW_JOURNAL, OnViewJournal)
   ON_BN_CLICKED(ID_JOURNAL_INODE, OnJournalInode)
-  ON_BN_CLICKED(IDC_SHOW_DEL, OnShowDeleted)
+  ON_BN_CLICKED(IDC_SHOW_HIDDEN, OnShowHidden)
+  ON_BN_CLICKED(IDC_SHOW_DELETED, OnShowDeleted)
   ON_BN_CLICKED(IDC_DEL_CLEAR, OnDelClear)
   ON_BN_CLICKED(IDC_EAS_IN_INODE, OnEAsInInode)
   ON_BN_CLICKED(ID_SAVE_SUPER, OnSaveSuper)
@@ -324,6 +327,7 @@ BOOL CLean::OnInitDialog() {
   csBaseSize.Format("Start: %I64i, Size: %I64i", m_lba, m_size);
   SetDlgItemText(IDC_BASE_SIZE_STR, csBaseSize);
 
+  m_show_hidden = AfxGetApp()->GetProfileInt("Settings", "LEANShowHidden", FALSE);
   m_show_del = AfxGetApp()->GetProfileInt("Settings", "LEANShowDel", FALSE);
   m_del_clear = AfxGetApp()->GetProfileInt("Settings", "LEANDelClear", FALSE);
   m_ESs_in_Inode = AfxGetApp()->GetProfileInt("Settings", "LEANEAsInInode", FALSE);
@@ -456,7 +460,7 @@ bool CLean::Format(const BOOL AskForBoot) {
   CLeanFormat format;
   format.m_journal = FALSE;
   format.m_eas_after_inode = FALSE;
-  format.m_pre_alloc_count = (dlg->m_sect_size == 4096) ? (2-1) : (8-1); // 4096-byte blocks use 2 prealloc's, else 8 prealloc's
+  format.m_pre_alloc_count = (dlg->m_sect_size == 4096) ? (4-1) : (8-1); // 4096-byte blocks use 4 prealloc's, else 8 prealloc's
   format.m_block_size = dlg->m_sect_size;
   if (!m_hard_format) {
     //format.m_journal = TRUE;
@@ -532,7 +536,7 @@ bool CLean::Format(const BOOL AskForBoot) {
   struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) (buffer + (m_super_block_loc * m_block_size));
   memset(super, 0, m_block_size);
   super->magic = LEAN_SUPER_MAGIC;
-  super->fs_version = 0x0007;  // 0.7
+  super->fs_version = 0x0008;  // 0.8
   super->log_blocks_per_band = log_band_size;
   super->pre_alloc_count = format.m_pre_alloc_count;
   super->state = (0<<1) | (1<<0);  // clean unmount
@@ -592,13 +596,13 @@ bool CLean::Format(const BOOL AskForBoot) {
     entry = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + LEAN_INODE_SIZE);
   // The "." entry
   entry[0].inode = super->root_start;
-  entry[0].type = LEAN_FT_DIR;
+  entry[0].type = LEAN_FA_HIDDEN | LEAN_FT_DIR;
   entry[0].rec_len = 1;
   entry[0].name_len = 1;
   entry[0].name[0] = '.';
   // The ".." entry
   entry[1].inode = super->root_start;
-  entry[1].type = LEAN_FT_DIR;
+  entry[1].type = LEAN_FA_HIDDEN | LEAN_FT_DIR;
   entry[1].rec_len = 1;
   entry[1].name_len = 2;
   entry[1].name[0] = '.';
@@ -614,7 +618,7 @@ bool CLean::Format(const BOOL AskForBoot) {
     extents.extent_count = 1;
     extents.extent_size[0] = 1 + JOURNAL_SIZE;
     extents.extent_start[0] = m_super.journal;
-    BuildInode(&extents, Size, LEAN_ATTR_HIDDEN | LEAN_ATTR_SYSTEM | LEAN_ATTR_IMMUTABLE_FL | LEAN_ATTR_EAS_IN_INODE);
+    BuildInode(&extents, Size, LEAN_ATTR_SYSTEM | LEAN_ATTR_IMMUTABLE_FL | LEAN_ATTR_EAS_IN_INODE);
     
     BYTE *journal = (BYTE *) calloc(Size, 1);
     struct S_LEAN_JOURNAL *hdr = (struct S_LEAN_JOURNAL *) journal;
@@ -654,18 +658,6 @@ bool CLean::Format(const BOOL AskForBoot) {
     dlg->WriteBlocks(bitmap, m_lba, lba, m_block_size, bitmap_size);
   }
 
-  /*
-  // set all bits in last bitmap that are past end of volume
-  //  we are either at LBA l, or there was only 1 band.
-  int k = (unsigned) ((m_size - lba) / 8);
-  bitmap[k] = (0xFF >> ((m_size - lba) % 8));
-  for (k++; k<dlg->m_block_size; k++)
-    bitmap[k] = 0xFF;
-  if (tot_bands == 1)
-    lba = super->bitmap_start;
-  dlg->WriteBlocks(bitmap, m_lba, lba, m_block_size, bitmap_size);
-  */
-  
   // before we leave, set/clear EAs_in_Inode per format.m_eas_after_inode
   m_ESs_in_Inode = format.m_eas_after_inode;
   CheckDlgButton(IDC_EAS_IN_INODE, format.m_eas_after_inode ? BST_CHECKED : BST_UNCHECKED);
@@ -931,9 +923,26 @@ void CLean::ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM 
     
     IsDot = ((name == ".") || (name == ".."));
     
-    switch (cur->type) {
+    switch (cur->type & LEAN_FT_FMT) {
+      case LEAN_FT_MT:  // File type: Empty
+        break;
+      case LEAN_FT_REG: // File type: regular file
+        if (cur->type & LEAN_FA_HIDDEN) {
+          if (!m_show_hidden)
+            break;
+          hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE_HIDDEN, IMAGE_FILE_HIDDEN, parent);
+        } else
+          hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
+        if (hItem == NULL) { m_too_many = TRUE; return; }
+        SaveItemInfo(hItem, cur->inode, 0, ITEM_IS_FILE, (DWORD) ((BYTE *) cur - (BYTE *) root), TRUE);
+        break;
       case LEAN_FT_DIR:  // File type: directory
-        hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
+        if (cur->type & LEAN_FA_HIDDEN) {
+          if (!m_show_hidden)
+            break;
+          hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER_HIDDEN, IMAGE_FOLDER_HIDDEN, parent);
+        } else
+          hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
         if (hItem == NULL) { m_too_many = TRUE; return; }
         sub = (struct S_LEAN_DIRENTRY *) ReadFile(cur->inode, &filesize);
         SaveItemInfo(hItem, cur->inode, filesize, ITEM_IS_FOLDER, (DWORD) ((BYTE *) cur - (BYTE *) root), !IsDot);
@@ -941,11 +950,6 @@ void CLean::ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM 
           ParseDir(sub, filesize, hItem);
           free(sub);
         }
-        break;
-      case LEAN_FT_REG: // File type: regular file
-        hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
-        if (hItem == NULL) { m_too_many = TRUE; return; }
-        SaveItemInfo(hItem, cur->inode, 0, ITEM_IS_FILE, (DWORD) ((BYTE *) cur - (BYTE *) root), TRUE);
         break;
       case LEAN_FT_LNK: // File type: symbolic link
         name += " (Link)";
@@ -955,12 +959,14 @@ void CLean::ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM 
         break;
       // should not encounter a fork.  A fork should not be referenced in a directory
       //case LEAN_FT_FRK: // File type: fork
-      //  name += " (Fork)";
-      //  hItem = m_dir_tree.Insert(name, ITEM_IS_FORK, IMAGE_FORKED, IMAGE_FORKED, parent);
-      //  if (hItem == NULL) { m_too_many = TRUE; return; }
-      //  SaveItemInfo(hItem, cur->inode, 0, 0, (DWORD) ((BYTE *) cur - (BYTE *) root), FALSE);
       //  break;
-      case LEAN_FT_MT:  // File type: Empty
+      case LEAN_FT_DELETED:
+        if (m_show_del) {
+          name += " (Deleted)";
+          hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, parent);
+          if (hItem == NULL) { m_too_many = TRUE; return; }
+          SaveItemInfo(hItem, cur->inode, 0, ITEM_IS_FILE, (DWORD) ((BYTE *) cur - (BYTE *) root), FALSE);
+        }
         break;
       default:
         name.Format("Unknown directory entry type found: %i\r\nStopping...", cur->type);
@@ -1211,8 +1217,8 @@ BOOL CLean::DetectLeanFS(void) {
     if (super->state & ~0x3)
       continue;
     
-    // must be version 0.7 (we don't support backward compatibility)
-    if (super->fs_version != 0x0007)
+    // must be version 0.8 (we don't support backward compatibility)
+    if (super->fs_version != 0x0008)
       continue;
     
     // else we have a valid LEAN FS super
@@ -1229,7 +1235,7 @@ BOOL CLean::DetectLeanFS(void) {
 
 // this assumes that the sector size is 512, since that is all
 //  the old specs allowed.
-BOOL CLean::DetectLeanFSOld(void) {
+WORD CLean::DetectLeanFSOld(void) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE buffer[MAX_SECT_SIZE];
   struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) buffer;
@@ -1264,18 +1270,20 @@ BOOL CLean::DetectLeanFSOld(void) {
     if (super->state & ~0x3)
       continue;
     
-    // must be at least version 0.6
-    if (super->fs_version != 0x0006)
+    // must be at least version 0.6 or 0.7
+    if ((super->fs_version < 0x0006) || (super->fs_version > 0x0007))
       continue;
     
     // else we have a valid LEAN FS super
     m_super_block_loc = sector;
     memcpy(&m_super, super, sizeof(struct S_LEAN_SUPER));
-    return TRUE;
+    
+    // return the version we found (0.6 or 0.7)
+    return super->fs_version;
   }
   
   // if we checked lba 1 - 32 and didn't find anything, no lean fs found
-  return FALSE;
+  return 0;
 }
 
 DWORD CLean::LeanCalcCRC(const void *data, unsigned count) {
@@ -1760,9 +1768,15 @@ BOOL CLean::InsertFolder(DWORD64 Inode, CString csName, CString csPath) {
   return b;
 }
 
+// the user change the status of the "Show Hidden" Check box
+void CLean::OnShowHidden() {
+  AfxGetApp()->WriteProfileInt("Settings", "LEANShowHidden", m_show_hidden = IsDlgButtonChecked(IDC_SHOW_HIDDEN));
+  Start(m_lba, m_size, m_color, m_index, FALSE);
+}
+
 // the user change the status of the "Show Deleted" Check box
 void CLean::OnShowDeleted() {
-  AfxGetApp()->WriteProfileInt("Settings", "LEANShowDel", m_show_del = IsDlgButtonChecked(IDC_SHOW_DEL));
+  AfxGetApp()->WriteProfileInt("Settings", "LEANShowDel", m_show_del = IsDlgButtonChecked(IDC_SHOW_DELETED));
   Start(m_lba, m_size, m_color, m_index, FALSE);
 }
 
@@ -1795,6 +1809,7 @@ void CLean::OnSaveSuper() {
 
   // make sure the bitmap is marked for this block
   MarkBlock(m_super.backup_super, TRUE);
+  m_free_block_cnt = CalcFreeBlocks();
 
   AfxMessageBox("Backup Superblock stored.");
 }

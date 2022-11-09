@@ -290,6 +290,7 @@
 #define IDC_S_CREATION_B                1141
 #define IDC_DEL_TIME_NOW                1142
 #define IDC_S_LAST_MOD_B                1142
+#define IDC_RSVD_UPDATE                 1142
 #define IDC_S_LAST_MOD_REC_B            1143
 #define IDC_S_LAST_ACCESS_B             1144
 #define IDC_F_CREATION_B                1145
@@ -994,6 +995,11 @@
 #define IDC_SYMBOL_NAME                 1641
 #define IDC_SYMBOL_NAME2                1642
 #define IDC_SYMBOL_DATA                 1642
+#define IDC_SHOW_HIDDEN                 1642
+#define IDC_HIDDEN                      1643
+#define IDC_SHOW_DELETED                1643
+#define IDC_UNDELETE                    1644
+#define IDC_SPIN1                       1645
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
@@ -1015,7 +1021,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        204
 #define _APS_NEXT_COMMAND_VALUE         32787
-#define _APS_NEXT_CONTROL_VALUE         1642
+#define _APS_NEXT_CONTROL_VALUE         1646
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
