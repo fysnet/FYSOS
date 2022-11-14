@@ -32,7 +32,7 @@ This uses up space in the executable as well as limiting the count of partitions
 - [ ] The current code release is for 64-bit Windows only.  (I will periodically bring the 32-bit version up to date. See below for the reason.)
 
 ## To Build
-- [X] 64-bit Windows: Using Microsoft Visual Studio (2019), create an empty workspace.  Add all of the files in this folder and then the 'res' folder.  Add the _WIN64 definition to your resource settings. Rebuild Solution.
+- [X] 64-bit Windows: Using Microsoft Visual Studio (2019), create an empty workspace.  Add all of the files in this folder and then the 'res' folder. Build Solution.
 - [X] <strike>32-bit Windows: Using Microsoft Visual C++ 6.0, create an empty workspace.  Add all of the files in this folder and then the 'res' folder.  Rebuild All. Three might be a few other small changes to make it compile on 32-bit MSVC++ 6.0, after all MSVC++ 6.0 is copyrighted 1994-98 :-)</strike> The drive I had WinXP and this compiler finally crashed.  It was at least a 25 year old drive.  I have another WinXP system, but I think I will just abandon trying to keep the 32-bit version up to date.  Maybe every once in a while I will compile it and upload it.  If you absolutely need the 32-bit version, let me know and I will see what I can do.
 - [ ] I have not built with any other compiler.  I am guessing that someone could build using GCC for Windows, and possibly GCC and mingw (?) for Linux?  However, I do not use Linux or GCC (for Windows), and have no idea if it is even possible.
 
