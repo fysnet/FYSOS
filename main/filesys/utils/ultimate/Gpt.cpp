@@ -768,7 +768,7 @@ void CGpt::OnGPTTotalCheck() {
               " allowing for 16384 bytes or 128 entries\r\n"
               " Current Entry Offset is %I64i\r\n", hdr->first_usable - 32, hdr->entry_offset);
     error_cnt++;
-  } else if ((dlg->m_sect_size == 4096) && (hdr->last_usable > (hdr->first_usable - 4))) {
+  } else if ((dlg->m_sect_size == 4096) && (hdr->entry_offset > (hdr->first_usable - 4))) {
     cs.Format("4096-byte sectors:\r\n"
               "*The Entry Offset LBA must be no more than %I64i\r\n"
               " allowing for 16384 bytes or 128 entries\r\n"
