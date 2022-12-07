@@ -66,15 +66,14 @@
 //
 
 // these must stay in the order matching MyImageList[]
-#define IMAGE_FOLDER  0
-#define IMAGE_FILE    1
-#define IMAGE_DELETE  2
-#define IMAGE_FORKED  3
-#define IMAGE_LABEL   4
-#define IMAGE_DEVICE  5
+#define IMAGE_FOLDER    0
+#define IMAGE_FILE      1
+#define IMAGE_DELETE    2
+#define IMAGE_SYMBOLIC  3
+#define IMAGE_LABEL     4
+#define IMAGE_DEVICE    5
 #define IMAGE_FOLDER_HIDDEN  6
 #define IMAGE_FILE_HIDDEN    7
-#define IMAGE_SYMBOLIC    8
 
 class CMyImageList : public CImageList {
   DECLARE_DYNCREATE(CMyImageList)

@@ -143,9 +143,9 @@ void CLean::OnLeanCheck() {
     lcInfo += cs;
   }
   
-  // must be version 0.7
-  if (super->fs_version < 0x0007) {
-    cs.Format("Version must be version 0.7. (0x%08X)\r\n", super->fs_version);
+  // must be version 1.0
+  if (super->fs_version < 0x0100) {
+    cs.Format("Version must be version 1.0. (0x%08X)\r\n", super->fs_version);
     lcInfo += cs;
   }
   
@@ -215,6 +215,12 @@ void CLean::OnLeanCheck() {
   if (super->bitmap_start <= m_super_block_loc) {
     cs.Format("Root Start Location is %I64i, should be at least %I64i.\r\n", super->root_start, m_super_block_loc + 1);
     lcInfo += cs;
+    lcErrorCount++;
+  }
+
+  // the capabilities register
+  if (super->capabilities & ~1) {
+    lcInfo += "Reserved bits in the capabilities member must be zeros...\r\n";
     lcErrorCount++;
   }
   
@@ -356,9 +362,7 @@ BOOL CLean::LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CStrin
       break;
     
     // retrieve the name.
-    name.Empty();
-    for (int i=0; i<cur->name_len; i++)
-      name += cur->name[i];
+    GetName(cur->name, name, cur->name_len, m_encoding);
     
     IsDot = ((name == ".") || (name == ".."));
     
@@ -435,7 +439,7 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_t
   }
   
   // check to see if crc is correct
-  dword = LeanCalcCRC(inode, LEAN_INODE_SIZE);
+  dword = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
   if (inode->checksum != dword) {
     cs.Format("Inode %I64i: CRC value is not 0x%08X (0x%08X)\r\n", block, dword, inode->checksum);
     lcInfo += cs;
@@ -453,7 +457,8 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_t
     LeanCheckAddInode(block);
   
   // the extent count must be greater than zero and less than or equal to LEAN_INODE_EXTENT_CNT
-  if ((inode->extent_count == 0) || (inode->extent_count > LEAN_INODE_EXTENT_CNT)) {
+  const int max_extents = (m_use_extended_extents) ? LEAN_INODE_EXTENT_CNT_EXT : LEAN_INODE_EXTENT_CNT;
+  if ((inode->extent_count == 0) || (inode->extent_count > max_extents)) {
     cs.Format("Inode %I64i: Illegal Extent Count value %i\r\n", block, inode->extent_count);
     lcInfo += cs;
     errors++;
@@ -472,7 +477,7 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_t
   }
   
   // if any bit from 20 to 28 in the attributes member is non-zero, give error
-  if (inode->attributes & (0x1FF << 20)) {
+  if ((inode->attributes & (0x1FF << 20)) || (inode->attributes & (1 << 12))) {
     cs.Format("Inode %I64i: Reserved bits in attribute are non-zero (0x%08X)\r\n", block, inode->attributes);
     lcInfo += cs;
     lcDirCount++;
@@ -504,7 +509,7 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_t
   }
   
   // check that all blocks in the extent(s) are marked used
-  cnt = LeanCheckExtents(&inode->extent_start[0], (unsigned int) inode->extent_count, LEAN_INODE_EXTENT_CNT);
+  cnt = LeanCheckExtents(&inode->extent_start[0], (unsigned int) inode->extent_count, max_extents, TRUE);
   if (cnt > 0) {
     cs.Format("Inode %I64i: Found %i used blocks marked free in bitmap(s)\r\n", block, cnt);
     lcInfo += cs;
@@ -512,8 +517,9 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_t
   }
 
   //  Check that the actual count of blocks used (from direct extents and indirect extents) match inode->block_count
-  for (i=0; (i<LEAN_INODE_EXTENT_CNT) && (i<inode->extent_count); i++)
-    blocks_used += inode->extent_size[i];
+  DWORD32 *extent_size = (DWORD32 *) ((BYTE *) &inode->extent_start[0] + (max_extents * sizeof(DWORD64)));
+  for (i=0; (i<max_extents) && (i<inode->extent_count); i++)
+    blocks_used += extent_size[i];
   if (inode->block_count != (blocks_used + qword)) {
     cs.Format("Inode %I64i: Blocks Used Count (%I64i) doesn't match Inode (%I64i)\r\n", block, blocks_used + qword, inode->block_count);
     lcInfo += cs;
@@ -560,8 +566,9 @@ int CLean::LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count,
   CString cs;
   DWORD dword, return_count = 0;
   DWORD64 prev = 0, block_count = 0;
-  int extent_max = (m_block_size - LEAN_INDIRECT_SIZE) / 12;  // max count of extents an indirect can have
-  int m_reserved2_size = m_block_size - LEAN_INDIRECT_SIZE - (extent_max * 12); // a count (if any) of bytes after the last indirect (a block size of 4096 will have a few)
+  const unsigned extent_size = (m_use_extended_extents) ? 16 : 12;
+  int extent_max = (m_block_size - LEAN_INDIRECT_SIZE) / extent_size;  // max count of extents an indirect can have
+  int m_reserved2_size = m_block_size - LEAN_INDIRECT_SIZE - (extent_max * extent_size); // a count (if any) of bytes after the last indirect (a block size of 4096 will have a few)
   
   while ((block != 0) && (errors == 0)) {
     // read in the indirect
@@ -575,7 +582,7 @@ int CLean::LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count,
     }
     
     // check to see if crc is correct
-    dword = LeanCalcCRC(indirect, m_block_size);
+    dword = LeanCalcCRC(indirect, m_block_size, TRUE);
     if (indirect->checksum != dword) {
       cs.Format("Indirect %I64i: CRC value is not 0x%08X (0x%08X)\r\n", block, dword, indirect->checksum);
       lcInfo += cs;
@@ -612,7 +619,7 @@ int CLean::LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count,
       block_count += count;
 
       // check that all blocks in the extent(s) are marked used
-      cnt = LeanCheckExtents((BYTE *) indirect + LEAN_INDIRECT_SIZE, (unsigned int) indirect->extent_count, extent_max);
+      cnt = LeanCheckExtents((BYTE *) indirect + LEAN_INDIRECT_SIZE, (unsigned int) indirect->extent_count, extent_max, FALSE);
       if (cnt > 0) {
         cs.Format("Indirect %I64i: Found %i used blocks marked free in bitmap(s)\r\n", block, cnt);
         lcInfo += cs;
@@ -642,7 +649,7 @@ int CLean::LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count,
     }
 
     // NoError: Simply display if the reserved areas are not zero
-    BYTE *resv2 = buffer + LEAN_INDIRECT_SIZE + (extent_max * 12);
+    BYTE *resv2 = buffer + LEAN_INDIRECT_SIZE + (extent_max * extent_size);
     if ((indirect->reserved0[0] != 0) || (indirect->reserved0[1] != 0) || (indirect->reserved1 != 0) ||
        ((m_reserved2_size > 0) && !IsBufferEmpty(resv2, m_reserved2_size))) {
       cs.Format("Indirect %I64i: One or more reserved areas are not zero\r\n", block);
@@ -666,13 +673,14 @@ int CLean::LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count,
 }
 
 // checks a set of extents and returns the count of blocks used that are marked free in the bitmap(s)
-int CLean::LeanCheckExtents(void *extents, unsigned int count, unsigned int extent_max) {
+int CLean::LeanCheckExtents(void *extents, unsigned int count, unsigned int extent_max, const BOOL is_inode) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE *bitmap = NULL;
   DWORD last_band = 0xFFFFFFFF, band;
   DWORD64 lba, bitmap_block = 0;
   unsigned int i, extent;
   int fnd_count = 0;  // count of blocks used but marked free
+  CString cs;
   
   const DWORD64 band_size = ((DWORD64) 1 << m_super.log_blocks_per_band); // blocks per band
   const unsigned bitmap_size = (unsigned) (band_size >> 12);     // blocks per bitmap
@@ -683,6 +691,7 @@ int CLean::LeanCheckExtents(void *extents, unsigned int count, unsigned int exte
   // point to the extent
   DWORD64 *extent_start = (DWORD64 *) extents;
   DWORD32 *extent_size = (DWORD32 *) ((BYTE *) extents + (extent_max * sizeof(DWORD64)));
+  DWORD32 *extent_crc = (DWORD32 *) ((BYTE *) extents + (extent_max * (sizeof(DWORD64) + sizeof(DWORD32))));
 
   for (extent=0; extent<count; extent++) {
     for (i=0; i<extent_size[extent]; i++) {
@@ -700,6 +709,16 @@ int CLean::LeanCheckExtents(void *extents, unsigned int count, unsigned int exte
       unsigned bit = block_in_this_band % 8;
       if (!(bitmap[byte] & (1 << bit)))
         fnd_count++;
+    }
+    
+    // check the CRC of the extent
+    if (m_use_extended_extents) {
+      DWORD crc = LeanCalcExtentCRC(extent_start[extent], extent_size[extent], is_inode && (extent == 0));
+      if (extent_crc[extent] != crc) {
+        cs.Format("Inode %I64i: Extent Index %i: CRC error 0x%08X: Should be 0x%08X.\r\n", extent_start[0], extent, extent_crc[extent], crc);
+        lcInfo += cs;
+        lcErrorCount++;
+      }
     }
   }
 

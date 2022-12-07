@@ -814,39 +814,11 @@ int CImageBar::DetectExt2(void *buffer, const DWORD64 Size, const unsigned sect_
   return FS_EXT2;
 }
 
-// TODO: After a while, delete this check, along with the code in lean.cpp...
 int CImageBar::DetectLean(DWORD64 lba, const unsigned sect_size) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE buffer[MAX_SECT_SIZE];
-  struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) buffer;
   CLean Lean;
-  WORD version;
 
   Lean.m_lba = lba;
 
-  // first check for an older version
-  version = Lean.DetectLeanFSOld();
-  if (version == 0x0006) {
-    if (AfxMessageBox("Found version 0.6 of Lean. Update?\nWill assume 512-byte blocks!", MB_YESNO, 0) == IDYES) {
-      dlg->ReadFromFile(buffer, lba + Lean.m_super_block_loc, 1);
-      // In theory, only the version and the block size needs to be updated.
-      // everything else should be the same, as long as the old version used 512-byte sector sizes.
-      super->fs_version = 0x0007;
-      super->log_block_size = 9;
-      super->checksum = Lean.LeanCalcCRC(buffer, 512);
-      dlg->WriteToFile(buffer, lba + Lean.m_super_block_loc, 1);
-    } else
-      return -1;
-  } else if (version == 0x0007) {
-    if (AfxMessageBox("Found version 0.7 of Lean. Update?", MB_YESNO, 0) == IDYES) {
-      dlg->ReadFromFile(buffer, lba + Lean.m_super_block_loc, 1);
-      // In theory, only the version number needs to be updated.  The rest will "fix" itself.
-      super->fs_version = 0x0008;
-      super->checksum = Lean.LeanCalcCRC(buffer, (1 << super->log_block_size));
-      dlg->WriteToFile(buffer, lba + Lean.m_super_block_loc, 1);
-    }
-  }
-  
   return (Lean.DetectLeanFS()) ? FS_LEAN : -1;
 }
 

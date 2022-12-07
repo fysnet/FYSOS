@@ -102,9 +102,12 @@ CLeanEntry::CLeanEntry(CWnd* pParent /*=NULL*/)
   m_uid = _T("");
   m_entry_crc = _T("");
   m_name = _T("");
+  m_rec_len = _T("");
+  m_name_len = _T("");
   m_hidden = 0;
   m_undelete = 0;
   //}}AFX_DATA_INIT
+  m_force_fork = FALSE;
 }
 
 void CLeanEntry::DoDataExchange(CDataExchange* pDX) {
@@ -112,6 +115,7 @@ void CLeanEntry::DoDataExchange(CDataExchange* pDX) {
   //{{AFX_DATA_MAP(CLeanEntry)
   DDX_Control(pDX, IDC_EXT_START, m_ext_start);
   DDX_Control(pDX, IDC_EXT_SIZE, m_ext_size);
+  DDX_Control(pDX, IDC_EXT_CRC, m_ext_crc);
   DDX_Text(pDX, IDC_ENTRY_ACC_TIME, m_acc_time);
   DDX_Text(pDX, IDC_ENTRY_ATTRBS, m_attribs);
   DDX_Text(pDX, IDC_ENTRY_CRE_TIME, m_cre_time);
@@ -129,6 +133,8 @@ void CLeanEntry::DoDataExchange(CDataExchange* pDX) {
   DDX_Text(pDX, IDC_ENTRY_SECT_COUNT, m_block_count);
   DDX_Text(pDX, IDC_ENTRY_UID, m_uid);
   DDX_Text(pDX, IDC_ENTRY_CRC, m_entry_crc);
+  DDX_Text(pDX, IDC_ENTRY_REC_LEN, m_rec_len);
+  DDX_Text(pDX, IDC_ENTRY_NAME_LEN, m_name_len);
   DDX_Text(pDX, IDC_ENTRY_NAME, m_name);
   DDX_Check(pDX, IDC_HIDDEN, m_hidden);
   DDX_Check(pDX, IDC_UNDELETE, m_undelete);
@@ -139,6 +145,7 @@ BEGIN_MESSAGE_MAP(CLeanEntry, CDialog)
   //{{AFX_MSG_MAP(CLeanEntry)
   ON_LBN_SELCHANGE(IDC_EXT_START, OnSelchangeExtStart)
   ON_LBN_SELCHANGE(IDC_EXT_SIZE, OnSelchangeExtSize)
+  ON_LBN_SELCHANGE(IDC_EXT_CRC, OnSelchangeExtCrc)
   ON_BN_CLICKED(IDC_ATTRIBUTE, OnAttribute)
   ON_BN_CLICKED(IDC_CRC_UPDATE, OnCrcUpdate)
   ON_BN_CLICKED(IDC_RSVD_UPDATE, OnRsvdUpdate)
@@ -212,6 +219,7 @@ BOOL CLeanEntry::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
 BOOL CLeanEntry::OnInitDialog() {
   CDialog::OnInitDialog();
 
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   struct S_LEAN_BLOCKS extents;
   CString cs;
   unsigned int i;
@@ -236,20 +244,28 @@ BOOL CLeanEntry::OnInitDialog() {
 
   cs.Format("%02X %02X %02X", m_inode.reserved[0], m_inode.reserved[1], m_inode.reserved[2]);
   SetDlgItemText(IDC_ENTRY_RESVD, (LPCTSTR) cs);
-
+  
   // set the spin control of the LinksCount for up button goes positive, down button goes negative.
   CSpinButtonCtrl *spin = (CSpinButtonCtrl *) GetDlgItem(IDC_SPIN1);
   spin->SetRange(0, UD_MAXVAL);
   
+  const unsigned max_extents = (m_parent->m_use_extended_extents) ? LEAN_INODE_EXTENT_CNT_EXT : LEAN_INODE_EXTENT_CNT;
   m_ext_start.ResetContent();
-  m_parent->ReadFileExtents(&extents, m_inode_num);
-  for (i=0; i<m_inode.extent_count && i<LEAN_INODE_EXTENT_CNT; i++) {
-    cs.Format("%I64i", extents.extent_start[i]);
-    m_ext_start.AddString(cs);
-    cs.Format("%i", extents.extent_size[i]);
-    m_ext_size.AddString(cs);
+  m_ext_size.ResetContent();
+  m_ext_crc.ResetContent();
+  if (m_parent->ReadFileExtents(&extents, m_inode_num) > 0) {
+    for (i=0; i<m_inode.extent_count && i<max_extents; i++) {
+      cs.Format("%I64i", extents.extent_start[i]);
+      m_ext_start.AddString(cs);
+      cs.Format("%i", extents.extent_size[i]);
+      m_ext_size.AddString(cs);
+      if (m_parent->m_use_extended_extents) {
+        cs.Format("0x%08X", extents.extent_crc[i]);
+        m_ext_crc.AddString(cs);
+      }
+    }
+    m_parent->FreeExtentBuffer(&extents);
   }
-  m_parent->FreeExtentBuffer(&extents);
   
   // Get the filename of this entry
   if (m_hItem) {
@@ -265,8 +281,9 @@ BOOL CLeanEntry::OnInitDialog() {
           root = (struct S_LEAN_DIRENTRY *) m_parent->ReadFile(items->Inode, &RootSize);
           if (root) {
             cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + Offset);
-            memcpy(m_name.GetBuffer(cur->name_len + 1), cur->name, cur->name_len);
-            m_name.ReleaseBuffer(cur->name_len);
+            m_rec_len.Format("%i bytes", cur->rec_len * 16);
+            m_name_len.Format("%i chars", cur->name_len);
+            m_parent->GetName(cur->name, m_name, cur->name_len, m_parent->m_encoding);
             m_hidden = (cur->type & LEAN_FA_HIDDEN) > 0;
             m_undelete = (cur->type & 0x7F) == LEAN_FT_DELETED;
             free(root);
@@ -274,11 +291,18 @@ BOOL CLeanEntry::OnInitDialog() {
         }
       }
     }
-  } else
+  } else {
+    GetDlgItem(IDC_ENTRY_REC_LEN)->EnableWindow(FALSE);
+    GetDlgItem(IDC_ENTRY_NAME_LEN)->EnableWindow(FALSE);
     GetDlgItem(IDC_ENTRY_NAME)->EnableWindow(FALSE);
+  }
   
   // if there are no indirects, don't enable the button
   GetDlgItem(IDINDIRECTS)->EnableWindow(m_inode.first_indirect != 0);
+  
+  // if extended extents is not used, disable the listbox
+  GetDlgItem(IDC_EXT_CRC)->ShowWindow(m_parent->m_use_extended_extents);
+  GetDlgItem(IDC_EXT_CRC)->SetFont(&dlg->m_DumpFont);
 
   // send to the dialog
   UpdateData(FALSE);
@@ -292,10 +316,17 @@ BOOL CLeanEntry::OnInitDialog() {
 
 void CLeanEntry::OnSelchangeExtStart() {
   m_ext_size.SetCurSel(m_ext_start.GetCurSel());
+  m_ext_crc.SetCurSel(m_ext_start.GetCurSel());
 }
 
 void CLeanEntry::OnSelchangeExtSize() {
   m_ext_start.SetCurSel(m_ext_size.GetCurSel());
+  m_ext_crc.SetCurSel(m_ext_size.GetCurSel());
+}
+
+void CLeanEntry::OnSelchangeExtCrc() {
+  m_ext_start.SetCurSel(m_ext_crc.GetCurSel());
+  m_ext_size.SetCurSel(m_ext_crc.GetCurSel());
 }
 
 struct S_ATTRIBUTES lean_attrbs[] = {
@@ -363,7 +394,7 @@ void CLeanEntry::OnCrcUpdate() {
   m_inode.last_indirect = convert64(m_last_indirect);
   m_inode.fork = convert64(m_fork);
   
-  DWORD crc = m_parent->LeanCalcCRC(&m_inode, LEAN_INODE_SIZE);
+  DWORD crc = m_parent->LeanCalcCRC(&m_inode, LEAN_INODE_SIZE, TRUE);
   m_entry_crc.Format("0x%08X", crc);
   SetDlgItemText(IDC_ENTRY_CRC, m_entry_crc);
 }
@@ -414,26 +445,28 @@ void CLeanEntry::OnSchTimeNow() {
 }
 
 // load and display the Inode's EAs
+// We use the 'Implementation Specific' field in the signature dword to store a type
+//  so that we can display and use this type within this app.
 void CLeanEntry::OnEas() {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE *buffer = (BYTE *) calloc(m_parent->m_block_size, 1);
   DWORD64 Size = 0, More;
   BYTE *p;
   int pos, len, buff_len, i;
+
+  // Read in the whole Inode Block
+  struct S_LEAN_INODE *inode_buf = (struct S_LEAN_INODE *) malloc(m_parent->m_block_size);
+  dlg->ReadBlocks(inode_buf, m_parent->m_lba, m_inode_num, m_parent->m_block_size, 1);
   
   // does the inode contain the EA's
-  if (m_inode.attributes & LEAN_ATTR_EAS_IN_INODE) {
-    // Read in the whole Inode Sector
-    void *inode_buf = malloc(m_parent->m_block_size);
-    dlg->ReadBlocks(inode_buf, m_parent->m_lba, m_inode.extent_start[0], m_parent->m_block_size, 1);
-    Size = (m_parent->m_block_size - sizeof(struct S_LEAN_INODE));
-    memcpy(buffer, (BYTE *) inode_buf + sizeof(struct S_LEAN_INODE), (size_t) Size);
-    free(inode_buf);
+  if (inode_buf->attributes & LEAN_ATTR_EAS_IN_INODE) {
+    Size = (m_parent->m_block_size - LEAN_INODE_SIZE);
+    memcpy(buffer, (BYTE *) inode_buf + LEAN_INODE_SIZE, (size_t) Size);
   }
   
   // are there any (more) in the fork?
-  if (m_inode.fork > 0) {
-    p = (BYTE *) m_parent->ReadFile(m_inode.fork, &More);
+  if (inode_buf->fork > 0) {
+    p = (BYTE *) m_parent->ReadFile(inode_buf->fork, &More);
     if (p) {
       buffer = (BYTE *) realloc(buffer, (size_t) (Size + More));
       memcpy(buffer + Size, p, (size_t) More);
@@ -442,35 +475,60 @@ void CLeanEntry::OnEas() {
     Size += More;
   }
   
+  // All of the Extended Attributes are now in 'buffer' with 'Size' bytes in length
+
   // retrieve the items
   p = buffer;
-  DWORD dword;  // NNVVVVVV where NN = name length, VVVVVV = length of attribute, in bytes
-  struct S_EA_STRUCT ea_struct[MAX_EA_STRUCT_ENTRIES];  // first MAX_EA_STRUCT_ENTRIES (can't allocate it because of the CStrings)
+  DWORD dword;  // NNRVVVVV where NN = name length, R= type, and VVVVV = length of attribute, in bytes
+
+  // allocate the items we use (including constructing the CStrings)
+  struct S_EA_STRUCT *ea_struct = (struct S_EA_STRUCT *) calloc(MAX_EA_STRUCT_ENTRIES * sizeof(struct S_EA_STRUCT), 1);
+  if (ea_struct == NULL) {
+    AfxMessageBox("Not enough memory"); // Kind of redundant. If we don't have enough memory, Windows won't be able to create a MESSAGE_BOX anyway...
+    free(buffer);
+    free(inode_buf);
+    return;
+  }
+  // initialize the CString csName in the allocated memory above
+  for (i=0; i<MAX_EA_STRUCT_ENTRIES; i++) {
+#ifdef _WIN64
+    CString::Construct(&ea_struct[i].csName);
+#else
+    ea_struct[i].csName.Init();
+#endif // _WIN64
+  }
+
   int EntryCount = 0;
+  DWORD NameLen;
   while (p < (buffer + Size)) {
     dword = * (DWORD *) p;
-    ea_struct[EntryCount].NameLen = (dword & 0xFF000000) >> 24;
-    ea_struct[EntryCount].AttribLen = (dword & 0x00FFFFFF);
-    len = sizeof(DWORD) + (((ea_struct[EntryCount].NameLen + ea_struct[EntryCount].AttribLen) + 3) & ~3);
-    // if NN == 0, this is an empty entry and VVVVVV = length of whole entry EXCLUDING dword header
-    if (ea_struct[EntryCount].NameLen > 0) {
-      memcpy(ea_struct[EntryCount].csName.GetBuffer(ea_struct[EntryCount].NameLen + 1), &p[4], ea_struct[EntryCount].NameLen);
-      ea_struct[EntryCount].csName.ReleaseBuffer(ea_struct[EntryCount].NameLen);
+    NameLen = (dword & 0xFF000000) >> 24;
+    ea_struct[EntryCount].Type = (BYTE) ((dword & 0x00F00000) >> 20);
+    ea_struct[EntryCount].AttribLen = (dword & 0x000FFFFF);
+    len = 0;
+
+    // if NN == 0, this is an empty entry and VVVVV = length of whole entry EXCLUDING dword header
+    if (NameLen > 0) {
+      m_parent->GetName(&p[4], ea_struct[EntryCount].csName, NameLen, m_parent->m_encoding);
+      len = m_parent->GetNameLen(ea_struct[EntryCount].csName, m_parent->m_encoding);
       if (ea_struct[EntryCount].AttribLen > 0) {
         if (ea_struct[EntryCount].AttribLen > MAX_EA_STRUCT_DATA_SIZE) {
           AfxMessageBox("Entry has more than MAX_EA_STRUCT_DATA_SIZE bytes in data");
           ea_struct[EntryCount].AttribLen = MAX_EA_STRUCT_DATA_SIZE;
         }
-        memcpy(ea_struct[EntryCount].Data, &p[4] + ea_struct[EntryCount].NameLen, ea_struct[EntryCount].AttribLen);
+        memcpy(ea_struct[EntryCount].Data, &p[4] + len, ea_struct[EntryCount].AttribLen);
       }
+      len += ea_struct[EntryCount].AttribLen;
       if (++EntryCount == MAX_EA_STRUCT_ENTRIES) {
         AfxMessageBox("We only support up to MAX_EA_STRUCT_ENTRIES entries...");
         break;
       }
     } else if (ea_struct[EntryCount].AttribLen == 0)
       break;
-    
-    p += len;
+    else
+      len = ea_struct[EntryCount].AttribLen;
+
+    p += (sizeof(DWORD) + len + 3) & ~3;
   }
   free(buffer);
   
@@ -478,88 +536,104 @@ void CLeanEntry::OnEas() {
   CLeanEAs LeanEAs;
   LeanEAs.m_ea_struct = ea_struct;
   LeanEAs.m_count = EntryCount;
+  LeanEAs.m_force_fork = m_force_fork;
   LeanEAs.DoModal();
+  m_force_fork = LeanEAs.m_force_fork;
 
   // write back the entries
   i = 0;
-  if (LeanEAs.m_count > 0) {
-    if (m_inode.attributes & LEAN_ATTR_EAS_IN_INODE) {
-      buff_len = m_parent->m_block_size - LEAN_INODE_SIZE;
-      if (LeanEAs.m_force_fork) {
-        m_inode.attributes &= ~LEAN_ATTR_EAS_IN_INODE;
-        m_attribs.Format("0x%08X", m_inode.attributes); // update the dialog member
-        memset(buffer, 0, buff_len);
-      } else {
-        buffer = (BYTE *) calloc(buff_len, 1);
-        p = buffer;
-        for (; i<LeanEAs.m_count; i++) {
-          len = sizeof(DWORD) + (((ea_struct[i].NameLen + ea_struct[i].AttribLen) + 3) & ~3);
-          if (len <= buff_len) {
-            * (DWORD *) p = (ea_struct[i].NameLen << 24) | ea_struct[i].AttribLen;
-            memcpy(p + sizeof(DWORD), ea_struct[i].csName, ea_struct[i].NameLen);
-            memcpy(p + sizeof(DWORD) + ea_struct[i].NameLen, ea_struct[i].Data, ea_struct[i].AttribLen);
-            p += len;
-            buff_len -= len;
-          } else
-            break;
-        }
-      }
-      if (buff_len > 0)
-        * (DWORD *) p = buff_len - sizeof(DWORD);
-      void *inode_buf = malloc(m_parent->m_block_size);
-      dlg->ReadBlocks(inode_buf, m_parent->m_lba, m_inode.extent_start[0], m_parent->m_block_size, 1);
-      memcpy((BYTE *) inode_buf + sizeof(struct S_LEAN_INODE), buffer, m_parent->m_block_size - LEAN_INODE_SIZE);
-      dlg->WriteBlocks(inode_buf, m_parent->m_lba, m_inode.extent_start[0], m_parent->m_block_size, 1);
-      free(inode_buf);
-      free(buffer);
-    }
-    
-    if (i < LeanEAs.m_count) {
-      pos = 0;
-      buff_len = m_parent->m_block_size;
-      buffer = (BYTE *) calloc(buff_len, 1);
+  if (inode_buf->attributes & LEAN_ATTR_EAS_IN_INODE) {
+    buff_len = m_parent->m_block_size - LEAN_INODE_SIZE;
+    buffer = (BYTE *) calloc(buff_len, 1);
+    p = buffer;
+    if (!LeanEAs.m_force_fork) {
       for (; i<LeanEAs.m_count; i++) {
-        len = sizeof(DWORD) + (((ea_struct[i].NameLen + ea_struct[i].AttribLen) + 3) & ~3);
-        if (pos + len > buff_len)
-          buffer = (BYTE *) realloc(buffer, buff_len = pos + len);
-        * (DWORD *) &buffer[pos] = (ea_struct[i].NameLen << 24) | ea_struct[i].AttribLen;
-        memcpy(&buffer[pos] + sizeof(DWORD), ea_struct[i].csName, ea_struct[i].NameLen);
-        memcpy(&buffer[pos] + sizeof(DWORD) + ea_struct[i].NameLen, ea_struct[i].Data, ea_struct[i].AttribLen);
-        pos += len;
+        NameLen = ea_struct[i].csName.GetLength();
+        if (NameLen > 255) NameLen = 255; // make sure we are not over the limit
+        dword = m_parent->GetNameLen(ea_struct[i].csName, m_parent->m_encoding);
+        len = (sizeof(DWORD) + dword + ea_struct[i].AttribLen + 3) & ~3;
+        if (len <= buff_len) {
+          * (DWORD *) p = (NameLen << 24) | (ea_struct[i].Type << 20) | ea_struct[i].AttribLen;
+          m_parent->PutName(&p[4], ea_struct[i].csName, -1, m_parent->m_encoding);
+          memcpy(p + sizeof(DWORD) + dword, ea_struct[i].Data, ea_struct[i].AttribLen);
+          p += len;
+          buff_len -= len;
+        } else
+          break;
       }
-      
-      struct S_LEAN_BLOCKS extents;
-      // allocate the extents for the fork, returning a "struct S_LEAN_BLOCKS"
-      m_parent->AllocateExtentBuffer(&extents, LEAN_DEFAULT_COUNT);
-      if (m_inode.fork == 0) {
-        if (m_parent->AppendToExtents(&extents, pos, 0, TRUE) == -1)
-          return;
-        m_parent->BuildInode(&extents, pos, LEAN_ATTR_IFFRK);
-        m_inode.fork = extents.extent_start[0];
-        m_fork.Format("%I64i", m_inode.fork); // update the Dialog member
-      } else {
-        void *inode_buf = malloc(m_parent->m_block_size);
-        dlg->ReadBlocks(inode_buf, m_parent->m_lba, m_inode.fork, m_parent->m_block_size, 1);
-        m_parent->ReadFileExtents(&extents, m_inode.fork);
-        free(inode_buf);
-      }
-      m_parent->WriteFile(buffer, &extents, pos);
-      m_parent->FreeExtentBuffer(&extents);
-      free(buffer);
-    } else if (m_inode.fork > 0) {
-      // Delete Fork
-      m_parent->DeleteInode(m_inode.fork);
-      m_inode.fork = 0;
-      m_fork = "0"; // update the Dialog member
+    }
+    if (buff_len > 0)
+      * (DWORD *) p = buff_len - sizeof(DWORD);
+    memcpy((BYTE *) inode_buf + LEAN_INODE_SIZE, buffer, m_parent->m_block_size - LEAN_INODE_SIZE);
+    free(buffer);
+  }
+  
+  // do we still have any after (possibly) storing in the Inode's block?
+  if (i < LeanEAs.m_count) {
+    pos = 0;
+    buff_len = m_parent->m_block_size;  // default to one block. Will resize below if needed.
+    buffer = (BYTE *) calloc(buff_len, 1);
+    for (; i<LeanEAs.m_count; i++) {
+      NameLen = ea_struct[i].csName.GetLength();
+      dword = m_parent->GetNameLen(ea_struct[i].csName, m_parent->m_encoding); // update the NameLen field to the encoding we use
+      len = sizeof(DWORD) + (((dword + ea_struct[i].AttribLen) + 3) & ~3);
+      if (pos + len > buff_len)
+        buffer = (BYTE *) realloc(buffer, buff_len = pos + len);
+      * (DWORD *) &buffer[pos] = (NameLen << 24) | (ea_struct[i].Type << 20) | ea_struct[i].AttribLen;
+      m_parent->PutName(&buffer[pos] + sizeof(DWORD), ea_struct[i].csName, -1, m_parent->m_encoding);
+      memcpy(&buffer[pos] + sizeof(DWORD) + dword, ea_struct[i].Data, ea_struct[i].AttribLen);
+      pos += len;
     }
     
-    // We need to update the Inodes Time Stamps
-    CTime time = CTime::GetCurrentTime();
-    m_inode.acc_time = 
-    m_inode.mod_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
-    m_acc_time.Format("%I64i", m_inode.acc_time); // update the dialog members
-    m_mod_time.Format("%I64i", m_inode.mod_time);
+    struct S_LEAN_BLOCKS extents;
+    // allocate the extents for the fork, returning a "struct S_LEAN_BLOCKS"
+    m_parent->AllocateExtentBuffer(&extents, LEAN_DEFAULT_COUNT);
+    if (inode_buf->fork == 0) {
+      if (m_parent->AppendToExtents(&extents, pos, 0, TRUE) == -1) {
+        free(buffer);
+        free(inode_buf);
+        return;
+      }
+      m_parent->BuildInode(&extents, pos, LEAN_ATTR_IFFRK);
+      inode_buf->fork = extents.extent_start[0];
+      m_fork.Format("%I64i", inode_buf->fork); // update the Dialog member
+    } else
+      m_parent->ReadFileExtents(&extents, inode_buf->fork);
+    
+    m_parent->WriteFile(buffer, &extents, pos);
+    m_parent->FreeExtentBuffer(&extents);
+    free(buffer);
+  } else if (inode_buf->fork > 0) {
+    // Delete Fork
+    m_parent->DeleteInode(inode_buf->fork);
+    inode_buf->fork = 0;
+    m_fork = "0"; // update the Dialog member
   }
+  
+  // We need to update the Inodes Time Stamps
+  CTime time = CTime::GetCurrentTime();
+  inode_buf->acc_time = 
+  inode_buf->mod_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
+  m_acc_time.Format("%I64i", inode_buf->acc_time); // update the dialog members
+  m_mod_time.Format("%I64i", inode_buf->mod_time);
+  inode_buf->checksum = m_parent->LeanCalcCRC(inode_buf, LEAN_INODE_SIZE, TRUE);
+  dlg->WriteBlocks(inode_buf, m_parent->m_lba, m_inode_num, m_parent->m_block_size, 1);
+
+  // update the extended extent's crcs
+  if (m_parent->m_use_extended_extents) {
+    m_parent->UpdateFileExtents(inode_buf, TRUE);
+    dlg->WriteBlocks(inode_buf, m_parent->m_lba, m_inode_num, m_parent->m_block_size, 1);
+  }
+
+  // copy to our local inode buffer
+  memcpy(&m_inode, inode_buf, LEAN_INODE_SIZE);
+  free(inode_buf);
+
+  // free the array and CStrings
+  for (i=0; i<MAX_EA_STRUCT_ENTRIES; i++)
+    ea_struct[i].csName.~CString();
+  free(ea_struct);
+
   UpdateData(FALSE); // Send to dialog
 }
 
@@ -599,7 +673,7 @@ void CLeanEntry::OnOK() {
   m_inode.fork = convert64(m_fork);
   
   // check the CRC
-  crc = m_parent->LeanCalcCRC(&m_inode, LEAN_INODE_SIZE);
+  crc = m_parent->LeanCalcCRC(&m_inode, LEAN_INODE_SIZE, TRUE);
   if (crc != m_inode.checksum)
     if (AfxMessageBox("Checksum not correct. Update?", MB_YESNO, 0) == IDYES)
       m_inode.checksum = crc;
@@ -620,11 +694,11 @@ void CLeanEntry::OnOK() {
           root = (struct S_LEAN_DIRENTRY *) m_parent->ReadFile(items->Inode, &RootSize);
           if (root) {
             cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + Offset);
-            int len = m_name.GetLength();
+            int len = m_parent->GetNameLen(m_name, m_parent->m_encoding);
             if (len <= ((cur->rec_len * 16) - LEAN_DIRENTRY_NAME)) {
               // TODO: can we divide it into two entries now??
-              memcpy(cur->name, m_name, len);
-              cur->name_len = len;
+              m_parent->PutName(cur->name, m_name, len, m_parent->m_encoding);
+              cur->name_len = m_name.GetLength();
             } else {
               // name is larger than what will fit in this current spot
               //  need to expand existing spot (i.e.: enlarge file and move all data toward the new end)
@@ -638,9 +712,9 @@ void CLeanEntry::OnOK() {
               memcpy(new_root, root, Offset + LEAN_DIRENTRY_NAME);
               
               cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) new_root + Offset);
-              memcpy(cur->name, m_name, len);
+              m_parent->PutName(cur->name, m_name, len, m_parent->m_encoding);
               cur->rec_len = (BYTE) new_len;
-              cur->name_len = len;
+              cur->name_len = m_name.GetLength();
               
               if (tail_len > 0)
                 memcpy((BYTE *) new_root + Offset + (new_len * 16), (BYTE *) root + Offset + (old_len * 16), tail_len);
@@ -669,7 +743,7 @@ void CLeanEntry::OnOK() {
   
   // write the new inode data to the disk
   dlg->ReadBlocks(buffer, m_parent->m_lba, m_inode_num, m_parent->m_block_size, 1);
-  memcpy(buffer, &m_inode, sizeof(struct S_LEAN_INODE));
+  memcpy(buffer, &m_inode, LEAN_INODE_SIZE);
   dlg->WriteBlocks(buffer, m_parent->m_lba, m_inode_num, m_parent->m_block_size, 1);
   free(buffer);
 

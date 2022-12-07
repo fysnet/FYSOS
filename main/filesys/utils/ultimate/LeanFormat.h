@@ -78,7 +78,9 @@ public:
   enum { IDD = IDD_LEAN_FORMAT };
   DWORD m_block_size;
   int   m_pre_alloc_count;
+  int   m_encoding;
   BOOL	m_eas_after_inode;
+  BOOL	m_extended_extents;
   BOOL	m_journal;
   //}}AFX_DATA
 
@@ -98,7 +100,9 @@ protected:
   afx_msg void OnOkay();
   //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
-};
+public:
+    virtual BOOL OnInitDialog();
+ };
 
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.

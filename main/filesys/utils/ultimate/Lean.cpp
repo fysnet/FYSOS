@@ -96,6 +96,7 @@ CLean::CLean() : CPropertyPage(CLean::IDD) {
   m_crc = _T("");
   m_cur_state = _T("");
   m_free_blocks = _T("");
+  m_next_free = _T("");
   m_guid = _T("");
   m_label = _T("");
   m_magic = _T("");
@@ -106,14 +107,17 @@ CLean::CLean() : CPropertyPage(CLean::IDD) {
   m_block_count = _T("");
   m_version = _T("");
   m_journal_lba = _T("");
+  m_capabilities = _T("");
   m_log_block_size = _T("");
+  m_encoding = ceUTF16;  // default to utf-16
   m_show_hidden = FALSE;
   m_show_del = FALSE;
   m_del_clear = FALSE;
-  m_ESs_in_Inode = FALSE;
+  m_EAs_in_Inode = FALSE;
   //}}AFX_DATA_INIT
   m_hard_format = FALSE;
   m_free_block_cnt = 0;
+  m_use_extended_extents = FALSE;
 }
 
 CLean::~CLean(){
@@ -136,6 +140,8 @@ void CLean::DoDataExchange(CDataExchange* pDX) {
   DDV_MaxChars(pDX, m_cur_state, 16);
   DDX_Text(pDX, IDC_LEAN_FREE_BLOCKS, m_free_blocks);
   DDV_MaxChars(pDX, m_free_blocks, 32);
+  DDX_Text(pDX, IDC_LEAN_NEXT_FREE, m_next_free);
+  DDV_MaxChars(pDX, m_next_free, 32);
   DDX_Text(pDX, IDC_LEAN_GUID, m_guid);
   DDV_MaxChars(pDX, m_guid, 64);
   DDX_Text(pDX, IDC_LEAN_LABEL, m_label);
@@ -152,15 +158,17 @@ void CLean::DoDataExchange(CDataExchange* pDX) {
   DDV_MaxChars(pDX, m_blocks_band, 8);
   DDX_Text(pDX, IDC_LEAN_BLOCK_SIZE, m_log_block_size);
   DDV_MaxChars(pDX, m_log_block_size, 32);
+  DDX_Text(pDX, IDC_LEAN_ENCODING, m_encoding);
   DDX_Text(pDX, IDC_LEAN_BLOCK_COUNT, m_block_count);
   DDV_MaxChars(pDX, m_block_count, 32);
   DDX_Text(pDX, IDC_LEAN_VERSION, m_version);
   DDV_MaxChars(pDX, m_version, 16);
   DDX_Text(pDX, IDC_JOURNAL_LBA, m_journal_lba);
+  DDX_Text(pDX, IDC_LEAN_CAPABILITIES, m_capabilities);
   DDX_Check(pDX, IDC_SHOW_HIDDEN, m_show_hidden);
-  DDX_Check(pDX, IDC_SHOW_DELETED, m_show_del);
+  DDX_Check(pDX, IDC_SHOW_DEL, m_show_del);
   DDX_Check(pDX, IDC_DEL_CLEAR, m_del_clear);
-  DDX_Check(pDX, IDC_EAS_IN_INODE, m_ESs_in_Inode);
+  DDX_Check(pDX, IDC_EAS_IN_INODE, m_EAs_in_Inode);
   //}}AFX_DATA_MAP
 }
 
@@ -198,7 +206,7 @@ BEGIN_MESSAGE_MAP(CLean, CPropertyPage)
   ON_BN_CLICKED(ID_VIEW_JOURNAL, OnViewJournal)
   ON_BN_CLICKED(ID_JOURNAL_INODE, OnJournalInode)
   ON_BN_CLICKED(IDC_SHOW_HIDDEN, OnShowHidden)
-  ON_BN_CLICKED(IDC_SHOW_DELETED, OnShowDeleted)
+  ON_BN_CLICKED(IDC_SHOW_DEL, OnShowDeleted)
   ON_BN_CLICKED(IDC_DEL_CLEAR, OnDelClear)
   ON_BN_CLICKED(IDC_EAS_IN_INODE, OnEAsInInode)
   ON_BN_CLICKED(ID_SAVE_SUPER, OnSaveSuper)
@@ -330,7 +338,7 @@ BOOL CLean::OnInitDialog() {
   m_show_hidden = AfxGetApp()->GetProfileInt("Settings", "LEANShowHidden", FALSE);
   m_show_del = AfxGetApp()->GetProfileInt("Settings", "LEANShowDel", FALSE);
   m_del_clear = AfxGetApp()->GetProfileInt("Settings", "LEANDelClear", FALSE);
-  m_ESs_in_Inode = AfxGetApp()->GetProfileInt("Settings", "LEANEAsInInode", FALSE);
+  m_EAs_in_Inode = AfxGetApp()->GetProfileInt("Settings", "LEANEAsInInode", FALSE);
   if (m_del_clear)
     SetDlgItemText(ID_DELETE, "Delete/Zero");
   else
@@ -355,7 +363,7 @@ void CLean::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
   HTREEITEM hItem = m_dir_tree.GetSelectedItem();
   struct S_LEAN_ITEMS *items = (struct S_LEAN_ITEMS *) m_dir_tree.GetDataStruct(hItem);
 
-  GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
+  GetDlgItem(ID_ENTRY)->EnableWindow((hItem != NULL) && (m_dir_tree.GetParentItem(hItem) != NULL));
   GetDlgItem(ID_COPY)->EnableWindow((hItem != NULL) && items->CanCopy);
   GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & (ITEM_IS_FILE | ITEM_IS_SYMBOLIC)));
   GetDlgItem(ID_INSERT)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));
@@ -374,8 +382,8 @@ void CLean::OnLeanApply() {
   
   memset(buffer, 0, m_block_size);
   memcpy(buffer, &m_super, sizeof(struct S_LEAN_SUPER));
-
-  crc = LeanCalcCRC(buffer, m_block_size);
+  
+  crc = LeanCalcCRC(buffer, m_block_size, TRUE);
   if (m_super.checksum != crc) {
     ret = AfxMessageBox("CRC is not correct!  Update before Write?", MB_YESNOCANCEL, NULL);
     if (ret == IDCANCEL)
@@ -459,7 +467,6 @@ bool CLean::Format(const BOOL AskForBoot) {
   // restore our SuperBlock info and get the specs to format the volume with
   CLeanFormat format;
   format.m_journal = FALSE;
-  format.m_eas_after_inode = FALSE;
   format.m_pre_alloc_count = (dlg->m_sect_size == 4096) ? (4-1) : (8-1); // 4096-byte blocks use 4 prealloc's, else 8 prealloc's
   format.m_block_size = dlg->m_sect_size;
   if (!m_hard_format) {
@@ -469,6 +476,7 @@ bool CLean::Format(const BOOL AskForBoot) {
   if (format.DoModal() != IDOK)
     return FALSE;
   
+  m_use_extended_extents = format.m_extended_extents;
   m_block_size = format.m_block_size;
   m_tot_blocks = (m_size * dlg->m_sect_size) / m_block_size;
   
@@ -486,6 +494,9 @@ bool CLean::Format(const BOOL AskForBoot) {
 
   if (!m_hard_format)
     ReceiveFromDialog(&m_super); // bring from Dialog
+
+  // set the character encoding for the volume
+  m_encoding = format.m_encoding;
   
   // first, clear out the volume
   for (lba=0; lba<m_size; lba++)
@@ -536,22 +547,26 @@ bool CLean::Format(const BOOL AskForBoot) {
   struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) (buffer + (m_super_block_loc * m_block_size));
   memset(super, 0, m_block_size);
   super->magic = LEAN_SUPER_MAGIC;
-  super->fs_version = 0x0008;  // 0.8
+  super->fs_version = 0x0100;  // 1.0
   super->log_blocks_per_band = log_band_size;
   super->pre_alloc_count = format.m_pre_alloc_count;
   super->state = (0<<1) | (1<<0);  // clean unmount
   GUID_Create(&super->guid, GUID_TYPE_RANDOM);
-  strcpy((char *) super->volume_label, "A label goes here.");
+  PutName(super->volume_label, "A label goes here.", 64, m_encoding);
   super->block_count = m_tot_blocks;
   super->free_block_count = (m_tot_blocks - m_super_block_loc - 1 - (tot_bands * bitmap_size) - (super->pre_alloc_count + 1) - 1) - ((format.m_journal) ? 3 : 0);
+  super->next_free_block = 0;
   super->primary_super = m_super_block_loc;
   super->backup_super = ((band_size - 1) < m_tot_blocks) ? (band_size - 1) : (m_tot_blocks - 1);   // last block in first band
   super->bitmap_start = m_super_block_loc + 1;
   super->root_start = super->bitmap_start + bitmap_size;
   super->bad_start = 0;  // no bad blocks (yet?)
   super->journal = (format.m_journal) ? super->backup_super - JOURNAL_SIZE - 1: 0;   // -1 for the inode block
+  super->capabilities = (format.m_extended_extents) ? LEAN_CAPABILITIES_EXT_EXTENTS : 0;
   super->log_block_size = LOG2(m_block_size);
-  super->checksum = LeanCalcCRC(super, m_block_size);
+  super->char_encoding = m_encoding;
+  super->resv[0] = super->resv[1] = 0;
+  super->checksum = LeanCalcCRC(super, m_block_size, TRUE);
   
   // create a buffer for the bitmap(s), and mark the first few bits as used.
   BYTE *bitmap = (BYTE *) calloc(bitmap_size * m_block_size, 1);
@@ -561,8 +576,9 @@ bool CLean::Format(const BOOL AskForBoot) {
   bitmap[((band_size - 1) / 8)] = (BYTE) ((DWORD) 0xFF << (8 - (1 + ((format.m_journal) ? (1 + JOURNAL_SIZE) : 0))));  // mark one for the backup, 1 for the inode, and JOURNAL_SIZE bits for the Journal
 
   // create a root directory
-  // (for an empty directory, at most two blocks)
-  struct S_LEAN_INODE *root = (struct S_LEAN_INODE *) calloc(2 * m_block_size, 1);
+  // (for an empty directory, we need at most two blocks.  However, we write (super->pre_alloc_count + 1) blocks to the disk)
+  u = ((super->pre_alloc_count + 1) > 2) ? (super->pre_alloc_count + 1) : 2;
+  struct S_LEAN_INODE *root = (struct S_LEAN_INODE *) calloc(u * m_block_size, 1);
   root->magic = LEAN_INODE_MAGIC;
   root->extent_count = 1;
   //memset(root->reserved, 0, 3);
@@ -572,7 +588,7 @@ bool CLean::Format(const BOOL AskForBoot) {
   root->attributes = LEAN_ATTR_IXUSR | LEAN_ATTR_IRUSR | LEAN_ATTR_IWUSR | LEAN_ATTR_ARCHIVE | LEAN_ATTR_IFDIR | LEAN_ATTR_PREALLOC;
   if (format.m_eas_after_inode)
     root->attributes |= LEAN_ATTR_EAS_IN_INODE;
-  root->file_size = 32;  // two entries
+  root->file_size = 0;  // currently zero
   root->block_count = (super->pre_alloc_count + 1);
   CTime now = CTime::GetCurrentTime();
   root->acc_time = 
@@ -582,39 +598,38 @@ bool CLean::Format(const BOOL AskForBoot) {
   root->first_indirect = 0;
   root->last_indirect = 0;
   root->fork = 0;
-  root->extent_start[0] = super->root_start;
-  root->extent_size[0] = (super->pre_alloc_count + 1);
-  root->checksum = LeanCalcCRC(root, LEAN_INODE_SIZE);
+
+  // create the one and only extent
+  unsigned max_extents = (m_use_extended_extents) ? LEAN_INODE_EXTENT_CNT_EXT : LEAN_INODE_EXTENT_CNT;
+  DWORD64 *p_extent_start = (DWORD64 *) &root->extent_start[0];
+  DWORD *p_extent_size = (DWORD *) ((BYTE *) &root->extent_start[0] + (max_extents * sizeof(DWORD64)));
+  DWORD *p_extent_crc = (DWORD *) ((BYTE *) &root->extent_start[0] + (max_extents * (sizeof(DWORD64) + sizeof(DWORD))));
+  p_extent_start[0] = super->root_start;
+  p_extent_size[0] = u;
+  if (m_use_extended_extents)
+    p_extent_crc[0] = LeanCalcCRC(root, u * m_block_size, TRUE);
   
   // the directory entry's
   // (for now, just the dot and dotdot entries)
   struct S_LEAN_DIRENTRY *entry;
   if (format.m_eas_after_inode) {
-    *(DWORD *) ((BYTE *) root + LEAN_INODE_SIZE) = (m_block_size - LEAN_INODE_SIZE - sizeof(DWORD));  // padding extended attribute
+    * (DWORD *) ((BYTE *) root + LEAN_INODE_SIZE) = (m_block_size - LEAN_INODE_SIZE - sizeof(DWORD));  // padding extended attribute
     entry = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + m_block_size);
   } else
     entry = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + LEAN_INODE_SIZE);
-  // The "." entry
-  entry[0].inode = super->root_start;
-  entry[0].type = LEAN_FA_HIDDEN | LEAN_FT_DIR;
-  entry[0].rec_len = 1;
-  entry[0].name_len = 1;
-  entry[0].name[0] = '.';
-  // The ".." entry
-  entry[1].inode = super->root_start;
-  entry[1].type = LEAN_FA_HIDDEN | LEAN_FT_DIR;
-  entry[1].rec_len = 1;
-  entry[1].name_len = 2;
-  entry[1].name[0] = '.';
-  entry[1].name[1] = '.';
-  
+
+  // The "." and ".." entries
+  root->file_size = CreateRootEntry(entry, super->root_start, LEAN_FA_HIDDEN | LEAN_FT_DIR, ".");
+  entry = (struct S_LEAN_DIRENTRY *) ((BYTE *) entry + root->file_size);  // move to next entry
+  root->file_size += CreateRootEntry(entry, super->root_start, LEAN_FA_HIDDEN | LEAN_FT_DIR, "..");
+
   // create an empty Journal?
   if (format.m_journal) {
     // Make an INODE, then write inode and journal to the image
     unsigned Size = m_block_size * JOURNAL_SIZE;
     
     struct S_LEAN_BLOCKS extents;
-    AllocateExtentBuffer(&extents, LEAN_INODE_EXTENT_CNT);
+    AllocateExtentBuffer(&extents, 1);
     extents.extent_count = 1;
     extents.extent_size[0] = 1 + JOURNAL_SIZE;
     extents.extent_start[0] = m_super.journal;
@@ -627,7 +642,7 @@ bool CLean::Format(const BOOL AskForBoot) {
     hdr->entry_cnt = (Size - sizeof(struct S_LEAN_JOURNAL)) / sizeof(S_LEAN_JOURNAL_ENTRY);
     for (u=0; u<hdr->entry_cnt; u++)
       entry[u].flags = JOURNAL_ENTRY_INVALID;
-    hdr->checksum = LeanCalcCRC(hdr, sizeof(struct S_LEAN_JOURNAL) + (hdr->entry_cnt * sizeof(S_LEAN_JOURNAL_ENTRY)));
+    hdr->checksum = LeanCalcCRC(hdr, sizeof(struct S_LEAN_JOURNAL) + (hdr->entry_cnt * sizeof(S_LEAN_JOURNAL_ENTRY)), TRUE);
     WriteFile(journal, &extents, Size);
     FreeExtentBuffer(&extents);
     free(journal);
@@ -638,7 +653,12 @@ bool CLean::Format(const BOOL AskForBoot) {
   dlg->WriteBlocks(bitmap, m_lba, super->bitmap_start, m_block_size, bitmap_size);
   dlg->WriteBlocks(root, m_lba, super->root_start, m_block_size, (super->pre_alloc_count + 1));
   dlg->WriteBlocks(super, m_lba, super->backup_super, m_block_size, 1);
-  
+
+  // now we can do the crc of the root
+  UpdateFileExtents(root, FALSE);
+  root->checksum = LeanCalcCRC(root, LEAN_INODE_SIZE, TRUE);
+  dlg->WriteBlocks(root, m_lba, super->root_start, m_block_size, 1);
+
   // now create and write each remaining band (just the bitmap)
   if (tot_bands > 1) {
     memset(bitmap, 0, bitmap_size * m_block_size);
@@ -659,7 +679,7 @@ bool CLean::Format(const BOOL AskForBoot) {
   }
 
   // before we leave, set/clear EAs_in_Inode per format.m_eas_after_inode
-  m_ESs_in_Inode = format.m_eas_after_inode;
+  m_EAs_in_Inode = format.m_eas_after_inode;
   CheckDlgButton(IDC_EAS_IN_INODE, format.m_eas_after_inode ? BST_CHECKED : BST_UNCHECKED);
 
   // done, cleanup and return
@@ -668,6 +688,21 @@ bool CLean::Format(const BOOL AskForBoot) {
   free(buffer);
 
   return TRUE;
+}
+
+// create a directory entry at 'entry'
+// return byte size of entry (bytes used)
+DWORD CLean::CreateRootEntry(struct S_LEAN_DIRENTRY *entry, const DWORD64 inode_num, const BYTE type, CString name) {
+  WORD length = 0;
+
+  entry->inode = inode_num;
+  entry->type = type;
+  entry->name_len = name.GetLength(); // count of chars used
+  length = PutName(entry->name, name, LEAN_NAME_LEN_MAX, m_encoding);
+  entry->rec_len = (((LEAN_DIRENTRY_NAME + length) + 15) / 16);
+
+  // return the count of bytes used
+  return entry->rec_len * 16;
 }
 
 void CLean::OnUpdateCode() {
@@ -729,7 +764,7 @@ void CLean::OnLeanCrcUpdate() {
 
   memcpy(buffer, &m_super, sizeof(struct S_LEAN_SUPER));
   
-  m_super.checksum = LeanCalcCRC(buffer, m_block_size);
+  m_super.checksum = LeanCalcCRC(buffer, m_block_size, TRUE);
   m_crc.Format("0x%08X", m_super.checksum);
   SetDlgItemText(IDC_LEAN_CRC, m_crc);
 
@@ -897,7 +932,8 @@ void CLean::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
       // select the root and set the focus to that root
       GetDlgItem(IDC_DIR_TREE)->SetFocus();
       m_dir_tree.SelectSetFirstVisible(m_hRoot);
-    }
+    } else 
+      AfxMessageBox("Found illegal Root Inode.");
     
     // display the running total of free bytes left
     DisplayFreeSpace();
@@ -911,16 +947,14 @@ void CLean::ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM 
   DWORD64 filesize;
   CString name;
   BOOL IsDot;
-  
+
   while ((((unsigned char *) cur < ((unsigned char *) root + root_size))) && !m_too_many) {
     if (cur->rec_len == 0)
       break;
     
     // retrieve the name.
-    name.Empty();
-    for (int i=0; i<cur->name_len; i++)
-      name += cur->name[i];
-    
+    GetName(cur->name, name, cur->name_len, m_encoding);
+
     IsDot = ((name == ".") || (name == ".."));
     
     switch (cur->type & LEAN_FT_FMT) {
@@ -1017,12 +1051,12 @@ void *CLean::ReadFile(DWORD64 block, DWORD64 *Size) {
   // does the file start in the inode?
   count = inode->file_size;
   if (!(inode->attributes & LEAN_ATTR_EAS_IN_INODE)) {
-    if (count > (m_block_size - sizeof(struct S_LEAN_INODE))) {
-      memcpy(ptr, (BYTE *) inode + sizeof(struct S_LEAN_INODE), (m_block_size - sizeof(struct S_LEAN_INODE)));
-      ptr += (m_block_size - sizeof(struct S_LEAN_INODE));
-      count -= (m_block_size - sizeof(struct S_LEAN_INODE));
+    if (count > (m_block_size - LEAN_INODE_SIZE)) {
+      memcpy(ptr, (BYTE *) inode + LEAN_INODE_SIZE, (m_block_size - LEAN_INODE_SIZE));
+      ptr += (m_block_size - LEAN_INODE_SIZE);
+      count -= (m_block_size - LEAN_INODE_SIZE);
     } else {
-      memcpy(ptr, (BYTE *) inode + sizeof(struct S_LEAN_INODE), (size_t) count);
+      memcpy(ptr, (BYTE *) inode + LEAN_INODE_SIZE, (size_t) count);
       return ptr;
     }
   }
@@ -1088,17 +1122,17 @@ void CLean::WriteFile(void *buffer, struct S_LEAN_BLOCKS *extents, DWORD64 Size)
   // does the file start in the inode?
   count = Size;
   if (!(inode->attributes & LEAN_ATTR_EAS_IN_INODE)) {
-    if (count > (m_block_size - sizeof(struct S_LEAN_INODE))) {
-      memcpy((BYTE *) inode + sizeof(struct S_LEAN_INODE), ptr, (m_block_size - sizeof(struct S_LEAN_INODE)));
-      ptr += (m_block_size - sizeof(struct S_LEAN_INODE));
-      count -= (m_block_size - sizeof(struct S_LEAN_INODE));
+    if (count > (m_block_size - LEAN_INODE_SIZE)) {
+      memcpy((BYTE *) inode + LEAN_INODE_SIZE, ptr, (m_block_size - LEAN_INODE_SIZE));
+      ptr += (m_block_size - LEAN_INODE_SIZE);
+      count -= (m_block_size - LEAN_INODE_SIZE);
     } else {
       if (m_del_clear)
-        memset((BYTE *) inode + sizeof(struct S_LEAN_INODE), 0, (m_block_size - sizeof(struct S_LEAN_INODE)));
-      memcpy((BYTE *) inode + sizeof(struct S_LEAN_INODE), ptr, (size_t) count);
+        memset((BYTE *) inode + LEAN_INODE_SIZE, 0, (m_block_size - LEAN_INODE_SIZE));
+      memcpy((BYTE *) inode + LEAN_INODE_SIZE, ptr, (size_t) count);
       count = 0;
     }
-    allocated_space -= sizeof(struct S_LEAN_INODE);
+    allocated_space -= LEAN_INODE_SIZE;
   } else
     allocated_space -= m_block_size;
 
@@ -1133,15 +1167,19 @@ void CLean::WriteFile(void *buffer, struct S_LEAN_BLOCKS *extents, DWORD64 Size)
   }
   free(block);
   
+  // update the extended extent's crc?
+  dlg->WriteBlocks(inode, m_lba, extents->extent_start[0], m_block_size, 1);
+  UpdateFileExtents(inode, FALSE);
+
   // update the inode's Timestamps
   CTime time = CTime::GetCurrentTime();
   inode->acc_time = 
     inode->mod_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
-  
+
   // update the inode's check sum and write it back
-  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
+  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
   dlg->WriteBlocks(inode, m_lba, extents->extent_start[0], m_block_size, 1);
-  
+
   free(inode);
 }
 
@@ -1217,8 +1255,8 @@ BOOL CLean::DetectLeanFS(void) {
     if (super->state & ~0x3)
       continue;
     
-    // must be version 0.8 (we don't support backward compatibility)
-    if (super->fs_version != 0x0008)
+    // must be version 1.0 (we don't support backward compatibility)
+    if (super->fs_version != 0x0100)
       continue;
     
     // else we have a valid LEAN FS super
@@ -1233,66 +1271,41 @@ BOOL CLean::DetectLeanFS(void) {
   return fnd;
 }
 
-// this assumes that the sector size is 512, since that is all
-//  the old specs allowed.
-WORD CLean::DetectLeanFSOld(void) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE buffer[MAX_SECT_SIZE];
-  struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) buffer;
-  
-  // the lean specs say that the super can be in sector 1 - 32 (zero based)
-  // count is 32 when finding primary, and 1 when finding backup
-  for (unsigned sector=1; sector<=32; sector++) {
-    dlg->ReadFromFile(buffer, m_lba + sector, 1);
-    
-    // the first entry should be 'LEAN'
-    if (super->magic != LEAN_SUPER_MAGIC)
-      continue;
-    
-    // How about the check sum
-    DWORD crc = 0, *p = (DWORD *) super;
-    for (unsigned i=1; i<(dlg->m_sect_size / sizeof(DWORD)); i++)
-      crc = (crc << 31) + (crc >> 1) + p[i];
-    if (crc != super->checksum)
-      continue;
-    
-    // check the primarySuper field.  It should == sector
-    if (super->primary_super != (DWORD64) sector)
-      continue;
-    
-    // We make a few more checks along the way, here.
-    
-    // the log2 entry should be at least 12 and not more than 31
-    if ((super->log_blocks_per_band < 12) || (super->log_blocks_per_band > 31))
-      continue;
-    
-    // all but bits 1:0 of state should be zero
-    if (super->state & ~0x3)
-      continue;
-    
-    // must be at least version 0.6 or 0.7
-    if ((super->fs_version < 0x0006) || (super->fs_version > 0x0007))
-      continue;
-    
-    // else we have a valid LEAN FS super
-    m_super_block_loc = sector;
-    memcpy(&m_super, super, sizeof(struct S_LEAN_SUPER));
-    
-    // return the version we found (0.6 or 0.7)
-    return super->fs_version;
-  }
-  
-  // if we checked lba 1 - 32 and didn't find anything, no lean fs found
-  return 0;
-}
-
-DWORD CLean::LeanCalcCRC(const void *data, unsigned count) {
+// if skip is TRUE, skip first dword (is inode, indirect, or superblock)
+DWORD CLean::LeanCalcCRC(const void *data, size_t count, const BOOL skip) {
   DWORD crc = 0;
   DWORD *p = (DWORD *) data;
+  size_t i = (skip) ? 1 : 0;
   
   count /= 4;
-  for (unsigned i=1; i<count; i++)
+  for (; i<count; i++)
     crc = (crc << 31) + (crc >> 1) + p[i];
+  
+  return crc;
+}
+
+// read in an extent, calculate the crc, and return the crc
+// we check to make sure that the extent isn't 'erroneously' long just as a check.
+DWORD CLean::LeanCalcExtentCRC(const DWORD64 start, const DWORD size, const BOOL first) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  size_t length = (size_t) size * m_block_size;
+  DWORD crc = 0;
+
+  // check that size is less than 64 meg, just so we don't allocate a huge buffer, etc.
+  if (length > 0x04000000ULL)
+    return 0;
+
+  void *ptr = malloc(length);
+  if (ptr == NULL)
+    return 0;
+
+  dlg->ReadBlocks(ptr, m_lba, start, m_block_size, size);
+  if (first)
+    crc = LeanCalcCRC((BYTE *) ptr + LEAN_INODE_SIZE, length - LEAN_INODE_SIZE, FALSE);
+  else
+    crc = LeanCalcCRC(ptr, length, FALSE);
+  
+  free(ptr);
   
   return crc;
 }
@@ -1304,7 +1317,7 @@ BOOL CLean::ValidInode(const struct S_LEAN_INODE *inode) {
     return FALSE;
   
   // check to see if crc is correct
-  if (inode->checksum != LeanCalcCRC(inode, LEAN_INODE_SIZE))
+  if (inode->checksum != LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE))
     return FALSE;
   
   // if links_count == 0, file should have been deleted
@@ -1321,7 +1334,7 @@ BOOL CLean::ValidIndirect(const struct S_LEAN_INDIRECT *indirect) {
     return FALSE;
   
   // check to see if crc is correct
-  if (indirect->checksum != LeanCalcCRC(indirect, m_block_size))
+  if (indirect->checksum != LeanCalcCRC(indirect, m_block_size, TRUE))
     return FALSE;
   
   // other checks here
@@ -1338,17 +1351,36 @@ void CLean::SendToDialog(struct S_LEAN_SUPER *super) {
   m_blocks_band.Format("%i", super->log_blocks_per_band);
   m_cur_state.Format("0x%08X", super->state);
   GUID_Format(m_guid, &super->guid);
-  m_label.Format("%s", super->volume_label);
+  GetName(super->volume_label, m_label, 64, super->char_encoding);
   m_block_count.Format("%I64i", super->block_count);
   m_free_blocks.Format("%I64i", super->free_block_count);
+  m_next_free.Format("%I64i", super->next_free_block);
   m_primary_lba.Format("%I64i", super->primary_super);
   m_backup_lba.Format("%I64i", super->backup_super);
   m_bitmap_lba.Format("%I64i", super->bitmap_start);
   m_root_lba.Format("%I64i", super->root_start);
   m_bad_lba.Format("%I64i", super->bad_start);
   m_log_block_size.Format("%i", super->log_block_size);
+  m_encoding = super->char_encoding;
   m_journal_lba.Format("%I64i", super->journal);
-  
+  m_capabilities.Format("0x%08X", super->capabilities);
+
+  m_use_extended_extents = (super->capabilities & (1 << 0)) > 0;
+
+  switch (m_encoding) {
+    case ceASCII:
+      SetDlgItemText(IDC_LEAN_ENCODING_DISP, "ascii");
+      break;
+    case ceUTF8:
+      SetDlgItemText(IDC_LEAN_ENCODING_DISP, "utf-8");
+      break;
+    case ceUTF16:
+      SetDlgItemText(IDC_LEAN_ENCODING_DISP, "utf-16");
+      break;
+    default:
+      SetDlgItemText(IDC_LEAN_ENCODING_DISP, "unknown");
+  }
+
   UpdateData(FALSE); // send to Dialog
   
   OnChangeLeanJournal();
@@ -1368,16 +1400,19 @@ void CLean::ReceiveFromDialog(struct S_LEAN_SUPER *super) {
   super->log_blocks_per_band = convert8(m_blocks_band);
   super->state = convert32(m_cur_state);
   GUID_Retrieve(m_guid, &super->guid);
-  strcpy((char *) super->volume_label, m_label);
+  PutName(super->volume_label, m_label, 64, m_encoding);
   super->block_count = convert64(m_block_count);
   super->free_block_count = convert64(m_free_blocks);
+  super->next_free_block = convert64(m_next_free);
   super->primary_super = convert64(m_primary_lba);
   super->backup_super = convert64(m_backup_lba);
   super->bitmap_start = convert64(m_bitmap_lba);
   super->root_start = convert64(m_root_lba);
   super->bad_start = convert64(m_bad_lba);
   super->log_block_size = convert8(m_log_block_size);
+  super->char_encoding = m_encoding;
   super->journal = convert64(m_journal_lba);
+  super->capabilities = convert32(m_capabilities);
 }
 
 void CLean::SaveItemInfo(HTREEITEM hItem, DWORD64 Inode, DWORD64 FileSize, DWORD flags, DWORD Offset, BOOL CanCopy) {
@@ -1583,7 +1618,7 @@ void CLean::OnLeanInsertSymbolic() {
     return;
 
   // length of the symbolic name (file data)
-  Size = Symbolic.m_symbolic_name.GetLength();
+  Size = GetNameLen(Symbolic.m_symbolic_name, m_encoding);
 
   // get the item from the tree control
   HTREEITEM hItem = m_dir_tree.GetSelectedItem();
@@ -1601,7 +1636,7 @@ void CLean::OnLeanInsertSymbolic() {
     // allocate the extents for it, returning a "struct S_LEAN_BLOCKS"
     AllocateExtentBuffer(&extents, LEAN_DEFAULT_COUNT);
     // Calculate how many actual bytes we will use
-    TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : sizeof(struct S_LEAN_INODE)); 
+    TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : LEAN_INODE_SIZE); 
     if (AppendToExtents(&extents, TotSize, 0, TRUE) == -1) {
       FreeExtentBuffer(&extents);
       return;
@@ -1618,7 +1653,10 @@ void CLean::OnLeanInsertSymbolic() {
     BuildInode(&extents, Size, LEAN_ATTR_IFLNK | Attrib);
     
     // copy the file to our system
-    WriteFile((void *) (LPCTSTR) Symbolic.m_symbolic_name, &extents, Size);
+    BYTE *buffer = (BYTE *) malloc((size_t) Size);
+    PutName(buffer, Symbolic.m_symbolic_name, (int) Size, m_encoding);
+    WriteFile(buffer, &extents, Size);
+    free(buffer);
     
     // free the buffers
     FreeExtentBuffer(&extents);
@@ -1665,7 +1703,7 @@ BOOL CLean::InsertFile(DWORD64 Inode, CString csName, CString csPath) {
   // allocate the extents for it, returning a "struct S_LEAN_BLOCKS"
   AllocateExtentBuffer(&extents, LEAN_DEFAULT_COUNT);
   // Calculate how many actual bytes we will use
-  TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : sizeof(struct S_LEAN_INODE)); 
+  TotSize = Size + ((Attrib & LEAN_ATTR_EAS_IN_INODE) ? m_block_size : LEAN_INODE_SIZE); 
   if (AppendToExtents(&extents, TotSize, 0, TRUE) == -1) {
     FreeExtentBuffer(&extents);
     free(buffer);
@@ -1776,12 +1814,12 @@ void CLean::OnShowHidden() {
 
 // the user change the status of the "Show Deleted" Check box
 void CLean::OnShowDeleted() {
-  AfxGetApp()->WriteProfileInt("Settings", "LEANShowDel", m_show_del = IsDlgButtonChecked(IDC_SHOW_DELETED));
+  AfxGetApp()->WriteProfileInt("Settings", "LEANShowDel", m_show_del = IsDlgButtonChecked(IDC_SHOW_DEL));
   Start(m_lba, m_size, m_color, m_index, FALSE);
 }
 
 void CLean::OnEAsInInode() {
-  AfxGetApp()->WriteProfileInt("Settings", "LEANEAsInInode", m_ESs_in_Inode = IsDlgButtonChecked(IDC_EAS_IN_INODE));
+  AfxGetApp()->WriteProfileInt("Settings", "LEANEAsInInode", m_EAs_in_Inode = IsDlgButtonChecked(IDC_EAS_IN_INODE));
 }
 
 // copy the Primary Superblock to the Backup Superblock
@@ -2160,226 +2198,69 @@ void CLean::MarkBlock(DWORD64 Block, BOOL MarkIt) {
   free(bitmap);
 }
 
-// allocate blocks, building extents for a Size count of blocks
-// S_LEAN_BLOCKS is a list of extents.  Does not know about indirects or anything.
-//  is simply a list of extents.  It is up to the other functions to read/write the actual extents to the disk
-// Size = bytes we need appended
-int CLean::AppendToExtents(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD64 Start, BOOL MarkIt) {
-  unsigned i, cnt = extents->extent_count;
-  unsigned count = (unsigned) ((Size + (m_block_size - 1)) / m_block_size);
-  DWORD64 block = Start;
-
-  for (i=0; i<count; i++) {
-    block = GetFreeBlock(block, MarkIt);
-    
-    // if incrementing Extents->extent_size[cnt] will be greater than will fit in a DWORD sized then move to next one
-    // Ben: For debugging purposes, we can change the 0xFFFF to 32 to create a few Indirects for each (large) file.
-    if (extents->extent_size[cnt] == MAXDWORD /* 32 */) {
-      cnt++;
-      if (cnt >= extents->allocated_count)
-        ReAllocateExtentBuffer(extents, extents->allocated_count + LEAN_DEFAULT_COUNT);
-    }
-    
-    if (extents->extent_size[cnt] == 0) {
-      extents->extent_start[cnt] = block;
-      extents->extent_size[cnt]++;
-    } else if (block == (extents->extent_start[cnt] + extents->extent_size[cnt])) {
-      extents->extent_size[cnt]++;
-    } else {
-      cnt++;
-      if (cnt >= extents->allocated_count)
-        ReAllocateExtentBuffer(extents, extents->allocated_count + LEAN_DEFAULT_COUNT);
-      extents->extent_start[cnt] = block;
-      extents->extent_size[cnt] = 1;
-    }
+// retrieve the name.
+void CLean::GetName(void *ptr, CString &name, const int len, const int encoding) {
+  name.Empty();
+  switch (encoding) {
+    case ceASCII:
+      EncodeFromAscii(ptr, name, len);
+      break;
+    case ceUTF8:
+      EncodeFromUTF8(ptr, name, len);
+      break;
+    case ceUTF16:
+      EncodeFromUTF16(ptr, name, len);
+      break;
+    default:
+      name = "*Encoding Error*";
   }
-  
-  // update the count of extents used
-  extents->extent_count = cnt + 1;
-  extents->block_count += count;
-
-  // return this count
-  return extents->extent_count;
 }
 
-// get the extents of the file
-int CLean::ReadFileExtents(struct S_LEAN_BLOCKS *extents, DWORD64 Inode) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE *inode_buffer = (BYTE *) malloc(m_block_size);
-  BYTE *indirect_buffer = (BYTE *) malloc(m_block_size);
-  struct S_LEAN_INODE *inode;
-  struct S_LEAN_INDIRECT *indirect;
-  DWORD64 ind_block;
-  unsigned i;
-  
-  // initialize our pointers
-  inode = (struct S_LEAN_INODE *) inode_buffer;
-  indirect = (struct S_LEAN_INDIRECT *) indirect_buffer;
+// returns the count of bytes needed to store a name in a specified encoding
+WORD CLean::GetNameLen(CString name, const int encoding) {
+  int ret = 0;
 
-  unsigned max_extents = (m_block_size - LEAN_INDIRECT_SIZE) / 12;
-  DWORD64 *extent_start = (DWORD64 *) (indirect_buffer + LEAN_INDIRECT_SIZE);
-  DWORD *extent_size = (DWORD *) (indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * sizeof(DWORD64)));
-  
-  // read the inode
-  dlg->ReadBlocks(inode, m_lba, Inode, m_block_size, 1);
-  if (!ValidInode(inode)) {
-    free(inode_buffer);
-    free(indirect_buffer);
-    return -1;
+  switch (encoding) {
+    case ceASCII:
+      ret = EncodeAsciiLen(name);
+      break;
+    case ceUTF8:
+      ret = EncodeUTF8Len(name);
+      break;
+    case ceUTF16:
+      ret = EncodeUTF16Len(name);
+      break;
+    default:
+      ret = 0;
+      break;
   }
-
-  // allocate at least LEAN_INODE_EXTENT_CNT extents to hold the direct extents
-  AllocateExtentBuffer(extents, LEAN_INODE_EXTENT_CNT);
-  
-  // do the direct extents first
-  for (i=0; i<inode->extent_count; i++) {
-    extents->extent_start[extents->extent_count] = inode->extent_start[i];
-    extents->extent_size[extents->extent_count] = inode->extent_size[i];
-    extents->block_count += inode->extent_size[i];
-    extents->extent_count++;
-  }
-  
-  // are there any indirect extents?
-  if (inode->first_indirect > 0) {
-    ind_block = inode->first_indirect;
-    while (ind_block > 0) {
-      // read in the indirect block
-      dlg->ReadBlocks(indirect, m_lba, ind_block, m_block_size, 1);
-      if (!ValidIndirect(indirect))
-        break;
-
-      // increase the size of our list
-      ReAllocateExtentBuffer(extents, extents->extent_count + indirect->extent_count);
-
-      // retrieve the extents in this indirect block
-      for (i=0; i<indirect->extent_count; i++) {
-        extents->extent_start[extents->extent_count] = extent_start[i];
-        extents->extent_size[extents->extent_count] = extent_size[i];
-        extents->block_count += extent_size[i];
-        extents->extent_count++;
-      }
-
-      // get next indirect (0 == no more)
-      ind_block = indirect->next_indirect;
-    }
-  }
-  
-  free(inode_buffer);
-  free(indirect_buffer);
-  return extents->extent_count;
+  return ret;
 }
 
-// write the extents of the file to the file
-// The count of extents could actually extend past the current inode count.
-//  therefore, we add indirects if needed
-int CLean::WriteFileExtents(const struct S_LEAN_BLOCKS *extents, struct S_LEAN_INODE *inode) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  BYTE *indirect_buffer = (BYTE *) malloc(m_block_size);
-  struct S_LEAN_INDIRECT *indirect;
-  DWORD64 prev_block, this_block, next_block, remaining;
-  unsigned i, count = 0;
-  
-  // initialize our pointer
-  indirect = (struct S_LEAN_INDIRECT *) indirect_buffer;
+// put the native CString at 'ptr' using 'encoding'
+// max_len is the max character length to place
+// if max_len == -1, get the length of the CString as the max count of chars to encode
+WORD CLean::PutName(void *ptr, CString name, int max_len, const int encoding) {
+  WORD ret = 0;
+  if (max_len == -1)
+    max_len = name.GetLength();
 
-  // calculate the max count of extents we can have per this block size
-  unsigned max_extents = (m_block_size - LEAN_INDIRECT_SIZE) / 12;
-  DWORD64 *extent_start = (DWORD64 *) (indirect_buffer + LEAN_INDIRECT_SIZE);
-  DWORD *extent_size = (DWORD *) (indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * sizeof(DWORD64)));
-  
-  // do the direct extents first
-  for (i=0; (i<LEAN_INODE_EXTENT_CNT) && (count<extents->extent_count); i++) {
-    inode->extent_start[i] = extents->extent_start[count];
-    inode->extent_size[i] = extents->extent_size[count];
-    count++;
+  switch (encoding) {
+    case ceASCII:
+      ret = EncodeToAscii(ptr, name, max_len);
+      break;
+    case ceUTF8:
+      ret = EncodeToUTF8(ptr, name, max_len);
+      break;
+    case ceUTF16:
+      ret = EncodeToUTF16(ptr, name, max_len);
+      break;
+    default:
+      ret = 0;
+      break;
   }
 
-  this_block = 0;
-  prev_block = 0;
-  remaining = 0;
-  BOOL used = FALSE;
-  
-  inode->indirect_count = 0;
-
-  // are there any indirect extents needed?
-  if (count < extents->extent_count) {
-    if (inode->first_indirect > 0) {
-      this_block = inode->first_indirect;
-      used = TRUE;
-    } else {
-      this_block = GetFreeBlock(0, TRUE);
-      inode->first_indirect = this_block;
-      used = FALSE;
-    }
-    
-    while (count < extents->extent_count) {
-      if (!used) {
-        // initialize the indirect block
-        memset(indirect, 0, m_block_size);
-        indirect->magic = LEAN_INDIRECT_MAGIC;
-        indirect->inode = extents->extent_start[0];
-        indirect->this_block = this_block;
-        indirect->prev_indirect = prev_block;
-        indirect->next_indirect = 0;
-      } else
-        dlg->ReadBlocks(indirect_buffer, m_lba, this_block, m_block_size, 1);
-      
-      // write to the indirect extents
-      indirect->block_count = 0;
-      for (i=0; (i<max_extents) && (count<extents->extent_count); i++) {
-        extent_start[i] = extents->extent_start[count];
-        extent_size[i] = extents->extent_size[count];
-        indirect->block_count += extents->extent_size[count];
-        count++;
-      }
-
-      indirect->extent_count = i;
-      inode->indirect_count++;
-
-      // will there be more?
-      if (count < extents->extent_count) {
-        if (used && (indirect->next_indirect > 0)) {
-          next_block = indirect->next_indirect;
-        } else {
-          next_block = GetFreeBlock(0, TRUE);
-          indirect->next_indirect = next_block;
-          used = FALSE;
-        }
-      } else {
-        next_block = this_block;
-        if (used)
-          remaining = indirect->next_indirect;
-        indirect->next_indirect = 0;
-      }
-      indirect->checksum = LeanCalcCRC(indirect, m_block_size);
-      
-      // write the indirect back
-      dlg->WriteBlocks(indirect_buffer, m_lba, this_block, m_block_size, 1);
-      
-      // initialize for next round
-      prev_block = this_block;
-      this_block = next_block;
-    }
-  }
-  
-  // if we don't need any more indirects, yet there are some allocated,
-  //  we need to free each remaining indirect block
-  while (remaining > 0) {
-    MarkBlock(remaining, FALSE);
-    dlg->ReadBlocks(indirect_buffer, m_lba, remaining, m_block_size, 1);
-    // TODO: Test indirect, free it
-    remaining = indirect->next_indirect;
-  }
-  
-  // update the inode structure
-  inode->last_indirect = this_block;
-  inode->extent_count = (count > LEAN_INODE_EXTENT_CNT) ? LEAN_INODE_EXTENT_CNT : (BYTE) count;
-  CTime time = CTime::GetCurrentTime();
-  inode->sch_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
-  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
-
-  free(indirect_buffer);
-  return extents->extent_count;
+  return ret;
 }
 
 // read in the current root (Inode) and add to it
@@ -2389,7 +2270,7 @@ int CLean::WriteFileExtents(const struct S_LEAN_BLOCKS *extents, struct S_LEAN_I
 int CLean::AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attrib) {
   struct S_LEAN_DIRENTRY *root, *cur, *next;
   struct S_LEAN_BLOCKS extents;
-  const WORD len = csName.GetLength();
+  const WORD len = GetNameLen(csName, m_encoding);
   DWORD64 root_size;
   BYTE byte;
 
@@ -2413,10 +2294,7 @@ int CLean::AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attri
             next->name_len = 0;
             next->type = LEAN_FT_MT;
           }
-          cur->name_len = len;
-          cur->inode = Start;
-          cur->type = Attrib;
-          memcpy(cur->name, csName, len);
+          CreateRootEntry(cur, Start, Attrib, csName);
           // write it back to the root
           WriteFile(root, &extents, root_size);
           FreeExtentBuffer(&extents);
@@ -2432,11 +2310,8 @@ int CLean::AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attri
     unsigned extended_size = ((LEAN_DIRENTRY_NAME + len) + 15) & ~15;
     root = (struct S_LEAN_DIRENTRY *) realloc(root, (size_t) (root_size + extended_size));
     cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + root_size);
-    cur->inode = Start;
-    cur->type = Attrib;
-    cur->rec_len = ((len + LEAN_DIRENTRY_NAME + 15) / 16);
-    cur->name_len = len;
-    memcpy(cur->name, csName, len);
+
+    CreateRootEntry(cur, Start, Attrib, csName);
 
     // WriteFile will add to the extents if needed
     WriteFile(root, &extents, root_size + extended_size);
@@ -2458,8 +2333,9 @@ void CLean::BuildInode(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD Attrib
   
   inode = (struct S_LEAN_INODE *) calloc(m_block_size, 1);
   
+  const unsigned max_extents = (m_use_extended_extents) ? LEAN_INODE_EXTENT_CNT_EXT : LEAN_INODE_EXTENT_CNT;
   inode->magic = LEAN_INODE_MAGIC;
-  inode->extent_count = (extents->extent_count > LEAN_INODE_EXTENT_CNT) ? LEAN_INODE_EXTENT_CNT : (BYTE) extents->extent_count;
+  inode->extent_count = (extents->extent_count > max_extents) ? max_extents : (BYTE) extents->extent_count;
   inode->indirect_count = 0;
   inode->links_count = 1;
   inode->attributes = Attrib;
@@ -2467,8 +2343,8 @@ void CLean::BuildInode(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD Attrib
   if (Attrib & LEAN_ATTR_EAS_IN_INODE)
     inode->block_count = pre_alloc_count + ((Size + (m_block_size - 1)) / m_block_size);
   else {
-    if (Size > (m_block_size - sizeof(struct S_LEAN_INODE))) {
-      DWORD64 s = Size - (m_block_size - sizeof(struct S_LEAN_INODE));
+    if (Size > (m_block_size - LEAN_INODE_SIZE)) {
+      DWORD64 s = Size - (m_block_size - LEAN_INODE_SIZE);
       inode->block_count = pre_alloc_count + ((s + (m_block_size - 1)) / m_block_size);
     } else
       inode->block_count = pre_alloc_count;
@@ -2483,6 +2359,7 @@ void CLean::BuildInode(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD Attrib
 
   WriteFileExtents(extents, inode);  // must write at least the first 6 so the checksum is correct
   dlg->WriteBlocks(inode, m_lba, extents->extent_start[0], m_block_size, 1);
+
   free(inode);
 }
 
@@ -2493,7 +2370,7 @@ void CLean::IncrementLinkCount(DWORD64 Inode) {
   dlg->ReadBlocks(inode, m_lba, Inode, m_block_size, 1);
 
   inode->links_count++;
-  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
+  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
   
   dlg->WriteBlocks(inode, m_lba, Inode, m_block_size, 1);
   free(inode);
@@ -2508,7 +2385,7 @@ void CLean::DecrementLinkCount(DWORD64 Inode) {
 
   if (inode->links_count > 1) {
     inode->links_count--;
-    inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
+    inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
     
     dlg->WriteBlocks(inode, m_lba, Inode, m_block_size, 1);
   }
@@ -2524,7 +2401,7 @@ void CLean::DeleteInode(DWORD64 Inode) {
 
   if (inode->links_count > 1) {
     inode->links_count--;
-    inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE);
+    inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
   } else {
     if (inode->fork)
       DeleteInode(inode->fork);
@@ -2540,7 +2417,7 @@ void CLean::DeleteInode(DWORD64 Inode) {
       DeleteIndirects(inode->first_indirect);
     
     // (For debugging purposes) also clear the inode or parts of it
-    memset(inode, 0, sizeof(struct S_LEAN_INODE));
+    memset(inode, 0, LEAN_INODE_SIZE);
   }
   
   dlg->WriteBlocks(inode, m_lba, Inode, m_block_size, 1);
@@ -2583,17 +2460,11 @@ void CLean::OnLeanEntry() {
     if (items) {
       // read the inode
       dlg->ReadBlocks(inode_buff, m_lba, items->Inode, m_block_size, 1);
-      memcpy(&LeanEntry.m_inode, inode_buff, sizeof(struct S_LEAN_INODE));
+      memcpy(&LeanEntry.m_inode, inode_buff, LEAN_INODE_SIZE);
       LeanEntry.m_hItem = hItem;
       LeanEntry.m_parent = this;
       LeanEntry.m_inode_num = items->Inode;
-      if (LeanEntry.DoModal() == IDOK) { // apply button pressed?
-      //  // must read it back in so we don't "destroy" the EA's we might have updated in LeanEntry
-      //  dlg->ReadFromFile(buffer, m_lba + items->Inode, 1);
-      //  memcpy(buffer, &LeanEntry.m_inode, sizeof(struct S_LEAN_INODE));
-      //  //inode_buff->checksum = LeanCalcCRC(buffer, LEAN_INODE_SIZE);
-      //  dlg->WriteToFile(buffer, m_lba + items->Inode, 1);
-      }
+      LeanEntry.DoModal();
     }
   }
   
@@ -2666,14 +2537,14 @@ void CLean::OnJournalInode() {
   
   // read the inode
   dlg->ReadBlocks(buffer, m_lba, m_super.journal, m_block_size, 1);
-  memcpy(&LeanEntry.m_inode, buffer, sizeof(struct S_LEAN_INODE));
+  memcpy(&LeanEntry.m_inode, buffer, LEAN_INODE_SIZE);
   LeanEntry.m_hItem = NULL;
   LeanEntry.m_parent = this;
   LeanEntry.m_inode_num = m_super.journal;
   if (LeanEntry.DoModal() == IDOK) { // apply button pressed?
     // must read it back in so we don't "destroy" the EA's we might have updated in LeanEntry
     dlg->ReadBlocks(buffer, m_lba, m_super.journal, m_block_size, 1);
-    memcpy(buffer, &LeanEntry.m_inode, sizeof(struct S_LEAN_INODE));
+    memcpy(buffer, &LeanEntry.m_inode, LEAN_INODE_SIZE);
     dlg->WriteBlocks(buffer, m_lba, m_super.journal, m_block_size, 1);
   }
   free(buffer);
@@ -2693,14 +2564,326 @@ void CLean::OnErase() {
   }
 }
 
+// allocate blocks, building extents for a Size count of blocks
+// S_LEAN_BLOCKS is a list of extents.  Does not know about indirects or anything.
+//  is simply a list of extents.  It is up to the other functions to read/write the actual extents to the disk
+// Size = bytes we need appended
+int CLean::AppendToExtents(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD64 Start, BOOL MarkIt) {
+  unsigned i, cnt = extents->extent_count;
+  unsigned count = (unsigned) ((Size + (m_block_size - 1)) / m_block_size);
+  DWORD64 block = Start;
+
+  for (i=0; i<count; i++) {
+    block = GetFreeBlock(block, MarkIt);
+    
+    // if incrementing Extents->extent_size[cnt] will be greater than will fit in a DWORD sized then move to next one
+    // Ben: For debugging purposes, we can change the 0xFFFF to 32 to create a few Indirects for each (large) file.
+    if (extents->extent_size[cnt] == MAXDWORD /* 32 */) {
+      cnt++;
+      if (cnt >= extents->allocated_count)
+        ReAllocateExtentBuffer(extents, extents->allocated_count + LEAN_DEFAULT_COUNT);
+    }
+    
+    if (extents->extent_size[cnt] == 0) {
+      extents->extent_start[cnt] = block;
+      extents->extent_size[cnt]++;
+    } else if (block == (extents->extent_start[cnt] + extents->extent_size[cnt])) {
+      extents->extent_size[cnt]++;
+    } else {
+      cnt++;
+      if (cnt >= extents->allocated_count)
+        ReAllocateExtentBuffer(extents, extents->allocated_count + LEAN_DEFAULT_COUNT);
+      extents->extent_start[cnt] = block;
+      extents->extent_size[cnt] = 1;
+    }
+  }
+  
+  // update the count of extents used
+  extents->extent_count = cnt + 1;
+  extents->block_count += count;
+
+  // return this count
+  return extents->extent_count;
+}
+
+// get the extents of the file
+int CLean::ReadFileExtents(struct S_LEAN_BLOCKS *extents, DWORD64 Inode) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE *inode_buffer = (BYTE *) malloc(m_block_size);
+  BYTE *indirect_buffer = (BYTE *) malloc(m_block_size);
+  struct S_LEAN_INODE *inode;
+  struct S_LEAN_INDIRECT *indirect;
+  DWORD64 ind_block;
+  unsigned i;
+  
+  // initialize our pointers
+  inode = (struct S_LEAN_INODE *) inode_buffer;
+  indirect = (struct S_LEAN_INDIRECT *) indirect_buffer;
+
+  DWORD64 *p_extent_start;
+  DWORD32 *p_extent_size, *p_extent_crc;
+  
+  // read the inode
+  dlg->ReadBlocks(inode, m_lba, Inode, m_block_size, 1);
+  if (!ValidInode(inode)) {
+    free(inode_buffer);
+    free(indirect_buffer);
+    return -1;
+  }
+
+  // allocate at least LEAN_INODE_EXTENT_CNT extents to hold the direct extents
+  unsigned max_extents = (m_use_extended_extents) ? LEAN_INODE_EXTENT_CNT_EXT : LEAN_INODE_EXTENT_CNT;
+  AllocateExtentBuffer(extents, max_extents);
+  
+  // do the direct extents first
+  p_extent_start = (DWORD64 *) &inode->extent_start[0];
+  p_extent_size = (DWORD32 *) ((BYTE *) &inode->extent_start[0] + (max_extents * sizeof(DWORD64)));
+  p_extent_crc = (DWORD32 *) ((BYTE *) &inode->extent_start[0] + (max_extents * (sizeof(DWORD64) + sizeof(DWORD32))));
+  for (i=0; i<inode->extent_count; i++) {
+    extents->extent_start[extents->extent_count] = p_extent_start[i];
+    extents->extent_size[extents->extent_count] = p_extent_size[i];
+    if (m_use_extended_extents)
+      extents->extent_crc[extents->extent_count] = p_extent_crc[i];
+    extents->block_count += p_extent_size[i];
+    extents->extent_count++;
+  }
+  
+  // are there any indirect extents?
+  unsigned extent_size = (m_use_extended_extents) ? 16 : 12;
+  max_extents = (m_block_size - LEAN_INDIRECT_SIZE) / extent_size;
+  p_extent_start = (DWORD64 *) (indirect_buffer + LEAN_INDIRECT_SIZE);
+  p_extent_size = (DWORD32 *) (indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * sizeof(DWORD64)));
+  p_extent_crc = (DWORD32 *) (indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * (sizeof(DWORD64) + sizeof(DWORD32))));
+  if (inode->first_indirect > 0) {
+    ind_block = inode->first_indirect;
+    while (ind_block > 0) {
+      // read in the indirect block
+      dlg->ReadBlocks(indirect, m_lba, ind_block, m_block_size, 1);
+      if (!ValidIndirect(indirect))
+        break;
+
+      // increase the size of our list
+      ReAllocateExtentBuffer(extents, extents->extent_count + indirect->extent_count);
+
+      // retrieve the extents in this indirect block
+      for (i=0; i<indirect->extent_count; i++) {
+        extents->extent_start[extents->extent_count] = p_extent_start[i];
+        extents->extent_size[extents->extent_count] = p_extent_size[i];
+        if (m_use_extended_extents)
+          extents->extent_crc[extents->extent_count] = p_extent_crc[i];
+        extents->block_count += p_extent_size[i];
+        extents->extent_count++;
+      }
+
+      // get next indirect (0 == no more)
+      ind_block = indirect->next_indirect;
+    }
+  }
+  
+  free(inode_buffer);
+  free(indirect_buffer);
+  return extents->extent_count;
+}
+
+// write the extents of the file to the file
+// The count of extents could actually extend past the current inode count.
+//  therefore, we add indirects if needed
+// (We can't update the extended extent crc here since the file may not have been written to yet.)
+int CLean::WriteFileExtents(const struct S_LEAN_BLOCKS *extents, struct S_LEAN_INODE *inode) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE *indirect_buffer = (BYTE *) malloc(m_block_size);
+  struct S_LEAN_INDIRECT *indirect;
+  DWORD64 prev_block, this_block, next_block, remaining;
+  unsigned i, count = 0;
+  
+  // initialize our pointer
+  indirect = (struct S_LEAN_INDIRECT *) indirect_buffer;
+
+  // calculate the max count of extents we can have per this block size
+  unsigned max_extents = (m_use_extended_extents) ? LEAN_INODE_EXTENT_CNT_EXT : LEAN_INODE_EXTENT_CNT;
+  DWORD64 *p_extent_start;
+  DWORD32 *p_extent_size, *p_extent_crc;
+  
+  // do the direct extents first
+  p_extent_start = (DWORD64 *) ((BYTE *) &inode->extent_start[0]);
+  p_extent_size = (DWORD32 *) ((BYTE *) &inode->extent_start[0] + (max_extents * sizeof(DWORD64)));
+  p_extent_crc = (DWORD32 *) ((BYTE *) &inode->extent_start[0] + (max_extents * (sizeof(DWORD64) + sizeof(DWORD32))));
+  for (i=0; (i<max_extents) && (count<extents->extent_count); i++) {
+    p_extent_start[i] = extents->extent_start[count];
+    p_extent_size[i] = extents->extent_size[count];
+    if (m_use_extended_extents)
+      p_extent_crc[i] = 0;
+    count++;
+  }
+
+  this_block = 0;
+  prev_block = 0;
+  remaining = 0;
+  BOOL used = FALSE;
+  
+  inode->indirect_count = 0;
+
+  unsigned extent_size = (m_use_extended_extents) ? 16 : 12;
+  max_extents = (m_block_size - LEAN_INDIRECT_SIZE) / extent_size;
+  p_extent_start = (DWORD64 *) (indirect_buffer + LEAN_INDIRECT_SIZE);
+  p_extent_size = (DWORD32 *) (indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * sizeof(DWORD64)));
+  p_extent_crc = (DWORD32 *) (indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * (sizeof(DWORD64) + sizeof(DWORD32))));
+
+  // are there any indirect extents needed?
+  if (count < extents->extent_count) {
+    if (inode->first_indirect > 0) {
+      this_block = inode->first_indirect;
+      used = TRUE;
+    } else {
+      this_block = GetFreeBlock(0, TRUE);
+      inode->first_indirect = this_block;
+      used = FALSE;
+    }
+    
+    while (count < extents->extent_count) {
+      if (!used) {
+        // initialize the indirect block
+        memset(indirect, 0, m_block_size);
+        indirect->magic = LEAN_INDIRECT_MAGIC;
+        indirect->inode = extents->extent_start[0];
+        indirect->this_block = this_block;
+        indirect->prev_indirect = prev_block;
+        indirect->next_indirect = 0;
+      } else
+        dlg->ReadBlocks(indirect_buffer, m_lba, this_block, m_block_size, 1);
+      
+      // write to the indirect extents
+      indirect->block_count = 0;
+      for (i=0; (i<max_extents) && (count<extents->extent_count); i++) {
+        p_extent_start[i] = extents->extent_start[count];
+        p_extent_size[i] = extents->extent_size[count];
+        if (m_use_extended_extents)
+          p_extent_crc[i] = 0;
+        indirect->block_count += extents->extent_size[count];
+        count++;
+      }
+
+      indirect->extent_count = i;
+      inode->indirect_count++;
+
+      // will there be more?
+      if (count < extents->extent_count) {
+        if (used && (indirect->next_indirect > 0)) {
+          next_block = indirect->next_indirect;
+        } else {
+          next_block = GetFreeBlock(0, TRUE);
+          indirect->next_indirect = next_block;
+          used = FALSE;
+        }
+      } else {
+        next_block = this_block;
+        if (used)
+          remaining = indirect->next_indirect;
+        indirect->next_indirect = 0;
+      }
+      indirect->checksum = LeanCalcCRC(indirect, m_block_size, TRUE);
+      
+      // write the indirect back
+      dlg->WriteBlocks(indirect_buffer, m_lba, this_block, m_block_size, 1);
+      
+      // initialize for next round
+      prev_block = this_block;
+      this_block = next_block;
+    }
+  }
+  
+  // if we don't need any more indirects, yet there are some allocated,
+  //  we need to free each remaining indirect block
+  while (remaining > 0) {
+    MarkBlock(remaining, FALSE);
+    dlg->ReadBlocks(indirect_buffer, m_lba, remaining, m_block_size, 1);
+    remaining = indirect->next_indirect;
+  }
+  
+  // update the inode structure
+  max_extents = (m_use_extended_extents) ? LEAN_INODE_EXTENT_CNT_EXT : LEAN_INODE_EXTENT_CNT;
+  inode->last_indirect = this_block;
+  inode->extent_count = (count > max_extents) ? max_extents : (BYTE) count;
+  CTime time = CTime::GetCurrentTime();
+  inode->sch_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
+  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
+
+  free(indirect_buffer);
+  return extents->extent_count;
+}
+
+// update the Extended Extent CRC of the file
+// to save time and when we know we only updated the data after the inode, we can specify to only update the inode
+void CLean::UpdateFileExtents(struct S_LEAN_INODE *inode, const BOOL inode_only) {
+
+  // only have to do if extended extents are used
+  if (!m_use_extended_extents)
+    return;
+
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE *indirect_buffer = (BYTE *) malloc(m_block_size);
+  struct S_LEAN_INDIRECT *indirect;
+  DWORD64 next_block;
+  unsigned i;
+  
+  // initialize our pointer
+  indirect = (struct S_LEAN_INDIRECT *) indirect_buffer;
+
+  // calculate the max count of extents we can have per this block size
+  DWORD64 *p_extent_start;
+  DWORD32 *p_extent_size, *p_extent_crc;
+  
+  // do the direct extents first
+  p_extent_start = (DWORD64 *) ((BYTE *) &inode->extent_start[0]);
+  p_extent_size = (DWORD32 *) ((BYTE *) &inode->extent_start[0] + (LEAN_INODE_EXTENT_CNT_EXT * sizeof(DWORD64)));
+  p_extent_crc = (DWORD32 *) ((BYTE *) &inode->extent_start[0] + (LEAN_INODE_EXTENT_CNT_EXT * (sizeof(DWORD64) + sizeof(DWORD32))));
+  for (i=0; i<inode->extent_count; i++)
+    p_extent_crc[i] = LeanCalcExtentCRC(p_extent_start[i], p_extent_size[i], i == 0);
+
+  if (!inode_only) {
+    unsigned max_extents = (m_block_size - LEAN_INDIRECT_SIZE) / 16;
+    p_extent_start = (DWORD64 *) (indirect_buffer + LEAN_INDIRECT_SIZE);
+    p_extent_size = (DWORD32 *) (indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * sizeof(DWORD64)));
+    p_extent_crc = (DWORD32 *) (indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * (sizeof(DWORD64) + sizeof(DWORD32))));
+    
+    next_block = inode->first_indirect;
+    while (next_block > 0) {
+      dlg->ReadBlocks(indirect_buffer, m_lba, next_block, m_block_size, 1);
+    
+      // update the crc in this indirect block
+      for (i=0; i<indirect->extent_count; i++)
+        p_extent_crc[i] = LeanCalcExtentCRC(p_extent_start[i], p_extent_size[i], FALSE);
+    
+      // update the indirect's crc
+      indirect->checksum = LeanCalcCRC(indirect, m_block_size, TRUE);
+    
+      // write the indirect back
+      dlg->WriteBlocks(indirect_buffer, m_lba, next_block, m_block_size, 1);
+    
+      // get the next one
+      next_block = indirect->next_indirect;
+    }
+  }
+  
+  // update the inode structure
+  CTime time = CTime::GetCurrentTime();
+  inode->sch_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
+  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
+
+  free(indirect_buffer);
+}
+
 // allocate memory for the extents
 void CLean::AllocateExtentBuffer(struct S_LEAN_BLOCKS *extents, const unsigned count) {
-  extents->was_error = FALSE;
   extents->extent_count = 0;
   extents->allocated_count = count;
   extents->block_count = 0;
   extents->extent_start = (DWORD64 *) calloc(count, sizeof(DWORD64));
-  extents->extent_size = (DWORD *) calloc(count, sizeof(DWORD));
+  extents->extent_size = (DWORD32 *) calloc(count, sizeof(DWORD32));
+  if (m_use_extended_extents)
+    extents->extent_crc = (DWORD32 *) calloc(count, sizeof(DWORD32));
+  else
+    extents->extent_crc = NULL;
 }
 
 // allocate memory for the extents
@@ -2717,13 +2900,24 @@ void CLean::ReAllocateExtentBuffer(struct S_LEAN_BLOCKS *extents, const unsigned
     extents->extent_start = (DWORD64 *) ptr;
     
     // then the 'size'
-    ptr = calloc(count, sizeof(DWORD));
-    memcpy(ptr, extents->extent_size, extents->allocated_count * sizeof(DWORD));
+    ptr = calloc(count, sizeof(DWORD32));
+    memcpy(ptr, extents->extent_size, extents->allocated_count * sizeof(DWORD32));
     free(extents->extent_size);
-    extents->extent_size = (DWORD *) ptr;
+    extents->extent_size = (DWORD32 *) ptr;
+
+    // then the 'crc' ?
+    if (m_use_extended_extents) {
+      ptr = calloc(count, sizeof(DWORD32));
+      memcpy(ptr, extents->extent_crc, extents->allocated_count * sizeof(DWORD32));
+      free(extents->extent_crc);
+      extents->extent_crc = (DWORD32 *) ptr;
+    }
+
   } else {
     realloc(extents->extent_start, count * sizeof(DWORD64));
-    realloc(extents->extent_size, count * sizeof(DWORD));
+    realloc(extents->extent_size, count * sizeof(DWORD32));
+    if (m_use_extended_extents)
+      realloc(extents->extent_crc, count * sizeof(DWORD32));
   }
   
   // update the new size
@@ -2739,4 +2933,9 @@ void CLean::FreeExtentBuffer(struct S_LEAN_BLOCKS *extents) {
   if (extents->extent_size)
     free(extents->extent_size);
   extents->extent_size = NULL;
+  if (m_use_extended_extents) {
+    if (extents->extent_crc)
+      free(extents->extent_crc);
+    extents->extent_crc = NULL;
+  }
 }

@@ -63,6 +63,7 @@
 #include "pch.h"
 
 #include "ultimate.h"
+#include "Lean.h"
 #include "LeanFormat.h"
 
 #ifdef _DEBUG
@@ -81,11 +82,12 @@ CLeanFormat::CLeanFormat(CWnd* pParent /*=NULL*/)
   //{{AFX_DATA_INIT(CLeanFormat)
   m_block_size = 512;
   m_pre_alloc_count = 0;
-  m_eas_after_inode = FALSE;
+  m_encoding = ceUTF8;
+  m_eas_after_inode = TRUE;
+  m_extended_extents = FALSE;
   m_journal = FALSE;
   //}}AFX_DATA_INIT
 }
-
 
 void CLeanFormat::DoDataExchange(CDataExchange* pDX) {
   CDialog::DoDataExchange(pDX);
@@ -94,17 +96,31 @@ void CLeanFormat::DoDataExchange(CDataExchange* pDX) {
   DDV_MinMaxInt(pDX, m_block_size, 256, 65536);
   DDX_Text(pDX, IDC_PRE_ALLOC_COUNT, m_pre_alloc_count);
   DDV_MinMaxInt(pDX, m_pre_alloc_count, 1, 12);
+  DDX_CBIndex(pDX, IDC_ENCODING, m_encoding);
   DDX_Check(pDX, IDC_EAS_IN_INODE, m_eas_after_inode);
+  DDX_Check(pDX, IDC_EXT_EXTENTS, m_extended_extents);
   DDX_Check(pDX, IDC_JOURNAL, m_journal);
   //}}AFX_DATA_MAP
 }
-
 
 BEGIN_MESSAGE_MAP(CLeanFormat, CDialog)
   //{{AFX_MSG_MAP(CLeanFormat)
   ON_BN_CLICKED(IDOK, OnOkay)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
+
+BOOL CLeanFormat::OnInitDialog() {
+  CDialog::OnInitDialog();
+
+  // fill the Encoding combo box
+  CComboBox *cb = (CComboBox *) GetDlgItem(IDC_ENCODING);
+  cb->AddString("Ascii");
+  cb->AddString("UTF-8");
+  cb->AddString("UTF-16");
+  cb->SetCurSel(m_encoding);
+
+  return TRUE;
+}
 
 /////////////////////////////////////////////////////////////////////////////
 // CLeanFormat message handlers
@@ -119,3 +135,4 @@ void CLeanFormat::OnOkay() {
 
   CDialog::OnOK();
 }
+

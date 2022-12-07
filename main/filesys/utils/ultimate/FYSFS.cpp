@@ -296,7 +296,7 @@ void CFYSFS::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
   HTREEITEM hItem = m_dir_tree.GetSelectedItem();
   struct S_FYSFS_ITEMS *items = (struct S_FYSFS_ITEMS *) m_dir_tree.GetDataStruct(hItem);
 
-  GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
+  GetDlgItem(ID_ENTRY)->EnableWindow((hItem != NULL) && (m_dir_tree.GetParentItem(hItem) != NULL));
   GetDlgItem(ID_COPY)->EnableWindow((hItem != NULL) && items->CanCopy);
   GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & ITEM_IS_FILE));
   GetDlgItem(ID_INSERT)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));

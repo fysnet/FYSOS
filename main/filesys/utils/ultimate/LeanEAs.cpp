@@ -210,7 +210,6 @@ void CLeanEAs::OnAdd() {
   // don't allow any more than MAX_EA_STRUCT_ENTRIES
   if (m_count < MAX_EA_STRUCT_ENTRIES) {
     m_ea_struct[m_count].csName = "New Name";
-    m_ea_struct[m_count].NameLen = m_ea_struct[m_count].csName.GetLength();
     m_ea_struct[m_count].AttribLen = 0;
     memset(m_ea_struct[m_count].Data, 0, MAX_EA_STRUCT_DATA_SIZE);
     
@@ -219,7 +218,7 @@ void CLeanEAs::OnAdd() {
     m_count++;
     OnSelchangeList();
   } else
-    AfxMessageBox("We only allow MAX_EA_STRUCT_ENTRIES");
+    AfxMessageBox("We only allow a count of MAX_EA_STRUCT_ENTRIES entries.");
 }
 
 void CLeanEAs::OnDelete() {
@@ -232,7 +231,6 @@ void CLeanEAs::OnDelete() {
   
   for (i=index; i<m_count-1; i++) {
     m_ea_struct[i].csName = m_ea_struct[i+1].csName;
-    m_ea_struct[i].NameLen = m_ea_struct[i+1].NameLen;
     m_ea_struct[i].AttribLen = m_ea_struct[i+1].AttribLen;
     if (m_ea_struct[i+1].AttribLen > 0)
       memcpy(m_ea_struct[i].Data, m_ea_struct[i+1].Data, m_ea_struct[i].AttribLen);
@@ -290,7 +288,6 @@ void CLeanEAs::OnApply() {
   m_list.DeleteString(index);
   m_ea_struct[index].csName = m_name;
   m_list.InsertString(index, m_name);
-  m_ea_struct[index].NameLen = m_name.GetLength();
   m_ea_struct[index].Type = m_as_utf8;
   
   switch (m_as_utf8) {

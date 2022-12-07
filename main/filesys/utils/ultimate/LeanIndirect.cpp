@@ -114,6 +114,7 @@ void CLeanIndirect::DoDataExchange(CDataExchange* pDX) {
   //{{AFX_DATA_MAP(CLeanEntry)
   DDX_Control(pDX, IDC_EXT_START, m_ext_start);
   DDX_Control(pDX, IDC_EXT_SIZE, m_ext_size);
+  DDX_Control(pDX, IDC_EXT_CRC, m_ext_crc);
   DDX_Text(pDX, IDC_ENTRY_MAGIC, m_magic);
   DDX_Text(pDX, IDC_ENTRY_CRC, m_crc);
   DDX_Text(pDX, IDC_ENTRY_BLOCK_COUNT, m_block_count);
@@ -132,6 +133,7 @@ BEGIN_MESSAGE_MAP(CLeanIndirect, CDialog)
   //{{AFX_MSG_MAP(CLeanIndirect)
   ON_LBN_SELCHANGE(IDC_EXT_START, OnSelchangeExtStart)
   ON_LBN_SELCHANGE(IDC_EXT_SIZE, OnSelchangeExtSize)
+  ON_LBN_SELCHANGE(IDC_EXT_CRC, OnSelchangeExtCrc)
   ON_BN_CLICKED(IDC_CRC_UPDATE, OnCrcUpdate)
   ON_BN_CLICKED(IDC_MAGIC_UPDATE, OnMagicUpdate)
   ON_BN_CLICKED(IDC_BLOCK_UPDATE, OnBlockCountUpdate)
@@ -226,8 +228,9 @@ BOOL CLeanIndirect::OnInitDialog() {
   
   CDialog::OnInitDialog();
 
-  m_extent_max = (m_parent->m_block_size - LEAN_INDIRECT_SIZE) / 12;
-  m_reserved2_size = m_parent->m_block_size - LEAN_INDIRECT_SIZE - (m_extent_max * 12);
+  unsigned extent_size = (m_parent->m_use_extended_extents) ? 16 : 12;
+  m_extent_max = (m_parent->m_block_size - LEAN_INDIRECT_SIZE) / extent_size;
+  m_reserved2_size = m_parent->m_block_size - LEAN_INDIRECT_SIZE - (m_extent_max * extent_size);
   m_indirect_buffer = malloc(m_parent->m_block_size);
   UpdateIndirect(m_current_indirect);
   //UpdateStatus(m_current_indirect); // called by UpdateIndirect() above
@@ -251,14 +254,18 @@ void CLeanIndirect::UpdateStatus(const DWORD64 block) {
 void CLeanIndirect::UpdateIndirect(const DWORD64 block) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE *byte;
-  DWORD64 *qword;
-  DWORD32 *dword;
   CString cs;
   int i;
 
-  qword = (DWORD64 *) ((BYTE *) m_indirect_buffer + LEAN_INDIRECT_SIZE);
-  dword = (DWORD32 *) ((BYTE *) m_indirect_buffer + LEAN_INDIRECT_SIZE + (m_extent_max * sizeof(DWORD64)));
-  byte = (BYTE *) &dword[m_extent_max];
+  unsigned extent_size = (m_parent->m_use_extended_extents) ? 16 : 12;
+  unsigned max_extents = (m_parent->m_block_size - LEAN_INDIRECT_SIZE) / extent_size;
+  DWORD64 *p_extent_start = (DWORD64 *) ((BYTE *) m_indirect_buffer + LEAN_INDIRECT_SIZE);
+  DWORD *p_extent_size = (DWORD *) ((BYTE *) m_indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * sizeof(DWORD64)));
+  DWORD *p_extent_crc = (DWORD *) ((BYTE *) m_indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * (sizeof(DWORD64) + sizeof(DWORD))));
+  if (m_parent->m_use_extended_extents)
+    byte = (BYTE *) ((BYTE *) m_indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * (sizeof(DWORD64) + sizeof(DWORD) + sizeof(DWORD))));
+  else
+    byte = (BYTE *) ((BYTE *) m_indirect_buffer + LEAN_INDIRECT_SIZE + (max_extents * (sizeof(DWORD64) + sizeof(DWORD))));
 
   dlg->ReadBlocks(m_indirect_buffer, m_parent->m_lba, block, m_parent->m_block_size, 1);
 
@@ -285,11 +292,16 @@ void CLeanIndirect::UpdateIndirect(const DWORD64 block) {
 
   m_ext_start.ResetContent();
   m_ext_size.ResetContent();
+  m_ext_crc.ResetContent();
   for (i=0; i<m_indirect.extent_count; i++) {
-    cs.Format("%I64i", qword[i]);
+    cs.Format("%I64i", p_extent_start[i]);
     m_ext_start.AddString(cs);
-    cs.Format("%i", dword[i]);
+    cs.Format("%i", p_extent_size[i]);
     m_ext_size.AddString(cs);
+    if (m_parent->m_use_extended_extents) {
+      cs.Format("0x%08X", p_extent_crc[i]);
+      m_ext_crc.AddString(cs);
+    }
   }
 
   // send to the dialog
@@ -297,6 +309,8 @@ void CLeanIndirect::UpdateIndirect(const DWORD64 block) {
 
   GetDlgItem(IDPREV)->EnableWindow(m_indirect.prev_indirect != 0);
   GetDlgItem(IDNEXT)->EnableWindow(m_indirect.next_indirect != 0);
+  GetDlgItem(IDC_EXT_CRC)->ShowWindow(m_parent->m_use_extended_extents);
+  GetDlgItem(IDC_EXT_CRC)->SetFont(&dlg->m_DumpFont);
 
   UpdateStatus(block);
   m_dirty = FALSE;
@@ -305,10 +319,17 @@ void CLeanIndirect::UpdateIndirect(const DWORD64 block) {
 
 void CLeanIndirect::OnSelchangeExtStart() {
   m_ext_size.SetCurSel(m_ext_start.GetCurSel());
+  m_ext_crc.SetCurSel(m_ext_start.GetCurSel());
 }
 
 void CLeanIndirect::OnSelchangeExtSize() {
   m_ext_start.SetCurSel(m_ext_size.GetCurSel());
+  m_ext_crc.SetCurSel(m_ext_size.GetCurSel());
+}
+
+void CLeanIndirect::OnSelchangeExtCrc() {
+  m_ext_start.SetCurSel(m_ext_crc.GetCurSel());
+  m_ext_size.SetCurSel(m_ext_crc.GetCurSel());
 }
 
 void CLeanIndirect::OnCrcUpdate() {
@@ -324,7 +345,7 @@ void CLeanIndirect::OnCrcUpdate() {
   m_indirect.extent_count = convert32(m_extent_count);
 
   memcpy(m_indirect_buffer, &m_indirect, LEAN_INDIRECT_SIZE);
-  DWORD crc = m_parent->LeanCalcCRC(m_indirect_buffer, m_parent->m_block_size);
+  DWORD crc = m_parent->LeanCalcCRC(m_indirect_buffer, m_parent->m_block_size, TRUE);
   m_crc.Format("0x%08X", crc);
   SetDlgItemText(IDC_ENTRY_CRC, m_crc);
 }

@@ -78,7 +78,7 @@
 struct S_LEAN_SUPER {
   DWORD  checksum;                // DWORD sum of all fields.
   DWORD  magic;                   // 0x4E41454C ('LEAN')
-  WORD   fs_version;              // 0x0007 = 0.7
+  WORD   fs_version;              // 0x0100 = 1.0
   BYTE   pre_alloc_count;         // count minus one of contiguous blocks that driver should try to preallocate
   BYTE   log_blocks_per_band;     // 1 << log_blocks_per_band = blocks_per_band. Valid values are 12, 13, 14, ...
   DWORD  state;                   // bit 0 = unmounted?, bit 1 = error?
@@ -86,22 +86,34 @@ struct S_LEAN_SUPER {
   BYTE   volume_label[64];        // can be modified by the LABEL command
   DWORD64 block_count;            // The total number of blocks that form a file system volume
   DWORD64 free_block_count;       // The number of free blocks in the volume. A value of zero means disk full.
+  DWORD64 next_free_block;        // Hint to the next free block.
   DWORD64 primary_super;          // block number of primary super block
   DWORD64 backup_super;           // block number of backup super block
   DWORD64 bitmap_start;           // This is the address of the block where the first bands' bitmap starts
   DWORD64 root_start;             // This is the address of the block where the root directory of the volume starts, the inode number of the root directory.
   DWORD64 bad_start;              // This is the address of the block where the pseudo-file to track bad blocks starts.
   DWORD64 journal;                // if not zero, inode number of journal file (version 0.7+ only)
+  DWORD  capabilities;            // Extended Capabilities bitmap
   BYTE   log_block_size;          // (1 << log_block_size) = block size (9 = 512, 10 = 1024, etc)
+  BYTE   char_encoding;           // Character Encoding of all strings on volume
+  BYTE   resv[2];
   //BYTE   reserved[];            // zeros
 };
 
+#define LEAN_CAPABILITIES_EXT_EXTENTS  (1<<0)
+
+// encoding "enum"
+#define ceASCII   0
+#define ceUTF8    1
+#define ceUTF16   2
+
 #define LEAN_FS_TIME_ADJUST  ((DWORD64) 0x00011EF9B4758000) // additional uS from 01-01-1970 to 01-01-1980
 
-#define LEAN_INODE_SIZE       176
-#define LEAN_INODE_EXTENT_CNT   6
+#define LEAN_INODE_SIZE       200
+#define LEAN_INODE_EXTENT_CNT       8
+#define LEAN_INODE_EXTENT_CNT_EXT   6
 
-// 176 bytes each
+// 200 bytes each
 struct S_LEAN_INODE {
   DWORD  checksum;                // DWORD  sum of all fields in structure
   DWORD  magic;                   // 0x45444F4E  ('NODE')
@@ -123,6 +135,7 @@ struct S_LEAN_INODE {
   DWORD64 fork;                   // if non-zero, contains an Inode number for a file holding extended attributes
   DWORD64 extent_start[LEAN_INODE_EXTENT_CNT]; // The array of extents
   DWORD  extent_size[LEAN_INODE_EXTENT_CNT]; 
+  //DWORD  extent_crc[LEAN_INODE_EXTENT_CNT]; // if extended extents are used (LEAN_INODE_EXTENT_CNT = 6)
 };
 
 //attributes:
@@ -178,14 +191,14 @@ struct S_LEAN_INDIRECT {
   //DWORD  extent_size[];
 };
 
-#define LEAN_NAME_LEN_MAX  4068   // 255 is largest value allowed in rec_len * 16 bytes per record - 12 bytes for header
+#define LEAN_NAME_LEN_MAX  4068   // (in bytes) 255 is largest value allowed in rec_len * 16 bytes per record - 12 bytes for header
 #define LEAN_DIRENTRY_NAME   12
 struct S_LEAN_DIRENTRY {
   DWORD64 inode;     // The inode number of the file linked by this directory entry, the address of the first cluster of the file.
   BYTE   type;      // see table below (0 = deleted)
   BYTE   rec_len;   // len of total record in 16 byte units.
-  WORD   name_len;  // total length of name.
-  BYTE   name[4];   // (UTF-8) must *not* be null terminated, remaining bytes undefined if not a multiple of 8.  UTF-8
+  WORD   name_len;  // total length of name in characters.
+  BYTE   name[4];   // remaining bytes undefined if not a multiple of 4
 };                  // 4 to make it 16 bytes for first para.  Not limited to 4 bytes.
 
 // type:
@@ -239,9 +252,8 @@ struct S_LEAN_ITEMS {
 #define MAX_EA_STRUCT_ENTRIES    256
 #define MAX_EA_STRUCT_DATA_SIZE  1024
 struct S_EA_STRUCT {
-  int   NameLen;
   int   AttribLen;
-  int   Type;
+  BYTE  Type;
   CString csName;
   BYTE  Data[MAX_EA_STRUCT_DATA_SIZE];
 };
@@ -249,12 +261,12 @@ struct S_EA_STRUCT {
 // structure to hold all LEAN blocks
 #define LEAN_DEFAULT_COUNT   64
 struct S_LEAN_BLOCKS {
-  BOOL   was_error;
   unsigned extent_count;
   unsigned allocated_count;
   DWORD64 block_count;
   DWORD64 *extent_start; // The array of extents
-  DWORD  *extent_size; 
+  DWORD32 *extent_size; 
+  DWORD32 *extent_crc;
 };
 
 /////////////////////////////////////////////////////////////////////////////
@@ -277,6 +289,7 @@ public:
   CString	m_crc;
   CString	m_cur_state;
   CString	m_free_blocks;
+  CString	m_next_free;
   CString	m_guid;
   CString	m_label;
   CString	m_magic;
@@ -287,14 +300,15 @@ public:
   CString	m_block_count;
   CString	m_version;
   CString	m_journal_lba;
+  CString m_capabilities;
   CString	m_log_block_size;
+  int m_encoding;
   //}}AFX_DATA
   
   BYTE lean_calc_log_band_size(const DWORD sect_size, const DWORD64 tot_blocks);
   
   void Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, BOOL IsNewTab);
   BOOL DetectLeanFS(void);
-  WORD DetectLeanFSOld(void);
   DWORD GetNewColor(int index);
   
   void ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM parent);
@@ -303,9 +317,11 @@ public:
   void ZeroExtent(DWORD64 ExtentStart, DWORD ExtentSize);
   BOOL ValidInode(const struct S_LEAN_INODE *inode);
   BOOL ValidIndirect(const struct S_LEAN_INDIRECT *indirect);
-  DWORD LeanCalcCRC(const void *data, unsigned count);
+  DWORD LeanCalcCRC(const void *data, size_t count, const BOOL skip);
+  DWORD LeanCalcExtentCRC(const DWORD64 start, const DWORD size, const BOOL first);
   void SaveItemInfo(HTREEITEM hItem, DWORD64 Inode, DWORD64 FileSize, DWORD flags, DWORD Offset, BOOL CanCopy);
   bool Format(const BOOL AskForBoot);
+  DWORD CreateRootEntry(struct S_LEAN_DIRENTRY *entry, const DWORD64 inode_num, const BYTE type, CString name);
   
   void SendToDialog(struct S_LEAN_SUPER *super);
   void ReceiveFromDialog(struct S_LEAN_SUPER *super);
@@ -324,7 +340,11 @@ public:
   int AppendToExtents(struct S_LEAN_BLOCKS *Extents, DWORD64 Size, DWORD64 Start, BOOL MarkIt);
   void FreeExtents(const struct S_LEAN_BLOCKS *Extents);
   int ReadFileExtents(struct S_LEAN_BLOCKS *Extents, DWORD64 Inode);
-  int WriteFileExtents(const struct S_LEAN_BLOCKS *Extents, struct S_LEAN_INODE *inode);
+  int WriteFileExtents(const struct S_LEAN_BLOCKS *extents, struct S_LEAN_INODE *inode);
+  void UpdateFileExtents(struct S_LEAN_INODE *inode, const BOOL inode_only);
+  void GetName(void *ptr, CString &name, const int len, const int encoding);
+  WORD GetNameLen(CString name, const int encoding);
+  WORD PutName(void *ptr, CString name, int max_len, const int encoding);
   int AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attrib);
   void BuildInode(struct S_LEAN_BLOCKS *Extents, DWORD64 Size, DWORD Attrib);
   void IncrementLinkCount(DWORD64 Inode);
@@ -353,11 +373,12 @@ public:
   BOOL    m_hard_format;
   DWORD   m_block_size;
   DWORD64 m_tot_blocks;
+  BOOL    m_use_extended_extents;
 
   BOOL    m_show_hidden;
   BOOL    m_show_del;
   BOOL    m_del_clear;
-  BOOL    m_ESs_in_Inode;
+  BOOL    m_EAs_in_Inode;
 
   BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
 
@@ -365,7 +386,7 @@ public:
   BOOL LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CString path);
   int  LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_to_list);
   int  LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count, DWORD64 *blocks_used);
-  int  LeanCheckExtents(void *extents, unsigned int count, unsigned int extent_max);
+  int  LeanCheckExtents(void *extents, unsigned int count, unsigned int extent_max, const BOOL is_inode);
   void LeanCheckAddInode(DWORD64 block);
   void LeanCheckLinkCount(void);
 

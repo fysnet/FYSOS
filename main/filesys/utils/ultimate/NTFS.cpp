@@ -284,7 +284,7 @@ void CNTFS::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
   HTREEITEM hItem = m_dir_tree.GetSelectedItem();
   struct S_NTFS_ITEMS *items = (struct S_NTFS_ITEMS *) m_dir_tree.GetDataStruct(hItem);
   
-  GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
+  GetDlgItem(ID_ENTRY)->EnableWindow((hItem != NULL) && (m_dir_tree.GetParentItem(hItem) != NULL));
   GetDlgItem(ID_COPY)->EnableWindow((hItem != NULL) && (items->mft_entry >= STARTING_MFT) && items->CanCopy);
   GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & ITEM_IS_FILE));
   //GetDlgItem(ID_INSERT)->EnableWindow(FALSE /*(hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0)*/);
@@ -937,6 +937,8 @@ BOOL CNTFS::GetFileAttrbs(struct S_NTFS_FILE_REC *file_rec, char *filename_str, 
   if (file_rec->magic == FILE_REC_MAGIC) {
     attrb = (struct S_NTFS_ATTR *) ((BYTE *) file_rec + file_rec->attribs_off);
     BYTE filename_last_type = 0xFF;
+    if ((attrb->type == NTFS_ATTR_EOA) || (attrb->len == 0))
+      return FALSE;
     while ((attrb->type != NTFS_ATTR_EOA) && (attrb->len > 0)) {
       attrb_res = (struct S_NTFS_ATTR_RES *) ((BYTE *) attrb + sizeof(struct S_NTFS_ATTR));
       attrb_nres = (struct S_NTFS_ATTR_NONRES *) ((BYTE *) attrb + sizeof(struct S_NTFS_ATTR));
@@ -970,7 +972,7 @@ BOOL CNTFS::GetFileAttrbs(struct S_NTFS_FILE_REC *file_rec, char *filename_str, 
           }
           break;
       }
-      UINT ll = attrb->len;
+      
       attrb = (struct S_NTFS_ATTR *) ((BYTE *) attrb + attrb->len);
       if ((BYTE *) attrb > (BYTE *) file_rec + file_rec->record_len) {
         //AfxMessageBox(" Error:  Went passed end of filerec data...");

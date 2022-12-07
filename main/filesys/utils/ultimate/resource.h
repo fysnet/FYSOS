@@ -35,7 +35,7 @@
 #define IDD_LEAN                        136
 #define IDB_DELETED                     137
 #define IDD_FAT_ENTRY                   137
-#define IDB_FORKED                      138
+#define IDB_SYMBOLIC                    138
 #define IDD_LEAN_ENTRY                  138
 #define IDD_ATTRIBUTE                   139
 #define IDD_LEAN_TIME                   140
@@ -50,8 +50,6 @@
 #define IDD_EMBR                        145
 #define IDB_FILE_HIDDEN                 145
 #define IDD_EMBR_ENTRY                  146
-#define IDB_FORKED1                     146
-#define IDB_SYMBOLIC                    146
 #define IDD_FAT32_INFO                  147
 #define IDD_FAT32_ENTRY                 148
 #define IDD_FYSFS                       149
@@ -236,11 +234,15 @@
 #define IDC_ENTRY_EXT                   1110
 #define ID_LEAN_DELETE                  1110
 #define IDC_LAST_MOUNT                  1110
+#define IDC_LEAN_NEXT_FREE              1110
 #define IDC_ENTRY_ATTRIB                1111
+#define IDC_LEAN_CAPABILITIES           1111
 #define IDC_ENTRY_RESERVED              1112
 #define IDC_ENTRY_TIME                  1113
 #define IDC_ENTRY_RESERVED1             1113
+#define IDC_LEAN_ENCODING               1113
 #define IDC_ENTRY_DATE                  1114
+#define IDC_LEAN_ENCODING_DISP          1114
 #define IDC_ENTRY_CLUSTER               1115
 #define IDC_ENTRY_FILESIZE              1116
 #define IDC_TIME_DISP                   1117
@@ -282,6 +284,7 @@
 #define IDC_SCH_TIME_NOW                1139
 #define IDC_FLAGS_B                     1139
 #define IDC_THIS_BLOCK                  1139
+#define IDC_EXT_SIZE2                   1139
 #define IDC_MOD_TIME_NOW                1140
 #define IDC_LEAN_TIME                   1140
 #define IDC_D_RUN_LIST_B                1140
@@ -292,8 +295,11 @@
 #define IDC_S_LAST_MOD_B                1142
 #define IDC_RSVD_UPDATE                 1142
 #define IDC_S_LAST_MOD_REC_B            1143
+#define IDC_ENTRY_REC_LEN               1143
 #define IDC_S_LAST_ACCESS_B             1144
+#define IDC_ENTRY_NAME_LEN              1144
 #define IDC_F_CREATION_B                1145
+#define IDC_EXT_CRC                     1145
 #define IDC_F_LAST_MOD_B                1146
 #define IDC_F_LAST_MOD_REC_B            1147
 #define IDC_SFS_TIMESTAMP               1148
@@ -838,6 +844,7 @@
 #define IDC_EAS_IN_INODE                1523
 #define ID_CLEAR                        1524
 #define IDC_PRE_ALLOC_COUNT2            1524
+#define IDC_EXT_EXTENTS                 1524
 #define IDC_ISO9660_NO_EMU              1525
 #define IDC_ISO9660_144                 1526
 #define IDC_ISO9660_120                 1527
@@ -997,9 +1004,9 @@
 #define IDC_SYMBOL_DATA                 1642
 #define IDC_SHOW_HIDDEN                 1642
 #define IDC_HIDDEN                      1643
-#define IDC_SHOW_DELETED                1643
 #define IDC_UNDELETE                    1644
 #define IDC_SPIN1                       1645
+#define IDC_ENCODING                    1647
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
@@ -1021,7 +1028,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        204
 #define _APS_NEXT_COMMAND_VALUE         32787
-#define _APS_NEXT_CONTROL_VALUE         1646
+#define _APS_NEXT_CONTROL_VALUE         1648
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

@@ -256,7 +256,7 @@ void CLeanJournal::OnLeanCrcUpdate() {
   
   UpdateData(TRUE);
   
-  DWORD crc = m_parent->LeanCalcCRC(hdr, sizeof(struct S_LEAN_JOURNAL) + (hdr->entry_cnt * sizeof(struct S_LEAN_JOURNAL_ENTRY)));
+  DWORD crc = m_parent->LeanCalcCRC(hdr, sizeof(struct S_LEAN_JOURNAL) + (hdr->entry_cnt * sizeof(struct S_LEAN_JOURNAL_ENTRY)), TRUE);
   cs.Format("0x%08X", crc);
   SetDlgItemText(IDC_LEAN_CRC, cs);
 }

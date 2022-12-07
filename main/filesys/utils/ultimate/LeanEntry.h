@@ -78,6 +78,7 @@ public:
   enum { IDD = IDD_LEAN_ENTRY };
   CListBox	m_ext_start;
   CListBox	m_ext_size;
+  CListBox	m_ext_crc;
   CString	m_acc_time;
   CString	m_attribs;
   CString	m_cre_time;
@@ -96,6 +97,8 @@ public:
   CString	m_uid;
   CString	m_entry_crc;
   CString	m_name;
+  CString m_rec_len;
+  CString m_name_len;
   BOOL    m_hidden;
   BOOL    m_undelete;
   //}}AFX_DATA
@@ -104,6 +107,7 @@ public:
   CLean    *m_parent;
   HTREEITEM m_hItem;
   DWORD64 m_inode_num;
+  BOOL    m_force_fork;
 
   BOOL OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult);
   
@@ -122,6 +126,7 @@ protected:
   virtual BOOL OnInitDialog();
   afx_msg void OnSelchangeExtStart();
   afx_msg void OnSelchangeExtSize();
+  afx_msg void OnSelchangeExtCrc();
   afx_msg void OnAttribute();
   afx_msg void OnCrcUpdate();
   afx_msg void OnRsvdUpdate();

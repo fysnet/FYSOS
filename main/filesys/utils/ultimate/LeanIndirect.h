@@ -78,6 +78,7 @@ public:
   enum { IDD = IDD_LEAN_INDIRECT };
   CListBox	m_ext_start;
   CListBox	m_ext_size;
+  CListBox	m_ext_crc;
   CString	m_magic;
   CString	m_crc;
   CString	m_block_count;
@@ -112,6 +113,7 @@ protected:
   virtual BOOL OnInitDialog();
   afx_msg void OnSelchangeExtStart();
   afx_msg void OnSelchangeExtSize();
+  afx_msg void OnSelchangeExtCrc();
   afx_msg void OnCrcUpdate();
   afx_msg void OnMagicUpdate();
   afx_msg void OnBlockCountUpdate();

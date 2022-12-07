@@ -320,7 +320,7 @@ void CExt2::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
   HTREEITEM hItem = m_dir_tree.GetSelectedItem();
   struct S_EXT2_ITEMS *items = (struct S_EXT2_ITEMS *) m_dir_tree.GetDataStruct(hItem);
 
-  GetDlgItem(ID_ENTRY)->EnableWindow(hItem != NULL);
+  GetDlgItem(ID_ENTRY)->EnableWindow((hItem != NULL) && (m_dir_tree.GetParentItem(hItem) != NULL));
   GetDlgItem(ID_COPY)->EnableWindow((hItem != NULL) && items->CanCopy);
   GetDlgItem(ID_INSERT)->EnableWindow(FALSE /*(hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0)*/);
   GetDlgItem(ID_DELETE)->EnableWindow(FALSE /*hItem != NULL*/);
@@ -525,7 +525,7 @@ void CExt2::ParseDir(void *root, DWORD64 root_size, HTREEITEM parent) {
           break;
         case EXT2_FT_SYMLINK: // File type: symbolic link
           //name += " (Link)";
-          hItem = m_dir_tree.Insert(name, ITEM_IS_FORK, IMAGE_FORKED, IMAGE_FORKED, parent);
+          hItem = m_dir_tree.Insert(name, ITEM_IS_FORK, IMAGE_SYMBOLIC, IMAGE_SYMBOLIC, parent);
           if (hItem == NULL) { m_too_many = TRUE; return; }
           SaveItemInfo(hItem, cur->inode - 1, FALSE);
           break;
