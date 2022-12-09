@@ -78,7 +78,6 @@ public:
   enum { IDD = IDD_LEAN_FORMAT };
   DWORD m_block_size;
   int   m_pre_alloc_count;
-  int   m_encoding;
   BOOL	m_eas_after_inode;
   BOOL	m_extended_extents;
   BOOL	m_journal;

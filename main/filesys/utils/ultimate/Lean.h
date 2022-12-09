@@ -90,22 +90,18 @@ struct S_LEAN_SUPER {
   DWORD64 primary_super;          // block number of primary super block
   DWORD64 backup_super;           // block number of backup super block
   DWORD64 bitmap_start;           // This is the address of the block where the first bands' bitmap starts
+  DWORD   bitmap_checksum;        // this is the checksum of the complete bitmap of the volume
+  DWORD   resv0;                  // reserved for future use
   DWORD64 root_start;             // This is the address of the block where the root directory of the volume starts, the inode number of the root directory.
   DWORD64 bad_start;              // This is the address of the block where the pseudo-file to track bad blocks starts.
   DWORD64 journal;                // if not zero, inode number of journal file (version 0.7+ only)
   DWORD  capabilities;            // Extended Capabilities bitmap
   BYTE   log_block_size;          // (1 << log_block_size) = block size (9 = 512, 10 = 1024, etc)
-  BYTE   char_encoding;           // Character Encoding of all strings on volume
-  BYTE   resv[2];
+  BYTE   resv1[3];                // reserved for future use
   //BYTE   reserved[];            // zeros
 };
 
 #define LEAN_CAPABILITIES_EXT_EXTENTS  (1<<0)
-
-// encoding "enum"
-#define ceASCII   0
-#define ceUTF8    1
-#define ceUTF16   2
 
 #define LEAN_FS_TIME_ADJUST  ((DWORD64) 0x00011EF9B4758000) // additional uS from 01-01-1970 to 01-01-1980
 
@@ -286,6 +282,7 @@ public:
   CString	m_backup_lba;
   CString	m_bad_lba;
   CString	m_bitmap_lba;
+  CString m_bitmap_crc;
   CString	m_crc;
   CString	m_cur_state;
   CString	m_free_blocks;
@@ -302,7 +299,6 @@ public:
   CString	m_journal_lba;
   CString m_capabilities;
   CString	m_log_block_size;
-  int m_encoding;
   //}}AFX_DATA
   
   BYTE lean_calc_log_band_size(const DWORD sect_size, const DWORD64 tot_blocks);
@@ -337,14 +333,15 @@ public:
   void DisplayFreeSpace(void);
   DWORD64 GetFreeBlock(DWORD64 Start, BOOL MarkIt);
   void MarkBlock(DWORD64 Block, BOOL MarkIt);
+  DWORD BitmapChecksum(struct S_LEAN_SUPER *super);
   int AppendToExtents(struct S_LEAN_BLOCKS *Extents, DWORD64 Size, DWORD64 Start, BOOL MarkIt);
   void FreeExtents(const struct S_LEAN_BLOCKS *Extents);
   int ReadFileExtents(struct S_LEAN_BLOCKS *Extents, DWORD64 Inode);
   int WriteFileExtents(const struct S_LEAN_BLOCKS *extents, struct S_LEAN_INODE *inode);
   void UpdateFileExtents(struct S_LEAN_INODE *inode, const BOOL inode_only);
-  void GetName(void *ptr, CString &name, const int len, const int encoding);
-  WORD GetNameLen(CString name, const int encoding);
-  WORD PutName(void *ptr, CString name, int max_len, const int encoding);
+  void GetName(void *ptr, CString &name, const int len);
+  WORD GetNameLen(CString name);
+  WORD PutName(void *ptr, CString name, int max_len);
   int AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attrib);
   void BuildInode(struct S_LEAN_BLOCKS *Extents, DWORD64 Size, DWORD Attrib);
   void IncrementLinkCount(DWORD64 Inode);
@@ -423,6 +420,7 @@ protected:
   afx_msg void OnLeanMagicUpdate();
   afx_msg void OnLeanCurrentState();
   afx_msg void OnLeanFreeUpdate();
+  afx_msg void OnLeanBitmapCRC();
   afx_msg void OnKillfocusLeanGuid();
   afx_msg void OnGuidCreate();
   afx_msg void OnShowHidden();

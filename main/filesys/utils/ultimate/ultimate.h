@@ -197,17 +197,6 @@ BOOL power_of_two(DWORD val);
 /////////////////////////////////////////////////////////////////////////////
 CString gFormatNum(DWORD64 num, BOOL isSigned, BOOL isDecimal);
 
-/////////////////////////////////////////////////////////////////////////////
-WORD EncodeToAscii(void *ptr, CString name, WORD MaxCount);
-WORD EncodeToUTF8(void *ptr, CString name, WORD MaxCount);
-WORD EncodeToUTF16(void *ptr, CString name, WORD MaxCount);
-WORD EncodeFromAscii(void *ptr, CString &name, int length);
-WORD EncodeFromUTF8(void *ptr, CString &name, int length);
-WORD EncodeFromUTF16(void *ptr, CString &name, int length);
-WORD EncodeAsciiLen(CString name);
-WORD EncodeUTF8Len(CString name);
-WORD EncodeUTF16Len(CString name);
-
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.
 

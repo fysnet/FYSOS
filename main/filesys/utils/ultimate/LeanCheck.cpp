@@ -230,6 +230,12 @@ void CLean::OnLeanCheck() {
     lcDiagCount++;
   }
   
+  // check the crc of the bitmap
+  if (super->bitmap_checksum != BitmapChecksum(super)) {
+    lcInfo += "Super Bitmap Checksum does not match actual...\r\n";
+    lcErrorCount++;
+  }
+
   ////////////////////////////////////////////////////////////////////
   // Check 2: get free block count from band bitmaps.
   lcInfo += "Checking the Bitmaps\r\n";
@@ -362,7 +368,7 @@ BOOL CLean::LeanCheckDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, CStrin
       break;
     
     // retrieve the name.
-    GetName(cur->name, name, cur->name_len, m_encoding);
+    GetName(cur->name, name, cur->name_len);
     
     IsDot = ((name == ".") || (name == ".."));
     
@@ -549,6 +555,12 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_t
     lcInfo += cs;
     errors++;
   }
+  // a fork must not have extended attributes just after the inode
+  if (!allow_fork && (inode->attributes & LEAN_ATTR_EAS_IN_INODE)) {
+    cs.Format("Inode %I64i: Fork has LEAN_ATTR_EAS_IN_INODE set.\r\n", block);
+    lcInfo += cs;
+    errors++;
+  }
 
   // free the buffer used
   free(buffer);
@@ -683,7 +695,7 @@ int CLean::LeanCheckExtents(void *extents, unsigned int count, unsigned int exte
   CString cs;
   
   const DWORD64 band_size = ((DWORD64) 1 << m_super.log_blocks_per_band); // blocks per band
-  const unsigned bitmap_size = (unsigned) (band_size >> 12);     // blocks per bitmap
+  const unsigned bitmap_size = (unsigned) (band_size / m_block_size / 8); // blocks per bitmap
 
   // create the buffer
   bitmap = (BYTE *) malloc(bitmap_size * m_block_size);

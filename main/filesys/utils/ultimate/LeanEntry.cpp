@@ -283,7 +283,7 @@ BOOL CLeanEntry::OnInitDialog() {
             cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + Offset);
             m_rec_len.Format("%i bytes", cur->rec_len * 16);
             m_name_len.Format("%i chars", cur->name_len);
-            m_parent->GetName(cur->name, m_name, cur->name_len, m_parent->m_encoding);
+            m_parent->GetName(cur->name, m_name, cur->name_len);
             m_hidden = (cur->type & LEAN_FA_HIDDEN) > 0;
             m_undelete = (cur->type & 0x7F) == LEAN_FT_DELETED;
             free(root);
@@ -509,8 +509,8 @@ void CLeanEntry::OnEas() {
 
     // if NN == 0, this is an empty entry and VVVVV = length of whole entry EXCLUDING dword header
     if (NameLen > 0) {
-      m_parent->GetName(&p[4], ea_struct[EntryCount].csName, NameLen, m_parent->m_encoding);
-      len = m_parent->GetNameLen(ea_struct[EntryCount].csName, m_parent->m_encoding);
+      m_parent->GetName(&p[4], ea_struct[EntryCount].csName, NameLen);
+      len = m_parent->GetNameLen(ea_struct[EntryCount].csName);
       if (ea_struct[EntryCount].AttribLen > 0) {
         if (ea_struct[EntryCount].AttribLen > MAX_EA_STRUCT_DATA_SIZE) {
           AfxMessageBox("Entry has more than MAX_EA_STRUCT_DATA_SIZE bytes in data");
@@ -550,11 +550,11 @@ void CLeanEntry::OnEas() {
       for (; i<LeanEAs.m_count; i++) {
         NameLen = ea_struct[i].csName.GetLength();
         if (NameLen > 255) NameLen = 255; // make sure we are not over the limit
-        dword = m_parent->GetNameLen(ea_struct[i].csName, m_parent->m_encoding);
+        dword = m_parent->GetNameLen(ea_struct[i].csName);
         len = (sizeof(DWORD) + dword + ea_struct[i].AttribLen + 3) & ~3;
         if (len <= buff_len) {
           * (DWORD *) p = (NameLen << 24) | (ea_struct[i].Type << 20) | ea_struct[i].AttribLen;
-          m_parent->PutName(&p[4], ea_struct[i].csName, -1, m_parent->m_encoding);
+          m_parent->PutName(&p[4], ea_struct[i].csName, -1);
           memcpy(p + sizeof(DWORD) + dword, ea_struct[i].Data, ea_struct[i].AttribLen);
           p += len;
           buff_len -= len;
@@ -575,12 +575,12 @@ void CLeanEntry::OnEas() {
     buffer = (BYTE *) calloc(buff_len, 1);
     for (; i<LeanEAs.m_count; i++) {
       NameLen = ea_struct[i].csName.GetLength();
-      dword = m_parent->GetNameLen(ea_struct[i].csName, m_parent->m_encoding); // update the NameLen field to the encoding we use
+      dword = m_parent->GetNameLen(ea_struct[i].csName); // update the NameLen field
       len = sizeof(DWORD) + (((dword + ea_struct[i].AttribLen) + 3) & ~3);
       if (pos + len > buff_len)
         buffer = (BYTE *) realloc(buffer, buff_len = pos + len);
       * (DWORD *) &buffer[pos] = (NameLen << 24) | (ea_struct[i].Type << 20) | ea_struct[i].AttribLen;
-      m_parent->PutName(&buffer[pos] + sizeof(DWORD), ea_struct[i].csName, -1, m_parent->m_encoding);
+      m_parent->PutName(&buffer[pos] + sizeof(DWORD), ea_struct[i].csName, -1);
       memcpy(&buffer[pos] + sizeof(DWORD) + dword, ea_struct[i].Data, ea_struct[i].AttribLen);
       pos += len;
     }
@@ -694,10 +694,10 @@ void CLeanEntry::OnOK() {
           root = (struct S_LEAN_DIRENTRY *) m_parent->ReadFile(items->Inode, &RootSize);
           if (root) {
             cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) root + Offset);
-            int len = m_parent->GetNameLen(m_name, m_parent->m_encoding);
+            int len = m_parent->GetNameLen(m_name);
             if (len <= ((cur->rec_len * 16) - LEAN_DIRENTRY_NAME)) {
               // TODO: can we divide it into two entries now??
-              m_parent->PutName(cur->name, m_name, len, m_parent->m_encoding);
+              m_parent->PutName(cur->name, m_name, len);
               cur->name_len = m_name.GetLength();
             } else {
               // name is larger than what will fit in this current spot
@@ -712,7 +712,7 @@ void CLeanEntry::OnOK() {
               memcpy(new_root, root, Offset + LEAN_DIRENTRY_NAME);
               
               cur = (struct S_LEAN_DIRENTRY *) ((BYTE *) new_root + Offset);
-              m_parent->PutName(cur->name, m_name, len, m_parent->m_encoding);
+              m_parent->PutName(cur->name, m_name, len);
               cur->rec_len = (BYTE) new_len;
               cur->name_len = m_name.GetLength();
               

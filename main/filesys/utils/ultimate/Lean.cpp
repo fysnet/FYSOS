@@ -93,6 +93,7 @@ CLean::CLean() : CPropertyPage(CLean::IDD) {
   m_backup_lba = _T("");
   m_bad_lba = _T("");
   m_bitmap_lba = _T("");
+  m_bitmap_crc = _T("");
   m_crc = _T("");
   m_cur_state = _T("");
   m_free_blocks = _T("");
@@ -109,7 +110,6 @@ CLean::CLean() : CPropertyPage(CLean::IDD) {
   m_journal_lba = _T("");
   m_capabilities = _T("");
   m_log_block_size = _T("");
-  m_encoding = ceUTF16;  // default to utf-16
   m_show_hidden = FALSE;
   m_show_del = FALSE;
   m_del_clear = FALSE;
@@ -134,6 +134,8 @@ void CLean::DoDataExchange(CDataExchange* pDX) {
   DDV_MaxChars(pDX, m_bad_lba, 32);
   DDX_Text(pDX, IDC_LEAN_BITMAP_LBA, m_bitmap_lba);
   DDV_MaxChars(pDX, m_bitmap_lba, 32);
+  DDX_Text(pDX, IDC_LEAN_BITMAP_CRC, m_bitmap_crc);
+  DDV_MaxChars(pDX, m_bitmap_crc, 32);
   DDX_Text(pDX, IDC_LEAN_CRC, m_crc);
   DDV_MaxChars(pDX, m_crc, 16);
   DDX_Text(pDX, IDC_LEAN_CUR_STATE, m_cur_state);
@@ -158,7 +160,6 @@ void CLean::DoDataExchange(CDataExchange* pDX) {
   DDV_MaxChars(pDX, m_blocks_band, 8);
   DDX_Text(pDX, IDC_LEAN_BLOCK_SIZE, m_log_block_size);
   DDV_MaxChars(pDX, m_log_block_size, 32);
-  DDX_Text(pDX, IDC_LEAN_ENCODING, m_encoding);
   DDX_Text(pDX, IDC_LEAN_BLOCK_COUNT, m_block_count);
   DDV_MaxChars(pDX, m_block_count, 32);
   DDX_Text(pDX, IDC_LEAN_VERSION, m_version);
@@ -195,6 +196,7 @@ BEGIN_MESSAGE_MAP(CLean, CPropertyPage)
   ON_BN_CLICKED(IDC_LEAN_MAGIC_UPDATE, OnLeanMagicUpdate)
   ON_BN_CLICKED(IDC_LEAN_CURRENT_STATE, OnLeanCurrentState)
   ON_BN_CLICKED(IDC_FREE_BLOCKS_UPDATE, OnLeanFreeUpdate)
+  ON_BN_CLICKED(IDC_BITMAP_CRC_UPDATE, OnLeanBitmapCRC)
   ON_EN_KILLFOCUS(IDC_LEAN_GUID, OnKillfocusLeanGuid)
   ON_BN_CLICKED(IDC_GUID_CREATE, OnGuidCreate)
   ON_BN_CLICKED(ID_DELETE, OnLeanDelete)
@@ -242,6 +244,9 @@ BOOL CLean::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
       break;
     case IDC_FREE_BLOCKS_UPDATE:
       strTipText = "Update Free Blocks to calculated free count";
+      break;
+    case IDC_BITMAP_CRC_UPDATE:
+      strTipText = "Update the Checksum of the bitmap";
       break;
     case ID_JOURNAL_INODE:
       strTipText = "View Journal Inode";
@@ -298,14 +303,12 @@ BOOL CLean::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
     case IDC_SHOW_DEL:
       strTipText = "Show Deleted Entries";
       break;
+    case IDC_SHOW_HIDDEN:
+      strTipText = "Show Hidden Entries";
+      break;
     case IDC_DEL_CLEAR:
       strTipText = "Zero File Contents on Delete";
       break;
-
-    //    case IDC_INSERT_VLABEL:
-    //      //strTipText.Format("Insert Boot Code at LBA %i", GetDlgItemInt(IDC_DI_LBA, 0, FALSE));
-    //      strTipText = "Insert Volume Label into Root Directory";
-    //      break;
 
     case ID_ERASE:
       strTipText = "Erase whole Partition";
@@ -495,9 +498,6 @@ bool CLean::Format(const BOOL AskForBoot) {
   if (!m_hard_format)
     ReceiveFromDialog(&m_super); // bring from Dialog
 
-  // set the character encoding for the volume
-  m_encoding = format.m_encoding;
-  
   // first, clear out the volume
   for (lba=0; lba<m_size; lba++)
     dlg->WriteToFile(buffer, m_lba + lba, 1);
@@ -552,21 +552,20 @@ bool CLean::Format(const BOOL AskForBoot) {
   super->pre_alloc_count = format.m_pre_alloc_count;
   super->state = (0<<1) | (1<<0);  // clean unmount
   GUID_Create(&super->guid, GUID_TYPE_RANDOM);
-  PutName(super->volume_label, "A label goes here.", 64, m_encoding);
+  PutName(super->volume_label, "A label goes here.", 64);
   super->block_count = m_tot_blocks;
   super->free_block_count = (m_tot_blocks - m_super_block_loc - 1 - (tot_bands * bitmap_size) - (super->pre_alloc_count + 1) - 1) - ((format.m_journal) ? 3 : 0);
   super->next_free_block = 0;
   super->primary_super = m_super_block_loc;
   super->backup_super = ((band_size - 1) < m_tot_blocks) ? (band_size - 1) : (m_tot_blocks - 1);   // last block in first band
   super->bitmap_start = m_super_block_loc + 1;
+  super->resv0 = 0;
   super->root_start = super->bitmap_start + bitmap_size;
   super->bad_start = 0;  // no bad blocks (yet?)
   super->journal = (format.m_journal) ? super->backup_super - JOURNAL_SIZE - 1: 0;   // -1 for the inode block
   super->capabilities = (format.m_extended_extents) ? LEAN_CAPABILITIES_EXT_EXTENTS : 0;
   super->log_block_size = LOG2(m_block_size);
-  super->char_encoding = m_encoding;
-  super->resv[0] = super->resv[1] = 0;
-  super->checksum = LeanCalcCRC(super, m_block_size, TRUE);
+  super->resv1[0] = super->resv1[1] = super->resv1[2] = 0;
   
   // create a buffer for the bitmap(s), and mark the first few bits as used.
   BYTE *bitmap = (BYTE *) calloc(bitmap_size * m_block_size, 1);
@@ -649,10 +648,9 @@ bool CLean::Format(const BOOL AskForBoot) {
   }
   
   // now write the first band to the disk
-  dlg->WriteBlocks(buffer, m_lba, 0, m_block_size, (long) (m_super_block_loc + 1)); // + 1 to include the super
+  dlg->WriteBlocks(buffer, m_lba, 0, m_block_size, (long) m_super_block_loc); // write everything up to the superblock
   dlg->WriteBlocks(bitmap, m_lba, super->bitmap_start, m_block_size, bitmap_size);
   dlg->WriteBlocks(root, m_lba, super->root_start, m_block_size, (super->pre_alloc_count + 1));
-  dlg->WriteBlocks(super, m_lba, super->backup_super, m_block_size, 1);
 
   // now we can do the crc of the root
   UpdateFileExtents(root, FALSE);
@@ -682,6 +680,12 @@ bool CLean::Format(const BOOL AskForBoot) {
   m_EAs_in_Inode = format.m_eas_after_inode;
   CheckDlgButton(IDC_EAS_IN_INODE, format.m_eas_after_inode ? BST_CHECKED : BST_UNCHECKED);
 
+  // update the bitmap's checksum and write the superblock to the disk
+  super->bitmap_checksum = 0;
+  super->checksum = LeanCalcCRC(super, m_block_size, TRUE);
+  dlg->WriteBlocks(super, m_lba, super->primary_super, m_block_size, 1);
+  dlg->WriteBlocks(super, m_lba, super->backup_super, m_block_size, 1);
+  
   // done, cleanup and return
   free(root);
   free(bitmap);
@@ -698,7 +702,7 @@ DWORD CLean::CreateRootEntry(struct S_LEAN_DIRENTRY *entry, const DWORD64 inode_
   entry->inode = inode_num;
   entry->type = type;
   entry->name_len = name.GetLength(); // count of chars used
-  length = PutName(entry->name, name, LEAN_NAME_LEN_MAX, m_encoding);
+  length = PutName(entry->name, name, LEAN_NAME_LEN_MAX);
   entry->rec_len = (((LEAN_DIRENTRY_NAME + length) + 15) / 16);
 
   // return the count of bytes used
@@ -802,6 +806,12 @@ void CLean::OnLeanFreeUpdate() {
   SetDlgItemText(IDC_LEAN_FREE_BLOCKS, m_free_blocks);
 }
 
+void CLean::OnLeanBitmapCRC() {
+  DWORD crc = BitmapChecksum(&m_super);
+  m_bitmap_crc.Format("0x%08X", crc);
+  SetDlgItemText(IDC_LEAN_BITMAP_CRC, m_bitmap_crc);
+}
+
 void CLean::OnChangeLeanJournal() {
   CString cs;
   DWORD64 inode;
@@ -882,6 +892,11 @@ void CLean::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
     AfxMessageBox("Did not find a valid LeanFS volume");
     m_isvalid = FALSE;
   }
+
+  // check the bitmap checksum
+  if (m_super.bitmap_checksum != BitmapChecksum(&m_super))
+    if (AfxMessageBox("Lean: Super Bitmap Checksum does not match actual. Ignore?", MB_YESNO, 0) != IDYES)
+      m_isvalid = FALSE;
   
   m_psp.dwFlags |= PSP_USETITLE;
   dlg->m_LeanNames[index] = "LeanFS";
@@ -953,7 +968,7 @@ void CLean::ParseDir(struct S_LEAN_DIRENTRY *root, DWORD64 root_size, HTREEITEM 
       break;
     
     // retrieve the name.
-    GetName(cur->name, name, cur->name_len, m_encoding);
+    GetName(cur->name, name, cur->name_len);
 
     IsDot = ((name == ".") || (name == ".."));
     
@@ -1258,8 +1273,8 @@ BOOL CLean::DetectLeanFS(void) {
     // must be version 1.0 (we don't support backward compatibility)
     if (super->fs_version != 0x0100)
       continue;
-    
-    // else we have a valid LEAN FS super
+
+    // else we may have a valid LEAN FS super
     m_super_block_loc = block;
     m_block_size = block_size;
     m_tot_blocks = (m_size * dlg->m_sect_size) / m_block_size;
@@ -1351,35 +1366,21 @@ void CLean::SendToDialog(struct S_LEAN_SUPER *super) {
   m_blocks_band.Format("%i", super->log_blocks_per_band);
   m_cur_state.Format("0x%08X", super->state);
   GUID_Format(m_guid, &super->guid);
-  GetName(super->volume_label, m_label, 64, super->char_encoding);
+  GetName(super->volume_label, m_label, 64);
   m_block_count.Format("%I64i", super->block_count);
   m_free_blocks.Format("%I64i", super->free_block_count);
   m_next_free.Format("%I64i", super->next_free_block);
   m_primary_lba.Format("%I64i", super->primary_super);
   m_backup_lba.Format("%I64i", super->backup_super);
   m_bitmap_lba.Format("%I64i", super->bitmap_start);
+  m_bitmap_crc.Format("0x%08X", super->bitmap_checksum);
   m_root_lba.Format("%I64i", super->root_start);
   m_bad_lba.Format("%I64i", super->bad_start);
   m_log_block_size.Format("%i", super->log_block_size);
-  m_encoding = super->char_encoding;
   m_journal_lba.Format("%I64i", super->journal);
   m_capabilities.Format("0x%08X", super->capabilities);
 
   m_use_extended_extents = (super->capabilities & (1 << 0)) > 0;
-
-  switch (m_encoding) {
-    case ceASCII:
-      SetDlgItemText(IDC_LEAN_ENCODING_DISP, "ascii");
-      break;
-    case ceUTF8:
-      SetDlgItemText(IDC_LEAN_ENCODING_DISP, "utf-8");
-      break;
-    case ceUTF16:
-      SetDlgItemText(IDC_LEAN_ENCODING_DISP, "utf-16");
-      break;
-    default:
-      SetDlgItemText(IDC_LEAN_ENCODING_DISP, "unknown");
-  }
 
   UpdateData(FALSE); // send to Dialog
   
@@ -1400,17 +1401,17 @@ void CLean::ReceiveFromDialog(struct S_LEAN_SUPER *super) {
   super->log_blocks_per_band = convert8(m_blocks_band);
   super->state = convert32(m_cur_state);
   GUID_Retrieve(m_guid, &super->guid);
-  PutName(super->volume_label, m_label, 64, m_encoding);
+  PutName(super->volume_label, m_label, 64);
   super->block_count = convert64(m_block_count);
   super->free_block_count = convert64(m_free_blocks);
   super->next_free_block = convert64(m_next_free);
   super->primary_super = convert64(m_primary_lba);
   super->backup_super = convert64(m_backup_lba);
   super->bitmap_start = convert64(m_bitmap_lba);
+  super->bitmap_checksum = convert32(m_bitmap_crc);
   super->root_start = convert64(m_root_lba);
   super->bad_start = convert64(m_bad_lba);
   super->log_block_size = convert8(m_log_block_size);
-  super->char_encoding = m_encoding;
   super->journal = convert64(m_journal_lba);
   super->capabilities = convert32(m_capabilities);
 }
@@ -1618,7 +1619,7 @@ void CLean::OnLeanInsertSymbolic() {
     return;
 
   // length of the symbolic name (file data)
-  Size = GetNameLen(Symbolic.m_symbolic_name, m_encoding);
+  Size = GetNameLen(Symbolic.m_symbolic_name);
 
   // get the item from the tree control
   HTREEITEM hItem = m_dir_tree.GetSelectedItem();
@@ -1654,7 +1655,7 @@ void CLean::OnLeanInsertSymbolic() {
     
     // copy the file to our system
     BYTE *buffer = (BYTE *) malloc((size_t) Size);
-    PutName(buffer, Symbolic.m_symbolic_name, (int) Size, m_encoding);
+    PutName(buffer, Symbolic.m_symbolic_name, (int) Size);
     WriteFile(buffer, &extents, Size);
     free(buffer);
     
@@ -2040,7 +2041,7 @@ DWORD CLean::CalcFreeBlocks(void) {
   DWORD64 bitmap_block, cur_block = 0;
 
   const unsigned band_size = (1ULL << m_super.log_blocks_per_band); // blocks per band
-  const unsigned bitmap_size = (unsigned) (band_size >> 12);     // blocks per bitmap
+  const unsigned bitmap_size = (unsigned) (band_size / m_block_size / 8);     // blocks per bitmap
   const unsigned tot_bands = (unsigned) ((m_tot_blocks + (band_size - 1)) / band_size);
 
   // create the buffer
@@ -2080,7 +2081,7 @@ void CLean::FreeExtents(const struct S_LEAN_BLOCKS *Extents) {
   unsigned free_count = 0;  // count of blocks free'd
   
   const DWORD64 band_size = ((DWORD64) 1 << m_super.log_blocks_per_band); // blocks per band
-  const unsigned bitmap_size = (unsigned) (band_size >> 12);     // blocks per bitmap
+  const unsigned bitmap_size = (unsigned) (band_size / m_block_size / 8);     // blocks per bitmap
 
   // create the buffer
   bitmap = (BYTE *) malloc(bitmap_size * m_block_size);
@@ -2129,7 +2130,7 @@ DWORD64 CLean::GetFreeBlock(DWORD64 Start, BOOL MarkIt) {
   int j;
   unsigned i, pos;
   const DWORD64 band_size = ((DWORD64) 1 << m_super.log_blocks_per_band); // blocks per band
-  const unsigned bitmap_size = (unsigned) (band_size >> 12);              // blocks per bitmap
+  const unsigned bitmap_size = (unsigned) (band_size / m_block_size / 8); // blocks per bitmap
   const unsigned bytes_bitmap = bitmap_size * m_block_size;
   const unsigned tot_bands = (unsigned) ((m_super.block_count + (band_size - 1)) / band_size);
   buffer = (BYTE *) malloc(bitmap_size * m_block_size);
@@ -2174,7 +2175,7 @@ void CLean::MarkBlock(DWORD64 Block, BOOL MarkIt) {
   DWORD band;
   
   const DWORD64 band_size = ((DWORD64) 1 << m_super.log_blocks_per_band); // blocks per band
-  const unsigned bitmap_size = (unsigned) (band_size >> 12);              // blocks per bitmap
+  const unsigned bitmap_size = (unsigned) (band_size / m_block_size / 8); // blocks per bitmap
 
   // create the buffer
   bitmap = (BYTE *) malloc(bitmap_size * m_block_size);
@@ -2198,67 +2199,78 @@ void CLean::MarkBlock(DWORD64 Block, BOOL MarkIt) {
   free(bitmap);
 }
 
-// retrieve the name.
-void CLean::GetName(void *ptr, CString &name, const int len, const int encoding) {
-  name.Empty();
-  switch (encoding) {
-    case ceASCII:
-      EncodeFromAscii(ptr, name, len);
-      break;
-    case ceUTF8:
-      EncodeFromUTF8(ptr, name, len);
-      break;
-    case ceUTF16:
-      EncodeFromUTF16(ptr, name, len);
-      break;
-    default:
-      name = "*Encoding Error*";
+// Load in the bitmap, calculate, and return a checksum
+DWORD CLean::BitmapChecksum(struct S_LEAN_SUPER *super) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  void *bitmap;
+  BYTE *ptr;
+  DWORD64 bitmap_block;
+  DWORD band, crc = 0;
+  
+  unsigned block_size = (1 << super->log_block_size);
+  const DWORD64 band_size = ((DWORD64) 1 << super->log_blocks_per_band); // blocks per band
+  unsigned bitmap_size = (unsigned) (band_size / block_size / 8);       // in blocks
+  const unsigned tot_bands = (unsigned) ((super->block_count + (band_size - 1)) / band_size);
+
+  // create the buffer
+  bitmap = malloc(bitmap_size * tot_bands * block_size);
+  ptr = (BYTE *) bitmap;
+  
+  for (band=0; band<tot_bands; band++) {
+    bitmap_block = (band==0) ? super->bitmap_start : (band * band_size);
+    dlg->ReadBlocks(ptr, m_lba, bitmap_block, block_size, bitmap_size);
+    ptr += (bitmap_size * block_size);
   }
+
+  crc = LeanCalcCRC(bitmap, (tot_bands * bitmap_size * block_size), FALSE);
+  
+  free(bitmap);
+
+  return crc;
 }
 
-// returns the count of bytes needed to store a name in a specified encoding
-WORD CLean::GetNameLen(CString name, const int encoding) {
+// This extracts a string from a UTF-8 buffer ('ptr') and puts it in a CString 'name'
+void CLean::GetName(void *ptr, CString &name, const int len) {
+  name.Empty();
+  
+  
+  // TODO: Currently assumes English and the first 128 code points
+  // A proper conversion from UTF-8 to MFC's CString should be written
+  void *p = name.GetBuffer(len + 1);
+  memcpy(p, ptr, len);
+  name.ReleaseBuffer(len);
+
+
+}
+
+// returns the count of bytes needed to store a name
+WORD CLean::GetNameLen(CString name) {
   int ret = 0;
 
-  switch (encoding) {
-    case ceASCII:
-      ret = EncodeAsciiLen(name);
-      break;
-    case ceUTF8:
-      ret = EncodeUTF8Len(name);
-      break;
-    case ceUTF16:
-      ret = EncodeUTF16Len(name);
-      break;
-    default:
-      ret = 0;
-      break;
-  }
+  
+  // TODO: Currently assumes English and the first 128 code points
+  // A proper routine to get the count of bytes needed should be written
+  ret = name.GetLength();
+
+  
   return ret;
 }
 
-// put the native CString at 'ptr' using 'encoding'
+// This extracts a string from a CString 'name' and encodes it to a UTF-8 buffer ('ptr')
 // max_len is the max character length to place
 // if max_len == -1, get the length of the CString as the max count of chars to encode
-WORD CLean::PutName(void *ptr, CString name, int max_len, const int encoding) {
+WORD CLean::PutName(void *ptr, CString name, int max_len) {
   WORD ret = 0;
   if (max_len == -1)
     max_len = name.GetLength();
 
-  switch (encoding) {
-    case ceASCII:
-      ret = EncodeToAscii(ptr, name, max_len);
-      break;
-    case ceUTF8:
-      ret = EncodeToUTF8(ptr, name, max_len);
-      break;
-    case ceUTF16:
-      ret = EncodeToUTF16(ptr, name, max_len);
-      break;
-    default:
-      ret = 0;
-      break;
-  }
+  // TODO: Currently assumes English and the first 128 code points
+  // A proper conversion from MFC's CString to UTF-8 should be written
+  int len = name.GetLength();
+  if (len > max_len) len = max_len;
+  memcpy(ptr, (LPCSTR) name, len);
+  ret = len;
+  
 
   return ret;
 }
@@ -2270,7 +2282,7 @@ WORD CLean::PutName(void *ptr, CString name, int max_len, const int encoding) {
 int CLean::AllocateRoot(CString csName, DWORD64 Inode, DWORD64 Start, BYTE Attrib) {
   struct S_LEAN_DIRENTRY *root, *cur, *next;
   struct S_LEAN_BLOCKS extents;
-  const WORD len = GetNameLen(csName, m_encoding);
+  const WORD len = GetNameLen(csName);
   DWORD64 root_size;
   BYTE byte;
 

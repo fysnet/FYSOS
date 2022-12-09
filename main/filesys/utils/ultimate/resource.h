@@ -238,6 +238,8 @@
 #define IDC_ENTRY_ATTRIB                1111
 #define IDC_LEAN_CAPABILITIES           1111
 #define IDC_ENTRY_RESERVED              1112
+#define IDC_LEAN_BITMAP_LBA2            1112
+#define IDC_LEAN_BITMAP_CRC             1112
 #define IDC_ENTRY_TIME                  1113
 #define IDC_ENTRY_RESERVED1             1113
 #define IDC_LEAN_ENCODING               1113
@@ -412,6 +414,7 @@
 #define IDC_FREE_BLOCKS_UPDATE          1201
 #define IDC_FAT32_ENTRY_TENTH           1202
 #define IDC_PATH_TABLE_SIZE             1202
+#define IDC_BITMAP_CRC_UPDATE           1202
 #define IDC_FAT32_ENTRY_TIME            1203
 #define IDC_PATH_TABLE_LOC              1203
 #define IDC_FAT32_ENTRY_DATE            1204
