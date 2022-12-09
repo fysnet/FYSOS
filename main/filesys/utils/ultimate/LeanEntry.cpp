@@ -494,6 +494,8 @@ void CLeanEntry::OnEas() {
 #ifdef _WIN64
     CString::Construct(&ea_struct[i].csName);
 #else
+    // this assumes you have changed the 'Init' member from 'protected' to 'public'
+    // (at the moment, I don't know any other way to initialize a CString that is allocated in memory)
     ea_struct[i].csName.Init();
 #endif // _WIN64
   }

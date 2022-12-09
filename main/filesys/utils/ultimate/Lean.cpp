@@ -892,11 +892,6 @@ void CLean::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
     AfxMessageBox("Did not find a valid LeanFS volume");
     m_isvalid = FALSE;
   }
-
-  // check the bitmap checksum
-  if (m_super.bitmap_checksum != BitmapChecksum(&m_super))
-    if (AfxMessageBox("Lean: Super Bitmap Checksum does not match actual. Ignore?", MB_YESNO, 0) != IDYES)
-      m_isvalid = FALSE;
   
   m_psp.dwFlags |= PSP_USETITLE;
   dlg->m_LeanNames[index] = "LeanFS";
@@ -1273,6 +1268,11 @@ BOOL CLean::DetectLeanFS(void) {
     // must be version 1.0 (we don't support backward compatibility)
     if (super->fs_version != 0x0100)
       continue;
+    
+    // check the bitmap checksum
+    //if (super->bitmap_checksum != BitmapChecksum(super))
+    //  if (AfxMessageBox("Lean: Super Bitmap Checksum does not match actual. Ignore?", MB_YESNO, 0) != IDYES)
+    //    continue;
 
     // else we may have a valid LEAN FS super
     m_super_block_loc = block;
