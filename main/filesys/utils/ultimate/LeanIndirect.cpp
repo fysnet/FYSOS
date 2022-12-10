@@ -345,7 +345,7 @@ void CLeanIndirect::OnCrcUpdate() {
   m_indirect.extent_count = convert32(m_extent_count);
 
   memcpy(m_indirect_buffer, &m_indirect, LEAN_INDIRECT_SIZE);
-  DWORD crc = m_parent->LeanCalcCRC(m_indirect_buffer, m_parent->m_block_size, TRUE);
+  DWORD crc = m_parent->computeChecksum(m_indirect_buffer, m_parent->m_block_size, TRUE);
   m_crc.Format("0x%08X", crc);
   SetDlgItemText(IDC_ENTRY_CRC, m_crc);
 }

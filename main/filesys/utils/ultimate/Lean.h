@@ -313,8 +313,10 @@ public:
   void ZeroExtent(DWORD64 ExtentStart, DWORD ExtentSize);
   BOOL ValidInode(const struct S_LEAN_INODE *inode);
   BOOL ValidIndirect(const struct S_LEAN_INDIRECT *indirect);
-  DWORD LeanCalcCRC(const void *data, size_t count, const BOOL skip);
+  DWORD computeChecksum(const void *data, const size_t size, const bool isSensitive);
+  DWORD computeChecksumPartial(DWORD res, const void *data, size_t size);
   DWORD LeanCalcExtentCRC(const DWORD64 start, const DWORD size, const BOOL first);
+  DWORD BitmapChecksum(struct S_LEAN_SUPER *super);
   void SaveItemInfo(HTREEITEM hItem, DWORD64 Inode, DWORD64 FileSize, DWORD flags, DWORD Offset, BOOL CanCopy);
   bool Format(const BOOL AskForBoot);
   DWORD CreateRootEntry(struct S_LEAN_DIRENTRY *entry, const DWORD64 inode_num, const BYTE type, CString name);
@@ -333,7 +335,6 @@ public:
   void DisplayFreeSpace(void);
   DWORD64 GetFreeBlock(DWORD64 Start, BOOL MarkIt);
   void MarkBlock(DWORD64 Block, BOOL MarkIt);
-  DWORD BitmapChecksum(struct S_LEAN_SUPER *super);
   int AppendToExtents(struct S_LEAN_BLOCKS *Extents, DWORD64 Size, DWORD64 Start, BOOL MarkIt);
   void FreeExtents(const struct S_LEAN_BLOCKS *Extents);
   int ReadFileExtents(struct S_LEAN_BLOCKS *Extents, DWORD64 Inode);

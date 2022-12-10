@@ -819,7 +819,15 @@ int CImageBar::DetectLean(DWORD64 lba, const unsigned sect_size) {
 
   Lean.m_lba = lba;
 
-  return (Lean.DetectLeanFS()) ? FS_LEAN : -1;
+  if (Lean.DetectLeanFS()) {
+    // check the bitmap checksum
+    if (Lean.m_super.bitmap_checksum != Lean.BitmapChecksum(&Lean.m_super))
+      if (AfxMessageBox("Lean: Super Bitmap Checksum does not match actual. Ignore?", MB_YESNO, 0) != IDYES)
+        return -1;
+    return FS_LEAN;
+  }
+
+  return -1;
 }
 
 int CImageBar::DetectNTFS(void *buffer) {

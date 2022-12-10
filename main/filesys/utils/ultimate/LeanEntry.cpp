@@ -394,7 +394,7 @@ void CLeanEntry::OnCrcUpdate() {
   m_inode.last_indirect = convert64(m_last_indirect);
   m_inode.fork = convert64(m_fork);
   
-  DWORD crc = m_parent->LeanCalcCRC(&m_inode, LEAN_INODE_SIZE, TRUE);
+  DWORD crc = m_parent->computeChecksum(&m_inode, LEAN_INODE_SIZE, TRUE);
   m_entry_crc.Format("0x%08X", crc);
   SetDlgItemText(IDC_ENTRY_CRC, m_entry_crc);
 }
@@ -618,7 +618,7 @@ void CLeanEntry::OnEas() {
   inode_buf->mod_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
   m_acc_time.Format("%I64i", inode_buf->acc_time); // update the dialog members
   m_mod_time.Format("%I64i", inode_buf->mod_time);
-  inode_buf->checksum = m_parent->LeanCalcCRC(inode_buf, LEAN_INODE_SIZE, TRUE);
+  inode_buf->checksum = m_parent->computeChecksum(inode_buf, LEAN_INODE_SIZE, TRUE);
   dlg->WriteBlocks(inode_buf, m_parent->m_lba, m_inode_num, m_parent->m_block_size, 1);
 
   // update the extended extent's crcs
@@ -675,7 +675,7 @@ void CLeanEntry::OnOK() {
   m_inode.fork = convert64(m_fork);
   
   // check the CRC
-  crc = m_parent->LeanCalcCRC(&m_inode, LEAN_INODE_SIZE, TRUE);
+  crc = m_parent->computeChecksum(&m_inode, LEAN_INODE_SIZE, TRUE);
   if (crc != m_inode.checksum)
     if (AfxMessageBox("Checksum not correct. Update?", MB_YESNO, 0) == IDYES)
       m_inode.checksum = crc;

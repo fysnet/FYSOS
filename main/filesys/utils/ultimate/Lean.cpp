@@ -386,7 +386,7 @@ void CLean::OnLeanApply() {
   memset(buffer, 0, m_block_size);
   memcpy(buffer, &m_super, sizeof(struct S_LEAN_SUPER));
   
-  crc = LeanCalcCRC(buffer, m_block_size, TRUE);
+  crc = computeChecksum(buffer, m_block_size, TRUE);
   if (m_super.checksum != crc) {
     ret = AfxMessageBox("CRC is not correct!  Update before Write?", MB_YESNOCANCEL, NULL);
     if (ret == IDCANCEL)
@@ -606,7 +606,7 @@ bool CLean::Format(const BOOL AskForBoot) {
   p_extent_start[0] = super->root_start;
   p_extent_size[0] = u;
   if (m_use_extended_extents)
-    p_extent_crc[0] = LeanCalcCRC(root, u * m_block_size, TRUE);
+    p_extent_crc[0] = computeChecksum(root, u * m_block_size, TRUE);
   
   // the directory entry's
   // (for now, just the dot and dotdot entries)
@@ -641,7 +641,7 @@ bool CLean::Format(const BOOL AskForBoot) {
     hdr->entry_cnt = (Size - sizeof(struct S_LEAN_JOURNAL)) / sizeof(S_LEAN_JOURNAL_ENTRY);
     for (u=0; u<hdr->entry_cnt; u++)
       entry[u].flags = JOURNAL_ENTRY_INVALID;
-    hdr->checksum = LeanCalcCRC(hdr, sizeof(struct S_LEAN_JOURNAL) + (hdr->entry_cnt * sizeof(S_LEAN_JOURNAL_ENTRY)), TRUE);
+    hdr->checksum = computeChecksum(hdr, sizeof(struct S_LEAN_JOURNAL) + (hdr->entry_cnt * sizeof(S_LEAN_JOURNAL_ENTRY)), TRUE);
     WriteFile(journal, &extents, Size);
     FreeExtentBuffer(&extents);
     free(journal);
@@ -654,7 +654,7 @@ bool CLean::Format(const BOOL AskForBoot) {
 
   // now we can do the crc of the root
   UpdateFileExtents(root, FALSE);
-  root->checksum = LeanCalcCRC(root, LEAN_INODE_SIZE, TRUE);
+  root->checksum = computeChecksum(root, LEAN_INODE_SIZE, TRUE);
   dlg->WriteBlocks(root, m_lba, super->root_start, m_block_size, 1);
 
   // now create and write each remaining band (just the bitmap)
@@ -682,7 +682,7 @@ bool CLean::Format(const BOOL AskForBoot) {
 
   // update the bitmap's checksum and write the superblock to the disk
   super->bitmap_checksum = 0;
-  super->checksum = LeanCalcCRC(super, m_block_size, TRUE);
+  super->checksum = computeChecksum(super, m_block_size, TRUE);
   dlg->WriteBlocks(super, m_lba, super->primary_super, m_block_size, 1);
   dlg->WriteBlocks(super, m_lba, super->backup_super, m_block_size, 1);
   
@@ -768,7 +768,7 @@ void CLean::OnLeanCrcUpdate() {
 
   memcpy(buffer, &m_super, sizeof(struct S_LEAN_SUPER));
   
-  m_super.checksum = LeanCalcCRC(buffer, m_block_size, TRUE);
+  m_super.checksum = computeChecksum(buffer, m_block_size, TRUE);
   m_crc.Format("0x%08X", m_super.checksum);
   SetDlgItemText(IDC_LEAN_CRC, m_crc);
 
@@ -1187,7 +1187,7 @@ void CLean::WriteFile(void *buffer, struct S_LEAN_BLOCKS *extents, DWORD64 Size)
     inode->mod_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
 
   // update the inode's check sum and write it back
-  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
+  inode->checksum = computeChecksum(inode, LEAN_INODE_SIZE, TRUE);
   dlg->WriteBlocks(inode, m_lba, extents->extent_start[0], m_block_size, 1);
 
   free(inode);
@@ -1269,11 +1269,6 @@ BOOL CLean::DetectLeanFS(void) {
     if (super->fs_version != 0x0100)
       continue;
     
-    // check the bitmap checksum
-    //if (super->bitmap_checksum != BitmapChecksum(super))
-    //  if (AfxMessageBox("Lean: Super Bitmap Checksum does not match actual. Ignore?", MB_YESNO, 0) != IDYES)
-    //    continue;
-
     // else we may have a valid LEAN FS super
     m_super_block_loc = block;
     m_block_size = block_size;
@@ -1286,17 +1281,29 @@ BOOL CLean::DetectLeanFS(void) {
   return fnd;
 }
 
-// if skip is TRUE, skip first dword (is inode, indirect, or superblock)
-DWORD CLean::LeanCalcCRC(const void *data, size_t count, const BOOL skip) {
-  DWORD crc = 0;
-  DWORD *p = (DWORD *) data;
-  size_t i = (skip) ? 1 : 0;
-  
-  count /= 4;
-  for (; i<count; i++)
-    crc = (crc << 31) + (crc >> 1) + p[i];
-  
-  return crc;
+DWORD CLean::computeChecksum(const void *data, const size_t size, const bool isSensitive)
+{
+	DWORD res = 0;
+	if (isSensitive)
+	{
+	  //assert(size >= sizeof(DWORD));
+	  res = computeChecksumPartial(res, static_cast<const uint8_t *>(data) + sizeof(DWORD), size - sizeof(DWORD));
+	}
+	else
+	{
+	  res = computeChecksumPartial(res, data, size);
+	}
+	return res;
+}
+
+DWORD CLean::computeChecksumPartial(DWORD res, const void *data, size_t size)
+{
+	const DWORD *d = static_cast<const DWORD *>(data);
+	//assert((size & (sizeof(DWORD) - 1)) == 0);
+	size /= sizeof(DWORD);
+	for (size_t i = 0; i != size; ++i)
+	  res = (res << 31) + (res >> 1) + d[i];
+	return res;
 }
 
 // read in an extent, calculate the crc, and return the crc
@@ -1316,12 +1323,38 @@ DWORD CLean::LeanCalcExtentCRC(const DWORD64 start, const DWORD size, const BOOL
 
   dlg->ReadBlocks(ptr, m_lba, start, m_block_size, size);
   if (first)
-    crc = LeanCalcCRC((BYTE *) ptr + LEAN_INODE_SIZE, length - LEAN_INODE_SIZE, FALSE);
+    crc = computeChecksum((BYTE *) ptr + LEAN_INODE_SIZE, length - LEAN_INODE_SIZE, FALSE);
   else
-    crc = LeanCalcCRC(ptr, length, FALSE);
+    crc = computeChecksum(ptr, length, FALSE);
   
   free(ptr);
   
+  return crc;
+}
+
+// Load in the bitmap, calculate, and return a checksum
+DWORD CLean::BitmapChecksum(struct S_LEAN_SUPER *super) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  DWORD64 bitmap_block;
+  DWORD crc;
+  
+  const size_t block_size = ((size_t) 1 << super->log_block_size);                     // block_size
+  const size_t band_size = ((size_t) 1 << super->log_blocks_per_band);  // blocks per band
+  const size_t bitmap_size = (size_t) (band_size / block_size / 8);   // in blocks
+  const size_t tot_bands = (size_t) ((super->block_count + (band_size - 1)) / band_size);
+
+  // create the buffer
+  void *bitmap = malloc(bitmap_size * block_size);
+  
+  crc = 0;
+  for (unsigned band=0; band<tot_bands; band++) {
+    bitmap_block = (band==0) ? super->bitmap_start : (band * band_size);
+    dlg->ReadBlocks(bitmap, m_lba, bitmap_block, (DWORD) block_size, (long) bitmap_size);
+    crc = computeChecksumPartial(crc, bitmap, bitmap_size * block_size);
+  }
+  
+  free(bitmap);
+
   return crc;
 }
 
@@ -1332,7 +1365,7 @@ BOOL CLean::ValidInode(const struct S_LEAN_INODE *inode) {
     return FALSE;
   
   // check to see if crc is correct
-  if (inode->checksum != LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE))
+  if (inode->checksum != computeChecksum(inode, LEAN_INODE_SIZE, TRUE))
     return FALSE;
   
   // if links_count == 0, file should have been deleted
@@ -1349,7 +1382,7 @@ BOOL CLean::ValidIndirect(const struct S_LEAN_INDIRECT *indirect) {
     return FALSE;
   
   // check to see if crc is correct
-  if (indirect->checksum != LeanCalcCRC(indirect, m_block_size, TRUE))
+  if (indirect->checksum != computeChecksum(indirect, m_block_size, TRUE))
     return FALSE;
   
   // other checks here
@@ -2199,36 +2232,6 @@ void CLean::MarkBlock(DWORD64 Block, BOOL MarkIt) {
   free(bitmap);
 }
 
-// Load in the bitmap, calculate, and return a checksum
-DWORD CLean::BitmapChecksum(struct S_LEAN_SUPER *super) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  void *bitmap;
-  BYTE *ptr;
-  DWORD64 bitmap_block;
-  DWORD band, crc = 0;
-  
-  unsigned block_size = (1 << super->log_block_size);
-  const DWORD64 band_size = ((DWORD64) 1 << super->log_blocks_per_band); // blocks per band
-  unsigned bitmap_size = (unsigned) (band_size / block_size / 8);       // in blocks
-  const unsigned tot_bands = (unsigned) ((super->block_count + (band_size - 1)) / band_size);
-
-  // create the buffer
-  bitmap = malloc(bitmap_size * tot_bands * block_size);
-  ptr = (BYTE *) bitmap;
-  
-  for (band=0; band<tot_bands; band++) {
-    bitmap_block = (band==0) ? super->bitmap_start : (band * band_size);
-    dlg->ReadBlocks(ptr, m_lba, bitmap_block, block_size, bitmap_size);
-    ptr += (bitmap_size * block_size);
-  }
-
-  crc = LeanCalcCRC(bitmap, (tot_bands * bitmap_size * block_size), FALSE);
-  
-  free(bitmap);
-
-  return crc;
-}
-
 // This extracts a string from a UTF-8 buffer ('ptr') and puts it in a CString 'name'
 void CLean::GetName(void *ptr, CString &name, const int len) {
   name.Empty();
@@ -2382,7 +2385,7 @@ void CLean::IncrementLinkCount(DWORD64 Inode) {
   dlg->ReadBlocks(inode, m_lba, Inode, m_block_size, 1);
 
   inode->links_count++;
-  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
+  inode->checksum = computeChecksum(inode, LEAN_INODE_SIZE, TRUE);
   
   dlg->WriteBlocks(inode, m_lba, Inode, m_block_size, 1);
   free(inode);
@@ -2397,7 +2400,7 @@ void CLean::DecrementLinkCount(DWORD64 Inode) {
 
   if (inode->links_count > 1) {
     inode->links_count--;
-    inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
+    inode->checksum = computeChecksum(inode, LEAN_INODE_SIZE, TRUE);
     
     dlg->WriteBlocks(inode, m_lba, Inode, m_block_size, 1);
   }
@@ -2413,7 +2416,7 @@ void CLean::DeleteInode(DWORD64 Inode) {
 
   if (inode->links_count > 1) {
     inode->links_count--;
-    inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
+    inode->checksum = computeChecksum(inode, LEAN_INODE_SIZE, TRUE);
   } else {
     if (inode->fork)
       DeleteInode(inode->fork);
@@ -2793,7 +2796,7 @@ int CLean::WriteFileExtents(const struct S_LEAN_BLOCKS *extents, struct S_LEAN_I
           remaining = indirect->next_indirect;
         indirect->next_indirect = 0;
       }
-      indirect->checksum = LeanCalcCRC(indirect, m_block_size, TRUE);
+      indirect->checksum = computeChecksum(indirect, m_block_size, TRUE);
       
       // write the indirect back
       dlg->WriteBlocks(indirect_buffer, m_lba, this_block, m_block_size, 1);
@@ -2818,7 +2821,7 @@ int CLean::WriteFileExtents(const struct S_LEAN_BLOCKS *extents, struct S_LEAN_I
   inode->extent_count = (count > max_extents) ? max_extents : (BYTE) count;
   CTime time = CTime::GetCurrentTime();
   inode->sch_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
-  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
+  inode->checksum = computeChecksum(inode, LEAN_INODE_SIZE, TRUE);
 
   free(indirect_buffer);
   return extents->extent_count;
@@ -2867,7 +2870,7 @@ void CLean::UpdateFileExtents(struct S_LEAN_INODE *inode, const BOOL inode_only)
         p_extent_crc[i] = LeanCalcExtentCRC(p_extent_start[i], p_extent_size[i], FALSE);
     
       // update the indirect's crc
-      indirect->checksum = LeanCalcCRC(indirect, m_block_size, TRUE);
+      indirect->checksum = computeChecksum(indirect, m_block_size, TRUE);
     
       // write the indirect back
       dlg->WriteBlocks(indirect_buffer, m_lba, next_block, m_block_size, 1);
@@ -2880,7 +2883,7 @@ void CLean::UpdateFileExtents(struct S_LEAN_INODE *inode, const BOOL inode_only)
   // update the inode structure
   CTime time = CTime::GetCurrentTime();
   inode->sch_time = ((INT64) time.GetTime()) * 1000000;  // uS from 1 Jan 1970
-  inode->checksum = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
+  inode->checksum = computeChecksum(inode, LEAN_INODE_SIZE, TRUE);
 
   free(indirect_buffer);
 }

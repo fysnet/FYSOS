@@ -445,7 +445,7 @@ int CLean::LeanCheckInode(DWORD64 block, const BOOL allow_fork, const BOOL add_t
   }
   
   // check to see if crc is correct
-  dword = LeanCalcCRC(inode, LEAN_INODE_SIZE, TRUE);
+  dword = computeChecksum(inode, LEAN_INODE_SIZE, TRUE);
   if (inode->checksum != dword) {
     cs.Format("Inode %I64i: CRC value is not 0x%08X (0x%08X)\r\n", block, dword, inode->checksum);
     lcInfo += cs;
@@ -594,7 +594,7 @@ int CLean::LeanCheckIndirect(DWORD64 inode_num, DWORD64 block, DWORD *ret_count,
     }
     
     // check to see if crc is correct
-    dword = LeanCalcCRC(indirect, m_block_size, TRUE);
+    dword = computeChecksum(indirect, m_block_size, TRUE);
     if (indirect->checksum != dword) {
       cs.Format("Indirect %I64i: CRC value is not 0x%08X (0x%08X)\r\n", block, dword, indirect->checksum);
       lcInfo += cs;
