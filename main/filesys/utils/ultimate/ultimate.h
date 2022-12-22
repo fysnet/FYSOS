@@ -89,6 +89,18 @@
 #define FS_FAT32   32
 #define FS_FSZ     90
 
+// detection counts
+struct S_DET_COUNTS {
+  int FatC, FatT;
+  int Ext2C, Ext2T;
+  int ExFatC, ExFatT;
+  int LeanC, LeanT;
+  int NtfsC, NtfsT;
+  int SfsC, SfsT;
+  int FysFsC, FysFsT;
+  int FszC, FszT;
+};
+
 #define ENDIAN_16U(x)   ((((x) & 0xFF) << 8) | (((x) & 0xFF00) >> 8))
 #define ENDIAN_32U(x)   ((((x) & 0xFF) << 24) | (((x) & 0xFF00) << 8) | (((x) & 0xFF0000) >> 8) | (((x) & 0xFF000000) >> 24))
 #define ENDIAN_64U(x)   (                                              \

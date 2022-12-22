@@ -111,6 +111,10 @@ void CFat::OnFatCheck() {
   modeless.Create(CModeless::IDD, this);
   modeless.ShowWindow(SW_SHOW);
   modeless.BringWindowToTop();
+
+  // on long tests, show that we are working instead of just 'sitting there'
+  modeless.GetDlgItem(IDC_DONE)->SetWindowTextA("Working...");
+  modeless.GetDlgItem(IDC_COPY)->SetWindowTextA("Working...");
   
   // calculate max count of cluster entries there are in a single FAT
   const unsigned sect_per_fat = (m_fat_size == FS_FAT32) ? bpb32->sect_per_fat32 : bpb12->sect_per_fat;
@@ -403,7 +407,7 @@ void CFat::FatCheckRoot(CModeless &modeless, struct S_FAT_ROOT *root, const unsi
       fcErrorCount++;
     }
   }
-  
+
   // show the progress
   modeless.SetDlgItemText(IDC_EDIT, fcInfo);
   modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
@@ -444,6 +448,14 @@ void CFat::FatCheckRoot(CModeless &modeless, struct S_FAT_ROOT *root, const unsi
                         "Directory points to infinate loop...\r\n", start);
               fcErrorCount++;
             } else {
+              // a sub directory's entry must have the filesize field of zero
+              if (filesize != 0) {
+                cs.Format("'%s' filesize field != 0  (0x%08X)\r\n", name, filesize);
+                fcInfo += cs;
+                fcErrorCount++;
+                cs.Empty(); // empty it so we don't add it again below
+              }
+              // read in the subdirectory and parse it
               sub = (struct S_FAT_ROOT *) ReadFile(start, &filesize, FALSE);
               if (sub) {
                 FatCheckRoot(modeless, sub, (filesize + 31) / 32, csPath + name + "\\");

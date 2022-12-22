@@ -116,19 +116,26 @@ bool CISOImage::Start(void) {
     if (memcmp(buffer + 1, "CD001", 5) == 0) {
       switch (buffer[0]) {
         case VD_TYPE_BOOT:
-          memcpy(m_BVD.m_descriptor, buffer, 2048);
-          m_BVD.Start(lba, GetNewColor(cindex), TRUE);
-          dlg->m_TabControl.AddPage(&m_BVD);
+          if (!m_BVD.m_is_valid) {
+            memcpy(m_BVD.m_descriptor, buffer, 2048);
+            m_BVD.Start(lba, GetNewColor(cindex), TRUE);
+            dlg->m_TabControl.AddPage(&m_BVD);
+          }
           break;
         case VD_TYPE_PRIM:
-          memcpy(m_PVD.m_descriptor, buffer, 2048);
-          m_PVD.Start(lba, GetNewColor(cindex), TRUE);
-          dlg->m_TabControl.AddPage(&m_PVD);
+          if (!m_PVD.m_is_valid) {
+            memcpy(m_PVD.m_descriptor, buffer, 2048);
+            m_PVD.Start(lba, GetNewColor(cindex), TRUE);
+            dlg->m_TabControl.AddPage(&m_PVD);
+          }
           break;
         case VD_TYPE_SUMP:
-          memcpy(m_SVD.m_descriptor, buffer, 2048);
-          m_SVD.Start(lba, GetNewColor(cindex), TRUE);
-          dlg->m_TabControl.AddPage(&m_SVD);
+          if (!m_SVD.m_is_valid) {
+            memcpy(m_SVD.m_descriptor, buffer, 2048);
+            m_SVD.Start(lba, GetNewColor(cindex), TRUE);
+            dlg->m_TabControl.AddPage(&m_SVD);
+          } else
+            AfxMessageBox("Already found supplement entry.\r\nTODO: Add ability to have multiple...");
           break;
         case VD_TYPE_VOL:
           //dlg->m_ISONames[index] = "Volume Partition";
@@ -145,14 +152,18 @@ bool CISOImage::Start(void) {
           break;
       }
     } else if (memcmp(buffer + 1, "BEA01", 5) == 0) {
-      memcpy(m_BEA.m_descriptor, buffer, 2048);
-      m_BEA.Start(lba, GetNewColor(cindex), TRUE);
-      dlg->m_TabControl.AddPage(&m_BEA);
+      if (!m_BEA.m_is_valid) {
+        memcpy(m_BEA.m_descriptor, buffer, 2048);
+        m_BEA.Start(lba, GetNewColor(cindex), TRUE);
+        dlg->m_TabControl.AddPage(&m_BEA);
+      }
     } else if ((memcmp(buffer + 1, "NSR02", 5) == 0) ||
                (memcmp(buffer + 1, "NSR03", 5) == 0)) {
-      memcpy(m_NSR.m_descriptor, buffer, 2048);
-      m_NSR.Start(lba, GetNewColor(cindex), TRUE);
-      dlg->m_TabControl.AddPage(&m_NSR);
+      if (!m_NSR.m_is_valid) {
+        memcpy(m_NSR.m_descriptor, buffer, 2048);
+        m_NSR.Start(lba, GetNewColor(cindex), TRUE);
+        dlg->m_TabControl.AddPage(&m_NSR);
+      }
     } else
       break;
     lba++;

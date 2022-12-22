@@ -809,8 +809,11 @@
 #define ID_COPY                         1492
 #define ID_INSERT                       1493
 #define ID_DELETE                       1494
+#define ID_INSERT_FAT16                 1494
 #define ID_APPLY                        1495
 #define ID_CHECK                        1496
+#define ID_INSERT_FAT17                 1496
+#define ID_INSERT_FAT12                 1496
 #define ID_CLEAN                        1497
 #define ID_FORMAT                       1498
 #define IDC_MFT_CLUSTER                 1499
@@ -911,7 +914,9 @@
 #define IDC_DUMP_NEXT                   1559
 #define IDC_EXTRA_COPY                  1559
 #define IDC_LOG_IMPLEMENTATION_ID       1560
+#define IDC_DUMP_FIRST                  1560
 #define IDC_SHOW_DEL                    1561
+#define IDC_DUMP_LAST                   1561
 #define IDC_STATIC_NOTES                1562
 #define IDC_VHD_GUID_UPDATE             1562
 #define IDC_SHOW_DEL2                   1562
@@ -1010,6 +1015,7 @@
 #define IDC_UNDELETE                    1644
 #define IDC_SPIN1                       1645
 #define IDC_ENCODING                    1647
+#define IDC_COUNT_LIST                  1648
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
@@ -1029,9 +1035,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        204
+#define _APS_NEXT_RESOURCE_VALUE        205
 #define _APS_NEXT_COMMAND_VALUE         32787
-#define _APS_NEXT_CONTROL_VALUE         1648
+#define _APS_NEXT_CONTROL_VALUE         1649
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

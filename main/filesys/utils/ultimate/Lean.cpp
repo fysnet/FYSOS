@@ -1287,7 +1287,7 @@ DWORD CLean::computeChecksum(const void *data, const size_t size, const bool isS
 	if (isSensitive)
 	{
 	  //assert(size >= sizeof(DWORD));
-	  res = computeChecksumPartial(res, static_cast<const uint8_t *>(data) + sizeof(DWORD), size - sizeof(DWORD));
+	  res = computeChecksumPartial(res, static_cast<const BYTE *>(data) + sizeof(DWORD), size - sizeof(DWORD));
 	}
 	else
 	{
@@ -2592,7 +2592,7 @@ int CLean::AppendToExtents(struct S_LEAN_BLOCKS *extents, DWORD64 Size, DWORD64 
     block = GetFreeBlock(block, MarkIt);
     
     // if incrementing Extents->extent_size[cnt] will be greater than will fit in a DWORD sized then move to next one
-    // Ben: For debugging purposes, we can change the 0xFFFF to 32 to create a few Indirects for each (large) file.
+    // Ben: For debugging purposes, we can change the 0xFFFFFFFF to 32 to create a few Indirects for each (large) file.
     if (extents->extent_size[cnt] == MAXDWORD /* 32 */) {
       cnt++;
       if (cnt >= extents->allocated_count)

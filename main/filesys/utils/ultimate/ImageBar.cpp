@@ -86,6 +86,7 @@ static char THIS_FILE[] = __FILE__;
 // CImageBar
 
 CImageBar::CImageBar() {
+  memset(&m_det_counts, 0, sizeof(struct S_DET_COUNTS));
 }
 
 CImageBar::~CImageBar() {
@@ -419,6 +420,7 @@ void CImageBar::ImageParseVolume(const BYTE type, const DWORD64 lba, const DWORD
         AfxMessageBox("Too many Unknown Volumes...");
         return;
       }
+      dlg->Unknown[dlg->m_UCount].m_det_counts = m_det_counts;
       dlg->Unknown[dlg->m_UCount].m_draw_index = DrawBox(lba, lba+size-1, TotalBlocks, color, TRUE, "Unknown", &dlg->Unknown[dlg->m_UCount]);
       dlg->Unknown[dlg->m_UCount].Start(lba, size, color, dlg->m_UCount, TRUE);
       dlg->m_UCount++;
@@ -616,31 +618,40 @@ int CImageBar::DetectFileSystem(const DWORD64 lba, const DWORD64 size) {
 const BYTE media[11] = { 0x00, 0x01, 0xF0, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF };
 
 int CImageBar::DetectFat(struct S_FAT1216_BPB *bpb, const unsigned sect_size) {
-  //struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) bpb;
+  int count = 0; // currently a count of 7 checks are made
+
   // check the jmp instruction
-  if (!(((bpb->jmp[0] == 0xEB) && (bpb->jmp[2] == 0x90)) ||
-        ((bpb->jmp[0] == 0xE9) && ((*(WORD *) &bpb->jmp[1]) < 0x1FE))))
-    return -1;
+  if (((bpb->jmp[0] == 0xEB) && (bpb->jmp[2] == 0x90)) ||
+      ((bpb->jmp[0] == 0xE9) && ((* (WORD *) &bpb->jmp[1]) < 0x1FE)))
+    count++;
+
   // check that bytes_per_sec is a power of 2 from 128 -> 4096
-  if ((bpb->bytes_per_sect < 128) || (bpb->bytes_per_sect > 4096) || !power_of_two(bpb->bytes_per_sect))
-    return -1;
+  if ((bpb->bytes_per_sect >= 128) && (bpb->bytes_per_sect <= 4096) && power_of_two(bpb->bytes_per_sect))
+    count++;
+
   // check that sect_per_clust is a power of two with a range of 1 -> 128
-  if ((bpb->sect_per_clust != 1) && (
-    (bpb->sect_per_clust < 1) || (bpb->sect_per_clust > 128) || !power_of_two(bpb->sect_per_clust))
-    ) return -1;
+  if ((bpb->sect_per_clust == 1) || (
+    (bpb->sect_per_clust > 1) && (bpb->sect_per_clust <= 128) && power_of_two(bpb->sect_per_clust))
+    ) count++;
+
   // check that sec_reserved > 0
-  if (!bpb->sect_reserved)
-    return -1;
+  if (bpb->sect_reserved > 0)
+    count++;
+
   // check that num_fats > 0
-  if (!bpb->fats)
-    return -1;
+  if (bpb->fats > 0)
+    count++;
+
   // check that bpb->num_lbas or sectors_ext_lbas is non zero
   // each can contain a value, though they must be identical if they do
-  if (((bpb->sectors && bpb->sect_extnd) && (bpb->sectors != bpb->sect_extnd)) || (!bpb->sectors && !bpb->sect_extnd))
-    return -1;
+  if ((bpb->sectors && bpb->sect_extnd) && (bpb->sectors == bpb->sect_extnd)) 
+    count++;
+  else if ((!bpb->sectors && bpb->sect_extnd) || (bpb->sectors && !bpb->sect_extnd))
+    count++;
+
   // check that media descriptor is good
-  if (memchr(media, bpb->descriptor, 11) == NULL)
-    return -1;
+  if (memchr(media, bpb->descriptor, 11) != NULL)
+    count++;
   
   // check that bpb->sec_per_fat is > 0
   // FAT32: bpb->sec_per_fat can == 0 if fsVersion == 0 ????
@@ -649,9 +660,24 @@ int CImageBar::DetectFat(struct S_FAT1216_BPB *bpb, const unsigned sect_size) {
   //  return -1;
 
   // now check to makes sure that the devices block size == bpb->bytes_per_sec ?????
-  
-  // if we made it this far, we must be a FAT File System
-  return DetectFatSize(bpb);
+
+  // if we found all checks successful, return as FAT
+  if (count == 7)
+    // if we made it this far, we must be a FAT File System
+    return DetectFatSize(bpb);
+
+  // else if we found at least 5, ask if we want to mount it as FAT
+  if (count >= 5) {
+    CString cs;
+    cs.Format(" Found %i out of 7 correct fields for a FAT file system. Mount as FAT?\r\n", count);
+    if (AfxMessageBox(cs, MB_YESNO, 0) == IDYES)
+      return DetectFatSize(bpb);
+  }
+
+  // else, return non-FAT
+  m_det_counts.FatC = count; // save for "unknown partition"
+  m_det_counts.FatT = 7;
+  return -1;
 }
 
 /* detects that FAT size of the fat fs.
@@ -756,62 +782,76 @@ unsigned CImageBar::DetectFatSize(struct S_FAT1216_BPB *bpb) {
 
 int CImageBar::DetectExFat(void *buffer) {
   struct S_EXFAT_VBR *vbr = (struct S_EXFAT_VBR *) buffer;
+  int count = 0; // currently a count of ? checks are made
   
   // first three bytes are 0xEB, 0x76, 0x90
   // TODO: does the second byte have to be 0x76?????
-  if ((vbr->jmp[0] != 0xEB) || (vbr->jmp[1] != 0x76) || (vbr->jmp[2] != 0x90))
-    return -1;
+  if ((vbr->jmp[0] == 0xEB) && (vbr->jmp[1] == 0x76) && (vbr->jmp[2] == 0x90))
+    count++;
   
   // the must_be_zero field must be zeros
   //if (IsBufferEmpty(vbr->reserved0, 53))
-  //  return -1;
+  //  count++;
   
   // fs version should be 1.00
-  if (vbr->fs_version != 0x0100)
-    return -1;
+  if (vbr->fs_version == 0x0100)
+    count++;
   
   // the log_bytes_per_sector + log_sects_per_track must be less than or equal to 25
   // and log_bytes_per_sector cannot be more than 12 (4096 bytes per sector)
-  if ((vbr->log_bytes_per_sect > 12) || ((vbr->log_bytes_per_sect + vbr->log_sects_per_clust) > 25))
-    return -1;
+  if ((vbr->log_bytes_per_sect <= 12) && ((vbr->log_bytes_per_sect + vbr->log_sects_per_clust) <= 25))
+    count++;
   
   // num fats must be 1 or 2
-  if ((vbr->num_fats < 1) || (vbr->num_fats > 2))
-    return -1;
+  if ((vbr->num_fats >= 1) && (vbr->num_fats <= 2))
+    count++;
   
   // percentage of heap should be 0 -> 100
-  if (vbr->percent_heap > 100)
-    return -1;
+  if (vbr->percent_heap <= 100)
+    count++;
   
   // bit 3 of flags should be zero
-  if (vbr->flags & (1<<3))
-    return -1;
+  if ((vbr->flags & (1<<3)) == 0)
+    count++;
   
   // boot sig should be 0xAA55
-  //if (vbr->boot_sig != 0xAA55)
-  //  return -1;
+  //if (vbr->boot_sig == 0xAA55)
+  //  count++;
   
-  return FS_EXFAT;
+  if (count == 6)
+    return FS_EXFAT;
+
+  // else, return non-ExFat
+  m_det_counts.ExFatC = count; // save for "unknown partition"
+  m_det_counts.ExFatT = 6;
+  return -1;
 }
 
 int CImageBar::DetectExt2(void *buffer, const DWORD64 Size, const unsigned sect_size) {
   struct S_EXT2_SUPER *super = (struct S_EXT2_SUPER *) ((BYTE *) buffer + (2 * sect_size));
+  int count = 0; // currently a count of 4 checks are made
   
   // currently, the log block size can only be 0, 1, or 2 (1k, 2k, or 4k)
-  if (super->log_block_size > 2)
-    return -1;
+  if (super->log_block_size <= 2)
+    count++;
   
-  if ((super->blocks_count * (1024 << super->log_block_size) >> 9) > Size)
-    return -1;
+  if ((super->blocks_count * (1024 << super->log_block_size) >> 9) <= Size)
+    count++;
   
-  if (super->magic != 0xEF53)
-    return -1;
+  if (super->magic == 0xEF53)
+    count++;
   
   // if the rev_level isn't 0 or 1, error
-  if (super->rev_level > 1)
-    return -1;
-  
-  return FS_EXT2;
+  if (super->rev_level <= 1)
+    count++;
+
+  if (count == 4)  
+    return FS_EXT2;
+
+  // else, return non-Ext2
+  m_det_counts.Ext2C = count; // save for "unknown partition"
+  m_det_counts.Ext2T = 4;
+  return -1;
 }
 
 int CImageBar::DetectLean(DWORD64 lba, const unsigned sect_size) {
@@ -832,125 +872,155 @@ int CImageBar::DetectLean(DWORD64 lba, const unsigned sect_size) {
 
 int CImageBar::DetectNTFS(void *buffer) {
   struct S_NTFS_BPB *bpb = (struct S_NTFS_BPB *) buffer;
+  int count = 0; // currently a count of ? checks are made
   
   DWORD crc, *p = (DWORD *) bpb;
   
   // check the jmp instruction
-  if ((bpb->jmp[0] != 0xEB) || (bpb->jmp[2] != 0x90))
-    return -1;
+  if ((bpb->jmp[0] == 0xEB) && (bpb->jmp[2] == 0x90))
+    count++;
   
   // check the checksum
   crc = 0;
   for (int i=0; i<22; i++)
     crc += p[i];
-  if (bpb->crc && (crc != bpb->crc))
-    return -1;
+  if ((bpb->crc == 0) || (crc == bpb->crc))
+    count++;
   
   // check the oem for "NTFS    "
-  if (memcmp(bpb->oem_name, "NTFS    ", 8) != 0)
-    return -1;
+  if (memcmp(bpb->oem_name, "NTFS    ", 8) == 0)
+    count++;
   
   // check that bytes_per_sec is a power of 2 from 128 -> 4096
-  if ((bpb->bytes_per_sect < 128) || (bpb->bytes_per_sect > 4096) || !power_of_two(bpb->bytes_per_sect))
-    return -1;
+  if ((bpb->bytes_per_sect >= 128) && (bpb->bytes_per_sect <= 4096) && power_of_two(bpb->bytes_per_sect))
+    count++;
   
   // check that sect_per_clust is a power of two with a range of 1 -> 128
-  if ((bpb->sect_per_clust != 1) && (
-    (bpb->sect_per_clust < 1) || (bpb->sect_per_clust > 128) || !power_of_two(bpb->sect_per_clust))
-    ) return -1;
+  if ((bpb->sect_per_clust == 1) || (
+    (bpb->sect_per_clust > 1) && (bpb->sect_per_clust <= 128) && power_of_two(bpb->sect_per_clust))
+    ) count++;
   
   // check that media descriptor is good
-  if (memchr(media, bpb->descriptor, 11) == NULL)
-    return -1;
+  if (memchr(media, bpb->descriptor, 11) != NULL)
+    count++;
   
   // Check the cluster size is not above 65536 bytes. 
-  if ((bpb->bytes_per_sect * bpb->sect_per_clust) > 65536)
-    return -1;
+  if ((bpb->bytes_per_sect * bpb->sect_per_clust) <= 65536)
+    count++;
   
   // if clust_file_rec_size is 225->247 or 1, 2, 4, 8, 16, 32, or 64, then valid ntfs
-  if (((bpb->clust_file_rec_size < 0xE1) || (bpb->clust_file_rec_size > 0xF7)) && (
-    (bpb->clust_file_rec_size != 1) && (bpb->clust_file_rec_size != 2) && (bpb->clust_file_rec_size != 4) && 
-    (bpb->clust_file_rec_size != 8) && (bpb->clust_file_rec_size != 16) && (bpb->clust_file_rec_size != 32) &&
-    (bpb->clust_file_rec_size != 64)))
-    return -1;
+  if (((bpb->clust_file_rec_size >= 225) && (bpb->clust_file_rec_size <= 247)) || (
+    (bpb->clust_file_rec_size == 1) || (bpb->clust_file_rec_size == 2) || (bpb->clust_file_rec_size == 4) || 
+    (bpb->clust_file_rec_size == 8) || (bpb->clust_file_rec_size == 16) || (bpb->clust_file_rec_size == 32) ||
+    (bpb->clust_file_rec_size == 64)))
+    count++;
   
   // if clust_index_block is 225->247 or 1, 2, 4, 8, 16, 32, or 64, then valid ntfs
-  if (((bpb->clust_index_block < 0xE1) || (bpb->clust_index_block > 0xF7)) && (
-    (bpb->clust_index_block != 1) && (bpb->clust_index_block != 2) && (bpb->clust_index_block != 4) && 
-    (bpb->clust_index_block != 8) && (bpb->clust_index_block != 16) && (bpb->clust_index_block != 32) &&
-    (bpb->clust_index_block != 64)))
-    return -1;
+  if (((bpb->clust_index_block >= 225) && (bpb->clust_index_block <= 247)) || (
+    (bpb->clust_index_block == 1) || (bpb->clust_index_block == 2) || (bpb->clust_index_block == 4) || 
+    (bpb->clust_index_block == 8) || (bpb->clust_index_block == 16) || (bpb->clust_index_block == 32) ||
+    (bpb->clust_index_block == 64)))
+    count++;
   
   // if reserved are zero, it is a NTFS
-  if (memcmp(bpb->resv0, "\0\0\0", 3) || memcmp(bpb->resv5, "\0\0\0", 3) || memcmp(bpb->resv6, "\0\0\0", 3) ||
-    bpb->resv1 || bpb->resv2 || bpb->resv3 || bpb->resv4)
-    return -1;
+  if (!memcmp(bpb->resv0, "\0\0\0", 3) && !memcmp(bpb->resv5, "\0\0\0", 3) && !memcmp(bpb->resv6, "\0\0\0", 3) &&
+    !bpb->resv1 && !bpb->resv2 && !bpb->resv3 && !bpb->resv4)
+    count++;
 
   // other checks go here
   
   // if we made it this far, we must be a NTFS File System
-  return FS_NTFS;
+  if (count == 10)  
+    return FS_NTFS;
+
+  // else, return non-NTFS
+  m_det_counts.NtfsC = count; // save for "unknown partition"
+  m_det_counts.NtfsT = 10;
+  return -1;
 }
 
 int CImageBar::DetectSFS(void *buffer, const unsigned sect_size) {
   struct S_SFS_SUPER *super = (struct S_SFS_SUPER *) ((BYTE *) buffer + SFS_SUPER_LOC);
   BYTE crc = 0;
+  int count = 0; // currently a count of 4 checks are made
   
-  if ((super->magic_version & 0x00FFFFFF) != SFS_SUPER_MAGIC)
-    return -1;
+  if ((super->magic_version & 0x00FFFFFF) == SFS_SUPER_MAGIC)
+    count++;
   
-  if (((super->magic_version & 0xFF000000) >> 24) != 0x1A)  // 0x1A = v1.10
-    return -1;
+  if (((super->magic_version & 0xFF000000) >> 24) == 0x1A)  // 0x1A = v1.10
+    count++;
   
   // check the crc of bytes 0x1A6 -> 0x1B7
   for (int i = SFS_SUPER_LOC + 24; i<=SFS_SUPER_LOC + 41; i++)
     crc += ((BYTE *) buffer)[i];
-  if (crc > 0)
-    return -1;
+  if (crc == 0)
+    count++;
   
-  if ((super->block_size < 2) || (super->block_size > 5))     // x = 2 = (2 ^ (x + 7))
-    return -1;
+  if ((super->block_size >= 2) && (super->block_size <= 5))     // x = 2 = (2 ^ (x + 7))
+    count++;
   
-  return FS_SFS;
+  if (count == 4)
+    return FS_SFS;
+
+  // else, return non-SFS
+  m_det_counts.SfsC = count; // save for "unknown partition"
+  m_det_counts.SfsT = 4;
+  return -1;
 }
 
 int CImageBar::DetectFYSFS(void *buffer, const unsigned sect_size) {
   struct S_FYSFS_SUPER *super = (struct S_FYSFS_SUPER *) ((BYTE *) buffer + (16 * sect_size));
+  int count = 0; // currently a count of 6 checks are made
   
-  if ((super->sig[0] != 'FYSF') || (super->sig[1] != 'SUPR'))
-    return -1;
+  if ((super->sig[0] == 'FYSF') && (super->sig[1] == 'SUPR'))
+    count++;
   // check that sect_per_clust is a power of two with a range of 1 -> 512
-  if ((super->sect_clust != 1) && (
-    (super->sect_clust < 1) || (super->sect_clust > 512) || !power_of_two(super->sect_clust))
-    ) return -1;
+  if ((super->sect_clust == 1) || (
+    (super->sect_clust >= 1) && (super->sect_clust <= 512) && power_of_two(super->sect_clust))
+    ) count++;
   // check that root entries >= 128 and < 65532 and a multiple of 4
-  if ((super->root_entries < 128) || (super->root_entries > 65532) || (super->root_entries % 4))
-    return -1;
+  if ((super->root_entries >= 128) && (super->root_entries < 65532) && !(super->root_entries & 3))
+    count++;
   // TODO: make sure that all the reserved entries are actually zero.
-  if (super->encryption > 1)
-    return -1;
+  if (super->encryption <= 1)
+    count++;
   // if the bitmap count is not 1 or 2
-  if ((super->bitmaps < 1) || (super->bitmaps > 2))
-    return -1;
+  if ((super->bitmaps == 1) || (super->bitmaps == 2))
+    count++;
   
   // here we have pretty much successfully detected a FYSFS FS.  
   // Let's check some values to make sure it is a valid FS
-  if ((super->bitmap_flag & BITMAP_USE_SECOND) && (super->bitmaps != 2))
-    AfxMessageBox(" Bitmap flag says to use second bitmap, but only one bitmap found...");
-  if ((super->root < super->data) || (super->root > (super->data + super->data_sectors)))
-    AfxMessageBox(" Root is not within the Data block...");
+  if (count == 5) {
+    if ((super->bitmap_flag & BITMAP_USE_SECOND) && (super->bitmaps != 2))
+      AfxMessageBox(" Bitmap flag says to use second bitmap, but only one bitmap found...");
+    if ((super->root < super->data) || (super->root > (super->data + super->data_sectors)))
+      AfxMessageBox(" Root is not within the Data block...");
+  }
   
   // if the version of the FS is less than 1.50, we don't support it.
-  if (super->ver < 0x0150)
-    AfxMessageBox(" ***** Version of volume is less than 01.50. *****");
+  if ((super->ver >= 0x0150) && (super->ver <= 0x0162))
+    count++;
   
   // if we made it this far, we must be a FAT File System
-  return FS_FYSFS;
+  if (count == 6)
+    return FS_FYSFS;
+  
+  // else, return non-FYSFS
+  m_det_counts.FysFsC = count; // save for "unknown partition"
+  m_det_counts.FysFsT = 6;
+  return -1;
 }
 
 int CImageBar::DetectFSZ(DWORD64 lba) {
   CFSZ fsz;
   fsz.m_lba = lba;
+  int count = fsz.DetectFSZ();
 
-  return (fsz.DetectFSZ()) ? FS_FSZ : -1;
+  if (count == 3)
+    return FS_FSZ;
+
+  // else, return non-FSZ
+  m_det_counts.FszC = count; // save for "unknown partition"
+  m_det_counts.FszT = 3;
+  return -1;
 }

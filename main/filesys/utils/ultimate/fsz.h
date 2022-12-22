@@ -252,7 +252,7 @@ public:
 
   void Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, BOOL IsNewTab);
   DWORD crc32c_calc(void *buffer, size_t length);
-  BOOL DetectFSZ(void);
+  int DetectFSZ(void);
   DWORD GetNewColor(int index);
   
   /*

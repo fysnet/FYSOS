@@ -714,7 +714,7 @@ void CFSZ::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   
   m_hard_format = FALSE;
 
-  if (!DetectFSZ()) {
+  if (DetectFSZ() != 3) {
     AfxMessageBox("Did not find a valid FS/Z volume");
     m_isvalid = FALSE;
   }
@@ -834,11 +834,12 @@ DWORD CFSZ::crc32c_calc(void *buffer, size_t length) {
   return crc32_val;
 }
 
-BOOL CFSZ::DetectFSZ(void) {
+// return count of tests passed (should be 3, currently)
+int CFSZ::DetectFSZ(void) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE buffer[2048];
   CString cs;
-  int i;
+  int i, count = 0;
 
   // since we have an unknown block size, we need to read 2048 bytes, only.
   // We (temporarily) change the sector size to 512, so we only read 4 512-byte sectors.
@@ -850,44 +851,46 @@ BOOL CFSZ::DetectFSZ(void) {
   // now detect the file system
   struct S_FSZ_SUPER *super = (struct S_FSZ_SUPER *) buffer;
 
-  if (super->magic != 0x5A2F5346)
-    return FALSE;
+  if (super->magic == 0x5A2F5346)
+    count++;
 
-  if (super->magic2 != 0x5A2F5346)
-    return FALSE;
+  if (super->magic2 == 0x5A2F5346)
+    count++;
 
-  if (crc32c_calc((char *) &super->magic, 508) != super->checksum)
-    return FALSE;
+  if (crc32c_calc((char *) &super->magic, 508) == super->checksum)
+    count++;
 
   // check that any of the high 8-byte parts of the 16-byte values are all zeros.
   // if any of these 16-byte values are greater than 64-bits, give an error.
   // * we don't support anything larger than 64-bit values *
-  DQWORD *val = &super->numsec;
-  for (i=0; i<8; i++) {
-    if (val[i].HighPart != 0) {
-      AfxMessageBox("A 128-bit super member is larger than 64-bits.");
-      break;
+  if (count == 3) {
+    DQWORD *val = &super->numsec;
+    for (i=0; i<8; i++) {
+      if (val[i].HighPart != 0) {
+        AfxMessageBox("FSZ: A 128-bit super member is larger than 64-bits.");
+        break;
+      }
     }
+
+  //  DWORD t = crc32c_calc((char *) &super->magic, 508);
+  //  cs.Format(" 0x%08X   0x%08X ", super->checksum, t);
+  //  AfxMessageBox(cs);
+
+    // found valid FS/Z volume
+    if (super->logsec <= 5)
+      m_block_size = 1 << (super->logsec + 11);
+    else {
+      cs.Format("Log Sector Size is out of range at %i.\nShould be 0 -> 5. Setting to a default of 4096.", super->logsec);
+      AfxMessageBox(cs);
+      m_block_size = 4096;  // default to 4096 if out of range
+      super->logsec = 1;
+    }
+
+    m_super = malloc(2048);
+    memcpy(m_super, buffer, 2048);
   }
 
-//  DWORD t = crc32c_calc((char *) &super->magic, 508);
-//  cs.Format(" 0x%08X   0x%08X ", super->checksum, t);
-//  AfxMessageBox(cs);
-
-  // found valid FS/Z volume
-  if (super->logsec <= 5)
-    m_block_size = 1 << (super->logsec + 11);
-  else {
-    cs.Format("Log Sector Size is out of range at %i.\nShould be 0 -> 5. Setting to a default of 4096.", super->logsec);
-    AfxMessageBox(cs);
-    m_block_size = 4096;  // default to 4096 if out of range
-    super->logsec = 1;
-  }
-
-  m_super = malloc(2048);
-  memcpy(m_super, buffer, 2048);
-
-  return TRUE;
+  return count;
 }
 
 /*

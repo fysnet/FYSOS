@@ -98,6 +98,10 @@ public:
   int     m_draw_index;
   
   DWORD64 m_current;  // current LSN of dump sector
+
+  // the list of file system counts
+  struct S_DET_COUNTS m_det_counts;
+
   
 // Overrides
   // ClassWizard generate virtual function overrides
@@ -114,8 +118,12 @@ protected:
   afx_msg void OnClean();
   afx_msg void OnFormat();
   afx_msg void OnInsert();
+  afx_msg void OnInsertFAT16BPB();
+  afx_msg void OnInsertFAT12BPB();
+  afx_msg void OnDumpFirst();
   afx_msg void OnDumpPrev();
   afx_msg void OnDumpNext();
+  afx_msg void OnDumpLast();
   //}}AFX_MSG
   DECLARE_MESSAGE_MAP()
 

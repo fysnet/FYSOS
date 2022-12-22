@@ -269,7 +269,7 @@ public:
   unsigned FatCheckLFN(struct S_FAT_LFN_ROOT *lfn, DWORD *ErrorCode);
   unsigned FatGetName(struct S_FAT_ROOT *root, CString &name, BYTE *attrib, DWORD *start, DWORD *filesize, BOOL *IsDot);
   unsigned FatGetLFN(struct S_FAT_LFN_ROOT *lfn, CString &name);
-  BOOL  FatIsValidChar(const char ch);
+  BOOL  FatIsValidChar(const BYTE ch, const bool is_sfn);
   DWORD GetNextCluster(void *FatBuffer, DWORD cluster);
   bool FatFormat(const BOOL AskForBoot);
   void SaveItemInfo(HTREEITEM hItem, DWORD Cluster, DWORD FileSize, struct S_FAT_ROOT *Entry, int Index, int count, DWORD flags, DWORD ErrorCode, BOOL CanCopy);

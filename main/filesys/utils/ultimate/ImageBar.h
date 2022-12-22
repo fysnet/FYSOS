@@ -78,6 +78,8 @@ public:
 
 // Attributes
 public:
+  struct S_DET_COUNTS m_det_counts;
+
 
 // Operations
 public:

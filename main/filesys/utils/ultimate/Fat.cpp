@@ -1047,8 +1047,8 @@ DWORD CFat::CheckRootEntry(struct S_FAT_ROOT *root) {
   if (root->attrb & ~FAT_ATTR_ALL)
     return FAT_BAD_ATTRIBUTE;
   if (root->attrb != FAT_ATTR_LONG_FILE) {
-    // if sub and any other bits are set, error (except for Hidden?)
-    if ((root->attrb & FAT_ATTR_SUB_DIR) && (root->attrb & ~(FAT_ATTR_SUB_DIR | FAT_ATTR_HIDDEN)))
+    // if sub and any other bits are set, error (except for Hidden and System)
+    if ((root->attrb & FAT_ATTR_SUB_DIR) && (root->attrb & ~(FAT_ATTR_SUB_DIR | FAT_ATTR_HIDDEN | FAT_ATTR_SYSTEM)))
       return FAT_BAD_ATTRIBUTE;
     // if vol label and any other bits are set, error
     if ((root->attrb & FAT_ATTR_VOLUME) && (root->attrb & ~FAT_ATTR_VOLUME))
@@ -1064,14 +1064,20 @@ DWORD CFat::CheckRootEntry(struct S_FAT_ROOT *root) {
   }
   
   // Check that there are no invalid chars in the name
-  if (root[sfn].name[0] != 0) {
-    for (i=0; i<8; i++) {
-      if (!FatIsValidChar(root[sfn].name[i]))
-        return FAT_BAD_CHAR;
-    }
-    for (i=0; i<3; i++) {
-      if (!FatIsValidChar(root[sfn].ext[i]))
-        return FAT_BAD_CHAR;
+  // (Unless it is the . or .. entry)
+  BOOL IsDot = ((memcmp(root[sfn].name, ".       ", 8) == 0) ||
+                (memcmp(root[sfn].name, "..      ", 8) == 0)) &&
+                (memcmp(root[sfn].ext, "   ", 3) == 0);
+  if (!IsDot) {
+    if (root[sfn].name[0] != 0) {
+      for (i=0; i<8; i++) {
+        if (!FatIsValidChar(root[sfn].name[i], TRUE))
+          return FAT_BAD_CHAR;
+      }
+      for (i=0; i<3; i++) {
+        if (!FatIsValidChar(root[sfn].ext[i], TRUE))
+          return FAT_BAD_CHAR;
+      }
     }
   }
 
@@ -1196,7 +1202,7 @@ unsigned CFat::FatCheckLFN(struct S_FAT_LFN_ROOT *lfn, DWORD *ErrorCode) {
   
   t = str;
   while (*t) {
-    if (!FatIsValidChar(*t)) {
+    if (!FatIsValidChar(*t, FALSE)) {
       if (ErrorCode) *ErrorCode = FAT_BAD_LFN_CHAR;
       return cnt;
     }
@@ -1207,11 +1213,37 @@ unsigned CFat::FatCheckLFN(struct S_FAT_LFN_ROOT *lfn, DWORD *ErrorCode) {
   return cnt;
 }
 
-const char fat_valid_chars[] = "$%'-@{}~!#()&_^ .";
+//const char fat_valid_chars[] = "$%'-@{}~!#()&_^ .";
+// LFN: characters may be any combination of letters, digits, or characters with code point
+//  values greater than 127, or any of the following special characters
+const char fat_lfn_valid_chars[] = "$%'-_@~\x60!(){}^#&+,;=[] .";
+
+// The following characters are not legal in any bytes of DIR_Name:
+//  Values less than 0x20 except for the special case of 0x05 in DIR_Name[0] described above.
+//  0x22, 0x2A, 0x2B, 0x2C, 0x2E, 0x2F, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x5B, 0x5C, 0x5D, and 0x7C.
+// invalid chars in a 8.3 short name (not part of a long file name entry list)
+const BYTE fat_sfn_invalid_chars[] = {
+  0x22, 0x2A, 0x2B, 0x2C, 0x2E, 0x2F, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x5B, 0x5C, 0x5D, 0x7C,
+  0x00  // ending marker
+};
 
 // returns TRUE if a valid char for FAT
-BOOL CFat::FatIsValidChar(const char ch) {
-  return (isalpha(ch) || isdigit(ch) || (strchr(fat_valid_chars, ch) ? TRUE : FALSE));
+BOOL CFat::FatIsValidChar(const BYTE ch, const bool is_sfn) {
+  if (!is_sfn)
+    return (isalpha(ch) || isdigit(ch) || (strchr(fat_lfn_valid_chars, ch) != NULL));
+  
+  // else it is a short filename entry, so check the 8.3 bytes
+  if (ch < 0x20)
+    return FALSE;
+
+  int i = 0;
+  while (fat_sfn_invalid_chars[i] != 0x00) {
+    if (ch == fat_sfn_invalid_chars[i])
+      return FALSE;
+    i++;
+  }
+
+  return TRUE;
 }
 
 // Load the first FAT to fat_buffer
@@ -1668,14 +1700,14 @@ void CFat::CreateSFN(CString csLFN, int seq, BYTE name[8], BYTE ext[3]) {
   csName.MakeUpper();
   l = csName.GetLength();
   for (i=0; i<l; i++)
-    if (!FatIsValidChar(csName.GetAt(i)) || ((csName.GetAt(i) == '~') && dotilde))
+    if (!FatIsValidChar(csName.GetAt(i), TRUE) || ((csName.GetAt(i) == '~') && dotilde))
       csName.SetAt(i, '_');
   
   csExt = csExt.Left(3);
   csExt.MakeUpper();
   l = csExt.GetLength();
   for (i=0; i<l; i++)
-    if (!FatIsValidChar(csExt.GetAt(i)))
+    if (!FatIsValidChar(csExt.GetAt(i), TRUE))
       csExt.SetAt(i, '_');
   
   if (dotilde) {

@@ -72,6 +72,7 @@
 
 #include "Lean.h"
 #include "Fat.h"
+#include "FatFormat.h"
 #include "ExFat.h"
 #include "FYSFS.h"
 #include "SFS.h"
@@ -108,8 +109,12 @@ BEGIN_MESSAGE_MAP(CUnknown, CPropertyPage)
   ON_BN_CLICKED(ID_CLEAN, OnClean)
   ON_BN_CLICKED(ID_FORMAT, OnFormat)
   ON_BN_CLICKED(ID_INSERT, OnInsert)
+  ON_BN_CLICKED(ID_INSERT_FAT12, OnInsertFAT12BPB)
+  ON_BN_CLICKED(ID_INSERT_FAT16, OnInsertFAT16BPB)
+  ON_BN_CLICKED(IDC_DUMP_FIRST, OnDumpFirst)
   ON_BN_CLICKED(IDC_DUMP_PREV, OnDumpPrev)
   ON_BN_CLICKED(IDC_DUMP_NEXT, OnDumpNext)
+  ON_BN_CLICKED(IDC_DUMP_LAST, OnDumpLast)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
@@ -123,12 +128,34 @@ BOOL CUnknown::OnInitDialog() {
   GetDlgItem(IDC_DUMP)->SetFont(&dlg->m_DumpFont);
   
   // display the base/size string
-  CString csBaseSize;
-  csBaseSize.Format("Start: %I64i, Size: %I64i", m_lba, m_size);
-  SetDlgItemText(IDC_BASE_SIZE_STR, csBaseSize);
+  CString cs;
+  cs.Format("Start: %I64i, Size: %I64i", m_lba, m_size);
+  SetDlgItemText(IDC_BASE_SIZE_STR, cs);
   
+  cs.Format("Detection Counts...\r\n"
+            " (Filesystem: matched 'n' of 'n' tests)\r\n"
+            "    Fat: %i of %i\r\n"
+            "   Ext2: %i of %i\r\n"
+            "  ExFat: %i of %i\r\n"
+            "   Lean: not applicable\r\n"
+            "   NTFS: %i of %i\r\n"
+            "    SFS: %i of %i\r\n"
+            "  FYSFS: %i of %i\r\n"
+            "    FSZ: %i of %i",
+    m_det_counts.FatC, m_det_counts.FatT,      // FAT
+    m_det_counts.Ext2C, m_det_counts.Ext2T,    // Ext2
+    m_det_counts.ExFatC, m_det_counts.ExFatT,  // ExFat
+    //m_det_counts.LeanC, m_det_counts.LeanT,    // Lean (Lean cannot return a count due to it checks multiple sectors. Each sector could have different counts.)
+    m_det_counts.NtfsC, m_det_counts.NtfsT,    // NTFS
+    m_det_counts.SfsC, m_det_counts.SfsT,      // SFS
+    m_det_counts.FysFsC, m_det_counts.FysFsT,  // FYSFS
+    m_det_counts.FszC, m_det_counts.FszT       // FSZ
+  );
+  GetDlgItem(IDC_COUNT_LIST)->SetFont(&dlg->m_DumpFont);
+  SetDlgItemText(IDC_COUNT_LIST, cs);
+
   OnDumpPrev();
-  
+
   return TRUE;
 }
 
@@ -390,6 +417,131 @@ void CUnknown::OnInsert() {
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
 }
 
+void CUnknown::OnInsertFAT12BPB() {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE buffer[MAX_SECT_SIZE];
+  CString cs;
+
+  cs.Format("Insert a FAT12 BPB at LSN %I64i?", m_current);
+  if (AfxMessageBox(cs, MB_YESNO, 0) != IDYES)
+    return;
+
+  // create a minimum FAT 16 BPB
+  memset(buffer, 0x00, MAX_SECT_SIZE);
+
+  CFat Fat;
+  CFatFormat format;
+  format.m_fat_size = FS_FAT12;
+  format.m_sectors = m_size;
+  format.m_num_fats = 2;
+  format.m_root_entries = 16; // in sectors
+  format.m_sect_cluster = 1;
+  if (format.DoModal() != IDOK)
+    return;
+
+  struct S_FAT1216_BPB *bpb = (struct S_FAT1216_BPB *) buffer;
+  bpb->jmp[0] = 0xEB;  bpb->jmp[1] = 0x3C; bpb->jmp[2] = 0x90;
+  memcpy(bpb->oem_name, "OEM_NAME", 8);
+  bpb->bytes_per_sect = dlg->m_sect_size;
+  bpb->sect_per_clust = format.m_sect_cluster;
+  bpb->sect_reserved = 1;
+  bpb->fats = format.m_num_fats;
+  bpb->root_entrys = (format.m_root_entries * dlg->m_sect_size) / 32;
+  if (m_size <= 0xFFFF) {
+    bpb->sectors = (WORD) m_size;
+    bpb->sect_extnd = 0;
+  } else {
+    bpb->sectors = 0;
+    bpb->sect_extnd = (DWORD) m_size;
+  }
+  if (m_size <= 2880)
+    bpb->descriptor = 0xF0;  // if it is a floppy, we need descriptor to be 0xF0
+  else
+    bpb->descriptor = 0xF8;  // else, assume it is a hard drive and use 0xF8
+  bpb->sect_per_fat = Fat.CalcSectPerFat(m_size - bpb->sect_reserved - format.m_root_entries, format.m_sect_cluster, dlg->m_sect_size, FS_FAT12);
+  bpb->sect_per_trk = 0;
+  bpb->heads = 0;
+  bpb->hidden_sects = (DWORD) m_lba;
+  bpb->drive_num = 0;
+  bpb->resv = 0;
+  bpb->sig = 0;
+  bpb->serial = 0;
+  memcpy(bpb->label, "NO LABEL   ", 11);
+  memcpy(bpb->sys_type, "FAT12   ", 8);
+  
+  // write it to the image
+  dlg->WriteToFile(buffer, m_lba + m_current, 1);
+  
+  // update the display
+  DumpIt(m_dump, buffer, (DWORD) (m_current * dlg->m_sect_size), dlg->m_sect_size, FALSE);
+  SetDlgItemText(IDC_DUMP, m_dump);
+}
+
+void CUnknown::OnInsertFAT16BPB() {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE buffer[MAX_SECT_SIZE];
+  CString cs;
+
+  cs.Format("Insert a FAT16 BPB at LSN %I64i?", m_current);
+  if (AfxMessageBox(cs, MB_YESNO, 0) != IDYES)
+    return;
+
+  // create a minimum FAT 16 BPB
+  memset(buffer, 0x00, MAX_SECT_SIZE);
+
+  CFat Fat;
+  CFatFormat format;
+  format.m_fat_size = FS_FAT16;
+  format.m_sectors = m_size;
+  format.m_num_fats = 2;
+  format.m_root_entries = 16; // in sectors
+  format.m_sect_cluster = 1;
+  if (format.DoModal() != IDOK)
+    return;
+
+  struct S_FAT1216_BPB *bpb = (struct S_FAT1216_BPB *) buffer;
+  bpb->jmp[0] = 0xEB;  bpb->jmp[1] = 0x3C; bpb->jmp[2] = 0x90;
+  memcpy(bpb->oem_name, "OEM_NAME", 8);
+  bpb->bytes_per_sect = dlg->m_sect_size;
+  bpb->sect_per_clust = format.m_sect_cluster;
+  bpb->sect_reserved = 1;
+  bpb->fats = format.m_num_fats;
+  bpb->root_entrys = (format.m_root_entries * dlg->m_sect_size) / 32;
+  if (m_size <= 0xFFFF) {
+    bpb->sectors = (WORD) m_size;
+    bpb->sect_extnd = 0;
+  } else {
+    bpb->sectors = 0;
+    bpb->sect_extnd = (DWORD) m_size;
+  }
+  if (m_size <= 2880)
+    bpb->descriptor = 0xF0;  // if it is a floppy, we need descriptor to be 0xF0
+  else
+    bpb->descriptor = 0xF8;  // else, assume it is a hard drive and use 0xF8
+  bpb->sect_per_fat = Fat.CalcSectPerFat(m_size - bpb->sect_reserved - format.m_root_entries, format.m_sect_cluster, dlg->m_sect_size, FS_FAT16);
+  bpb->sect_per_trk = 0;
+  bpb->heads = 0;
+  bpb->hidden_sects = (DWORD) m_lba;
+  bpb->drive_num = 0;
+  bpb->resv = 0;
+  bpb->sig = 0;
+  bpb->serial = 0;
+  memcpy(bpb->label, "NO LABEL   ", 11);
+  memcpy(bpb->sys_type, "FAT16   ", 8);
+  
+  // write it to the image
+  dlg->WriteToFile(buffer, m_lba + m_current, 1);
+  
+  // update the display
+  DumpIt(m_dump, buffer, (DWORD) (m_current * dlg->m_sect_size), dlg->m_sect_size, FALSE);
+  SetDlgItemText(IDC_DUMP, m_dump);
+}
+
+void CUnknown::OnDumpFirst() {
+  m_current = 1;
+  OnDumpPrev();
+}
+
 void CUnknown::OnDumpPrev() {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   BYTE buffer[MAX_SECT_SIZE];
@@ -398,8 +550,10 @@ void CUnknown::OnDumpPrev() {
   if (m_current > 0)
     m_current--;
   
+  GetDlgItem(IDC_DUMP_FIRST)->EnableWindow(m_current > 0);
   GetDlgItem(IDC_DUMP_PREV)->EnableWindow(m_current > 0);
   GetDlgItem(IDC_DUMP_NEXT)->EnableWindow(m_current < (m_size - 1));
+  GetDlgItem(IDC_DUMP_LAST)->EnableWindow(m_current < (m_size - 1));
   cs.Format("LSN %I64i of %I64i", m_current, m_size - 1);
   SetDlgItemText(IDC_DUMP_STR, cs);
   
@@ -416,12 +570,19 @@ void CUnknown::OnDumpNext() {
   if (m_current < (m_size - 1))
     m_current++;
   
+  GetDlgItem(IDC_DUMP_FIRST)->EnableWindow(m_current > 0);
   GetDlgItem(IDC_DUMP_PREV)->EnableWindow(m_current > 0);
   GetDlgItem(IDC_DUMP_NEXT)->EnableWindow(m_current < (m_size - 1));
+  GetDlgItem(IDC_DUMP_LAST)->EnableWindow(m_current < (m_size - 1));
   cs.Format("LSN %I64i of %I64i", m_current, m_size - 1);
   SetDlgItemText(IDC_DUMP_STR, cs);
   
   dlg->ReadFromFile(buffer, m_lba + m_current, 1);
   DumpIt(m_dump, buffer, (DWORD) (m_current * dlg->m_sect_size), dlg->m_sect_size, FALSE);
   SetDlgItemText(IDC_DUMP, m_dump);
+}
+
+void CUnknown::OnDumpLast() {
+  m_current = m_size - 2;
+  OnDumpNext();
 }
