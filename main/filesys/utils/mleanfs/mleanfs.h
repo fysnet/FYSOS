@@ -57,7 +57,7 @@
  */
 
 /*
- *  Last updated: 15 Nov 2022
+ *  Last updated: 28 Dec 2022
  */
 
 // set it to 1 (align on byte)
@@ -74,7 +74,7 @@
 
 #define LOG2(x) (int) (log((double) (x)) / log(2.0))  // log2(x) = log(x) / log(2.0)
 
-char strtstr[] = "\nMLEANFS  v2.10.20    Forever Young Software 1984-2022\n\n";
+char strtstr[] = "\nMLEANFS  v2.20.00    Forever Young Software 1984-2022\n\n";
 
 // default superblock location (will sector pad to this location if boot_size is less than)
 //  if boot code is larger, will move super location to just past boot code
@@ -95,7 +95,7 @@ char strtstr[] = "\nMLEANFS  v2.10.20    Forever Young Software 1984-2022\n\n";
 struct S_LEAN_SUPER {
   uint32_t checksum;                // uint32_t sum of all fields.
   uint32_t magic;                   // 0x4E41454C ('LEAN')
-  uint16_t fs_version;              // 0x0006 = 0.6
+  uint16_t fs_version;              // 0x0100 = 1.0
   uint8_t  pre_alloc_count;         // count minus one of contiguous blocks that driver should try to preallocate
   uint8_t  log_blocks_per_band;     // 1 << log_blocks_per_band = blocks_per_band. Valid values are 12, 13, 14, ...
   uint32_t state;                   // bit 0 = unmounted?, bit 1 = error?
@@ -103,19 +103,23 @@ struct S_LEAN_SUPER {
   uint8_t  volume_label[64];        // can be modified by the LABEL command
   uint64_t block_count;             // The total number of blocks that form a file system volume
   uint64_t free_block_count;        // The number of free blocks in the volume. A value of zero means disk full.
+  uint64_t next_free;               // The next (possible) free block to start searching for free blocks.
   uint64_t primary_super;           // block number of primary super block
   uint64_t backup_super;            // block number of backup super block
   uint64_t bitmap_start;            // This is the address of the block where the first bands bitmap starts
+  uint32_t bitmap_checksum;         // The checksum of the whole bitmap
+  uint32_t reserved0;               // reserved and preserved
   uint64_t root_start;              // This is the address of the block where the root directory of the volume starts, the inode number of the root directory.
   uint64_t bad_start;               // This is the address of the block where the pseudo-file to track bad blocks starts.
   uint64_t journal_inode;           // This is the address of the block for the journal file.
+  uint32_t capabilities;            // The capability bitmap of the volume
   uint8_t  log_block_size;          // 1 << log_block_size = block_size in bytes. Valid values are 9, 10, 11, ...
-  uint8_t  reserved[7];             // reserved and preserved
-  //uint8_t  reserved[];            // zeros
+  uint8_t  reserved1[3];            // reserved and preserved
+  //uint8_t  reserved2[];            // zeros
 };
 
-#define S_LEAN_INODE_SIZE     176
-#define LEAN_INODE_EXTENT_CNT   6
+#define S_LEAN_INODE_SIZE     200
+#define LEAN_INODE_EXTENT_CNT   8
 #define LEAN_DATA_OFFSET      512   // data starts at offset 512 from start of inode
 
 // 176 bytes each
@@ -230,4 +234,5 @@ void create_inode(FILE *, const uint64_t, const uint64_t, const uint32_t, const 
 
 void parse_command(int, char *[], char *, bool *, char *);
 
-uint32_t lean_calc_crc(const void *, size_t);
+uint32_t computeChecksumPartial(uint32_t res, const void *data, size_t size);
+uint32_t computeChecksum(const void *data, const size_t size, const bool isSensitive);

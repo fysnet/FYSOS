@@ -77,7 +77,7 @@
  *  Assumptions/prerequisites:
  *   - requires 64-bit integers
  *
- *  Last updated: 15 Nov 2022
+ *  Last updated: 28 Dec 2022
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os mleanfs.c -o mleanfs.exe -s
@@ -312,7 +312,7 @@ int main(int argc, char *argv[]) {
   struct S_LEAN_SUPER *super = (struct S_LEAN_SUPER *) buffer;
   memset(super, 0, block_size);
   super->magic = LEAN_SUPER_MAGIC;
-  super->fs_version = 0x0008;  // 0.8
+  super->fs_version = 0x0100;  // 1.0
   super->log_blocks_per_band = log_band_size;
   super->pre_alloc_count = (8 - 1);
   super->state = (0 << 1) | (1 << 0);  // clean unmount
@@ -321,13 +321,16 @@ int main(int argc, char *argv[]) {
   super->volume_label[63] = 0;  // make sure label is null terminated
   super->block_count = tot_blocks;
   super->free_block_count = 0; // we update this later
+  super->next_free = 0;
   super->primary_super = super_loc;
   super->backup_super = ((tot_blocks < band_size) ? tot_blocks : band_size) - 1; // last block in first band
   super->bitmap_start = super_loc + 1;
+  super->bitmap_checksum = 0; // we update this later
   super->root_start = super->bitmap_start + bitmap_size;
   super->bad_start = 0;  // no bad sectors (yet?)
   super->journal_inode = 0;
   super->log_block_size = resources->param1;
+  super->capabilities = 0;
 
   // create a buffer for the bitmap(s), and mark the first few bits as used.
   bitmaps = (uint8_t *) calloc(tot_bands * (bitmap_size * block_size), 1);
@@ -453,7 +456,9 @@ int main(int argc, char *argv[]) {
   FSEEK(targ, (resources->base_lba + super_loc) * block_size, SEEK_SET);
   printf(" Writing Super Block to block %" LL64BIT "i\n", FTELL(targ) / block_size);
   super->free_block_count = resources->tot_sectors - blocks_used;
-  super->checksum = lean_calc_crc(super, block_size);
+  super->next_free = blocks_used; // (close enough)
+  super->bitmap_checksum = computeChecksum(bitmaps, tot_bands * (bitmap_size * block_size), FALSE);
+  super->checksum = computeChecksum(super, block_size, TRUE);
   fwrite(super, block_size, 1, targ);
   FSEEK(targ, (resources->base_lba + super->backup_super) * block_size, SEEK_SET);
   printf(" Writing Backup Super Block to block %" LL64BIT "i\n", (uint64_t) (FTELL(targ) / block_size));
@@ -527,22 +532,32 @@ uint8_t lean_calc_log_band_size(const size_t block_size, const size_t tot_blocks
   return ret;
 }
 
-/* This always skips the first dword since it is the crc field.
- *  The CRC is calculated as:
- *     crc = 0;
- *     loop (n times)
- *       crc = ror(crc) + dword[x]
+/* Compute the Checksum of an area.
+ *  data -> Sensitive stucture or data area to be checked.
+ *  size = size in bytes of area.
+ *  isSensitive = non-zero to skip first 32-bit entry (is a Sensitive structure)
  */
-uint32_t lean_calc_crc(const void *ptr, size_t size) {
-  uint32_t crc = 0;
-  const uint32_t *p = (const uint32_t *) ptr;
-  unsigned int i;
+uint32_t computeChecksum(const void *data, const size_t size, const bool isSensitive) {
+	uint32_t res = 0;
+	if (isSensitive) {
+	  res = computeChecksumPartial(res, (uint8_t *) data + sizeof(uint32_t), size - sizeof(uint32_t));
+	}	else {
+	  res = computeChecksumPartial(res, data, size);
+	}
+	return res;
+}
 
-  size /= sizeof(uint32_t);
-  for (i = 1; i < size; ++i)
-    crc = (crc << 31) + (crc >> 1) + p[i];
-
-  return crc;
+/* Compute the Checksum of a partial area.
+ *  res = running checksum of last checked area.
+ *  data -> Sensitive stucture or data area to be checked.
+ *  size = size in bytes of area.
+ */
+uint32_t computeChecksumPartial(uint32_t res, const void *data, size_t size) {
+	const uint32_t *d = (uint32_t *) data;
+	size /= sizeof(uint32_t);
+	for (size_t i = 0; i != size; ++i)
+	  res = (res << 31) + (res >> 1) + d[i];
+	return res;
 }
 
 /* *********************************************************************************************************
@@ -766,7 +781,7 @@ void create_inode(FILE *fp, const uint64_t file_size, const uint64_t allocation_
     inode->extent_start[e] = extent->start[e];
     inode->extent_size[e] = extent->size[e];
   }
-  inode->checksum = lean_calc_crc((uint32_t *) inode, S_LEAN_INODE_SIZE);
+  inode->checksum = computeChecksum((uint32_t *) inode, S_LEAN_INODE_SIZE, TRUE);
 
 #ifdef INODE_HAS_EAS
   // extended attributes
