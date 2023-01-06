@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2022
+ ;                             Copyright (c) 1984-2023
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -64,9 +64,9 @@
  ;    This code uses instructions that are valid for a 386 or later 
  ;    Intel x86 or compatible CPU.
  ;
- ;  Last updated: 24 Sept 2022
+ ;  Last updated: 5 Jan 2023
  ;
- ;  Assembled using (NBASM v00.26.74) (http://www.fysnet/newbasic.htm)
+ ;  Assembled using (NBASM v00.26.80) (http://www.fysnet/newbasic.htm)
  ;   nbasm embr
  ;
  
@@ -365,18 +365,9 @@ remaining_code:
            ;  calculate a new one when we update the date
            call crc32_initialize
 
-           mov  di,offset entry_hdr
-           mov  ebx,[di + S_EMBR->crc]
-           mov  dword [di + S_EMBR->crc],0
-
-           mov  si,di
-           mov  ax,[di + S_EMBR->entry_count]
-           mov  cx,sizeof(S_EMBR_ENTRY)
-           mul  cx
-           mov  cx,ax
-           add  cx,sizeof(S_EMBR)
-           call crc32
-           
+           mov  si,offset entry_hdr
+           mov  ebx,[si + S_EMBR->crc]
+           call crc32_calculate
            cmp  ebx,eax
            je   short @f
 
@@ -553,7 +544,7 @@ not_valid: mov  word col,7
            mov  word col,21
            xor  eax,eax
            mov  ax,cur_entry
-           inc  ax
+           ; inc  ax   ; zero based
            call display_dec
            inc  word row
            mov  word col,7
@@ -661,7 +652,7 @@ not_enter: cmp  ax,1769h  ; 'I'
 not_i:     cmp  ax,1474h  ; 'T'
            je   short @f
            cmp  ax,1454h  ; 't'
-           jne  short not_t
+           jne  not_t
 @@:        mov  word col,5
            mov  word row,23
            mov  si,offset enter_dec_number
@@ -683,15 +674,25 @@ not_i:     cmp  ax,1474h  ; 'T'
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; now write delay back to the disk
 save_delay_count:
-           mov  boot_delay,ax
-           mov  cx,1
-           xor  ebx,ebx
-           mov  bx,es
-           shl  ebx,4
+           mov  boot_delay,ax  ; update the value
+
+           ; calculate the new crc           
+           call crc32_calculate
+           mov  si,offset entry_hdr
+           mov  [si + S_EMBR->crc],eax
+
+           mov  cx,1           ; 1 sector
+           
+           xor  ebx,ebx        ; ebx -> physical address of data to write
+           mov  bx,ds          ;
+           shl  ebx,4          ;
            add  ebx,offset entry_hdr
+           
+           xor  edx,edx        ; edx:eax = lba to write to
            mov  eax,offset entry_hdr
            shr  eax,9
-           cdq
+           inc  eax            ; skip past mbr
+ 
            mov  si,4301h       ; write service
            call transfer_sectors_long
            jmp  short do_again
@@ -770,14 +771,8 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate new crc
+           call crc32_calculate
            mov  si,offset entry_hdr
-           mov  dword [si + S_EMBR->crc],0
-           mov  ax,[si + S_EMBR->entry_count]
-           mov  cx,sizeof(S_EMBR_ENTRY)
-           mul  cx
-           mov  cx,ax
-           add  cx,sizeof(S_EMBR)
-           call crc32
            mov  [si + S_EMBR->crc],eax
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -1230,7 +1225,7 @@ disp_it1:  ; di -> entry
            mov  word col,34
            xor  eax,eax
            mov  ax,bx
-           inc  ax
+           ; inc  ax   ; zero based
            call display_dec
            jmp  info_not_valid
 
@@ -1677,6 +1672,28 @@ crc32      proc near
            ret
 crc32      endp
 
+; calculates the crc of the header and all entries
+; on entry
+;  nothing
+; on return
+;  eax = crc
+; (preserves the current crc)
+crc32_calculate proc near uses ebx cx dx si
+           mov  si,offset entry_hdr
+           mov  ebx,[si + S_EMBR->crc]
+           mov  dword [si + S_EMBR->crc],0
+           
+           mov  ax,[si + S_EMBR->entry_count]
+           mov  cx,sizeof(S_EMBR_ENTRY)
+           mul  cx
+           mov  cx,ax
+           add  cx,sizeof(S_EMBR)
+           call crc32
+
+           mov  [si + S_EMBR->crc],ebx
+           ret
+crc32_calculate endp
+
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; remaining data needed
@@ -1695,8 +1712,8 @@ cur_selected dw  0    ; current entry selected
 tot_entries  dw  0    ; total entries
 
 
-menu_start  db        'ÕÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ  FYS OS (aka Konan) Multi-boot EMBR v0.94.00  ÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¸'
-            db  13,10,'³                (C)opyright Forever Young Software 1984-2022                 ³'
+menu_start  db        'ÕÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ  FYS OS (aka Konan) Multi-boot EMBR v0.95.10  ÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¸'
+            db  13,10,'³                (C)opyright Forever Young Software 1984-2023                 ³'
             db  13,10,'³    ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿ ³'
             db  13,10,'³    ³                                                                      ',24,' ³'
             db  13,10,'³    ³                                                                      ° ³'
@@ -1750,126 +1767,126 @@ legend      db        '³     ENTER = Boot current selected partition entry.     
            ; must start on a sector boundary
            org (($ + (SECT_SIZE-1)) & ~(SECT_SIZE-1))
 
-DEMO_THIS   equ 0  ; change '1' to '0' when not demonstrating 10 entries...
+DEMO_THIS   equ 1  ; change '1' to '0' when not demonstrating 10 entries...
 
 entry_hdr   db  'EMBR'        ; sig0
 .if DEMO_THIS
-            dd  59828E59h     ; crc32
+hdr_crc     dd  83FA7EEEh     ; crc32
             dw  10            ; total entries in table
 .else
-            dd  9F03423Fh     ; crc32
-            dw  1             ; total entries in table
+hdr_crc     dd  0E663A8E3h    ; crc32
+            dw  2             ; total entries in table
 .endif
 boot_delay  db  20            ; boot delay
             dup 17,0          ; reserved
             db  'RBME'        ; sig1
             
-            ; entry 1
+            ; entry 0 (zero based)
             dd  ENTRY_VALID   ; flags
             db  'eMBR'        ; signature
             dq  63            ; starting sector (MBR + eMBR + blank to next track) (63)
             dq  (100800-63)   ; sector count (100 cylinders)
-            db  'FYSOS / LEAN Filesystem used with the FYSOS:SYSCORE book.      ',0
+            db  'FAT file system used with the FYSOS:SYSCORE book.              ',0
             dq  465D6740h     ; date created  (29 May 2017, noon)
             dq  465D6E48h     ; last booted   (29 May 2017, noon thirty)
             dq  1111222233334444h ; OS signature
+            dup 16,0          ; reserved
+            
+            ; entry 1
+            dd  ENTRY_VALID   ; flags
+            db  'eMBR'        ; signature
+            dq  100800        ; starting sector
+            dq  103824        ; sector count
+            db  'Empty Partition ready for formatting.  Do not boot...          ',0
+            dq  46516740h     ; date created
+            dq  46546E48h     ; last booted
+            dq  4568751657532121h ; OS signature
             dup 16,0          ; reserved
             
 .if DEMO_THIS
             ; entry 2
             dd  ENTRY_VALID   ; flags
             db  'eMBR'        ; signature
-            dq  24567         ; starting sector
-            dq  25184954      ; sector count
+            dq  204624        ; starting sector
+            dq  123456        ; sector count
             db  'Entry #2 Demo entry.  Will not have anything.  Do not boot...  ',0
-            dq  46516740h     ; date created
-            dq  46546E48h     ; last booted
-            dq  4568751657532121h ; OS signature
-            dup 16,0          ; reserved
-            
-            ; entry 3
-            dd  ENTRY_VALID   ; flags
-            db  'eMBR'        ; signature
-            dq  124567        ; starting sector
-            dq  125184954     ; sector count
-            db  'Entry #3 Demo entry.  Will not have anything.  Do not boot...  ',0
             dq  46416740h     ; date created
             dq  46446E48h     ; last booted
             dq  4231876854489457h ; OS signature
             dup 16,0          ; reserved
 
-            ; entry 4
+            ; entry 3
             dd  ENTRY_VALID   ; flags
             db  'eMBR'        ; signature
-            dq  2845          ; starting sector
-            dq  2545844       ; sector count
-            db  'Entry #4 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  328080        ; starting sector
+            dq  254584        ; sector count
+            db  'Entry #3 Demo entry.  Will not have anything.  Do not boot...  ',0
             dq  46416040h     ; date created
             dq  46446E08h     ; last booted
             dq  3135487646878746h ; OS signature
             dup 16,0          ; reserved
 
-            ; entry 5
+            ; entry 4
             dd  0             ; flags *Not Valid* *Empty slot*
             db  'eMBR'        ; signature
-            dq  111121111     ; starting sector
+            dq  582664        ; starting sector
             dq  22544         ; sector count
-            db  'Entry #5 Demo entry.  Will not have anything.  Do not boot...  ',0
+            db  'Entry #4 Demo entry.  Will not have anything.  Do not boot...  ',0
             dq  46415040h     ; date created
             dq  46445E08h     ; last booted
             dq  46546A456D746446h ; OS signature
             dup 16,0          ; reserved
 
-            ; entry 6
+            ; entry 5
             dd  ENTRY_VALID   ; flags
             db  'eMBR'        ; signature
-            dq  1AAAAAAAAh    ; starting sector
-            dq  22548855      ; sector count
-            db  'Entry #6 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  605208        ; starting sector
+            dq  548855        ; sector count
+            db  'Entry #5 Demo entry.  Will not have anything.  Do not boot...  ',0
             dq  46413040h     ; date created
             dq  46443E08h     ; last booted
             dq  46546A46456D5446h ; OS signature
             dup 16,0          ; reserved
 
-            ; entry 7
+            ; entry 6
             dd  ENTRY_VALID   ; flags
             db  'eMBR'        ; signature
-            dq  1111111111    ; starting sector
-            dq  2222222222    ; sector count
-            db  'Entry #7 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  1154063       ; starting sector
+            dq  222222        ; sector count
+            db  'Entry #6 Demo entry.  Will not have anything.  Do not boot...  ',0
             dq  46403040h     ; date created
             dq  46433E08h     ; last booted
             dq  4673A1213AA1A34Dh ; OS signature
             dup 16,0          ; reserved
 
-            ; entry 8
+            ; entry 7
             dd  ENTRY_VALID   ; flags
             db  'eMBR'        ; signature
-            dq  333333333     ; starting sector
-            dq  444444444     ; sector count
-            db  'Entry #8 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  1376285       ; starting sector
+            dq  444444        ; sector count
+            db  'Entry #7 Demo entry.  Will not have anything.  Do not boot...  ',0
             dq  46401040h     ; date created
             dq  46431E08h     ; last booted
             dq  47799A4654D444AAh ; OS signature
             dup 16,0          ; reserved
 
-            ; entry 9
+            ; entry 8
             dd  0             ; flags *Not Valid* *Empty slot*
             db  'eMBR'        ; signature
-            dq  2255225522    ; starting sector
-            dq  5522552255    ; sector count
-            db  'Entry #9 Demo entry.  Will not have anything.  Do not boot...  ',0
+            dq  1820729       ; starting sector
+            dq  552255        ; sector count
+            db  'Entry #8 Demo entry.  Will not have anything.  Do not boot...  ',0
             dq  36401040h     ; date created
             dq  36431E08h     ; last booted
             dq  9999A99AAA4A45AAh ; OS signature
             dup 16,0          ; reserved
 
-            ; entry 10
+            ; entry 9
             dd  ENTRY_VALID   ; flags
             db  'eMBR'        ; signature
-            dq  0DEADBEEFh    ; starting sector
-            dq  0A5A5A5A5A5h  ; sector count
-            db  'Entry #10 Demo entry.  Will not have anything.  Do not boot... ',0
+            dq  2372984       ; starting sector
+            dq  546867        ; sector count
+            db  'Entry #9 Demo entry.  Will not have anything.  Do not boot...  ',0
             dq  26401040h     ; date created
             dq  26431E08h     ; last booted
             dq  44DDDDDDDDAAAAAAh ; OS signature
@@ -1881,10 +1898,12 @@ boot_delay  db  20            ; boot delay
 
 ;%print ((OCCUPY * SECT_SIZE)-$)  ; 8544 bytes here
 
-            org (OCCUPY * SECT_SIZE)
+            org ((OCCUPY - 1) * SECT_SIZE)  ; this gets us to a total of 32 sectors (when we prepend mbr.bin)
+
+.pmode      ; this gets us to 24 cyliders. Just a nice round number for bochs and qemu ( minus 512 for the mbr.bin)
+            org ((24 * 16 * 63 * 512) - 512)
 
 .end
 
 ;TODO:
 ; - the calculated seconds from date is a day ahead.  Leap year or something.
-; - scroll bar

@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2022
+ ;                             Copyright (c) 1984-2023
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -55,7 +55,7 @@
  ; For more information, please visit:
  ;             http://www.fysnet.net/osdesign_book_series.htm
  
- ;  Last updated: 24 Sept 2022
+ ;  Last updated: 5 Jan 2023
 
 ENTRY_VALID    equ  (1<<0)
 ENTRY_HIDE     equ  (1<<1)
