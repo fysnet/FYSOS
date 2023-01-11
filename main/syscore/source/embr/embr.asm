@@ -439,13 +439,17 @@ remaining_code:
            ; print the menu text and start getting valid entrys
 @@:        mov  si,offset menu_start
            call display_string
-           
+
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; now get the entries.
            mov  word cur_start,0
            mov  edi,entry_offset
            mov  ax,[edi + S_EMBR->entry_count]
            mov  tot_entries,ax
+
+           ; save the boot delay value for later
+           mov  al,[edi + S_EMBR->boot_delay]
+           mov  boot_delay,al
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate last booted entry
@@ -704,10 +708,10 @@ not_i:     cmp  ax,1474h  ; 'T'
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; now write delay back to the disk
 save_delay_count:
-           mov  boot_delay,ax  ; update the value
+           mov  esi,entry_offset
+           mov  [esi + S_EMBR->boot_delay],al
 
            ; calculate the new crc           
-           mov  esi,entry_offset
            call crc32_calculate
            mov  [esi + S_EMBR->crc],eax
 
@@ -1735,6 +1739,7 @@ enter_dec_number  db 'Please enter a decimal number from 1 to 255: ',0
 
 key_pressed  db  0    ; was a key pressed yet?
 last_boot    dw  0
+boot_delay   db  0    ; saved boot delay
 
 cur_entry    dw  0    ; current entry selected
 cur_start    dw  0    ; starting entry to display as first in list
@@ -1803,13 +1808,13 @@ DEMO_THIS   equ 1  ; change '1' to '0' when not demonstrating 10 entries...
 
 our_entry_hdr db  'EMBR'        ; sig0
 .if DEMO_THIS
-hdr_crc     dd  83FA7EEEh     ; crc32
+            dd  83FA7EEEh     ; crc32
             dw  10            ; total entries in table
 .else
-hdr_crc     dd  0E663A8E3h    ; crc32
+            dd  0E663A8E3h    ; crc32
             dw  2             ; total entries in table
 .endif
-boot_delay  db  20            ; boot delay
+            db  20            ; boot delay
             dup 17,0          ; reserved
             db  'RBME'        ; sig1
             
