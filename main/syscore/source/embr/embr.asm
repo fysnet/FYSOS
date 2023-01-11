@@ -64,9 +64,9 @@
  ;    This code uses instructions that are valid for a 386 or later 
  ;    Intel x86 or compatible CPU.
  ;
- ;  Last updated: 5 Jan 2023
+ ;  Last updated: 10 Jan 2023
  ;
- ;  Assembled using (NBASM v00.26.80) (http://www.fysnet/newbasic.htm)
+ ;  Assembled using (NBASM v00.26.81) (http://www.fysnet/newbasic.htm)
  ;   nbasm embr
  ;
  
@@ -74,7 +74,7 @@
  ;
  ; This code and the eMBR technique is copyrighted.  You may use this
  ;  and the eMBR technique as you would like as long as you do not change
- ;  the overall function of the use and you must also include the following
+ ;  the overall function of the use and you must also include the above
  ;  copyright line in all code and documentation pertaining to the use
  ;  of this technique.
  ;
@@ -95,12 +95,15 @@
  ; This code also assumes you will not be on a floppy disk.
 
 .model tiny                        ;
-.diag 0
+.diag 0                            ; turn off display of diagnostic errors
 
 include 'embr.inc'                 ; our include file
 outfile 'embr.bin'                 ; declare the out filename
 
-; sector size
+; the source code within the range from LBA 1 to SECT_OFFSET is sector size
+;  independent. A sector can be 4096 bytes in size or the standard 512 bytes.
+; however, for this demo to work, we need to define a sector size, so that
+;  our partition header and entries align on sector boundaries.
 SECT_SIZE   equ  512               ; we are assembling for 512 bytes sectors
 
 ; total count of sectors the code and entries occupy
@@ -108,9 +111,14 @@ SECT_SIZE   equ  512               ; we are assembling for 512 bytes sectors
 ;  use all of them.  This is for future additions
 OCCUPY         equ 32 ; MBR = 1, EMBR = 31
 
-; count of entries in menu window at one time, must be at least 2
+; count of entries in menu window at one time, must be at least 2.
 ; used to know how many entries to display in a given window
 TOTAL_DISPLAY  equ  7
+
+; we need 26 bytes of data space for the disk read service(s).
+; once we execute the code at 'start', we don't need that area anymore,
+;  so we point our packet at that area.
+PACKET_OFFSET  equ  start
 
 ; start of our code
 .code                              ;
@@ -167,23 +175,37 @@ read_remaining:
            ;  get the size of a sector.  i.e.: bytes per sector
            mov  ah,48h
            mov  dl,drive
-           mov  si,offset packet
+           mov  si,offset PACKET_OFFSET
            mov  byte [si],1Ah
            int  13h
            mov  ax,[si+S_INT13_PARMS->sector_size]
            mov  sector_size,ax
 
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ;  We check that 'remaining' times 'sector_size' is less than 64k
+           ;  We only use 16-bit offsets, so we can't be more than 64k in total code/data
+           mov  cx,remaining      ; minus 1 count of all code and data used
+           inc  cx                ; 
+           mul  cx                ;
+           or   dx,dx             ; if dx != 0, we overflowed the 64k limit
+           jnz  short too_many_remaining
+
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ;  Now read in the remaining sectors
            xor  edx,edx        ;
            mov  eax,2          ; always at LBA 2
-           mov  cx,remaining   ;
+           mov  cx,remaining   ; this is the value from the signature block at 0x1F2
            mov  ebx,07E00h     ; physical address 0x07E00
            mov  si,4201h       ; read service
            call transfer_sectors_long
            
            jmp  remaining_code
-           
+
+
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; the remaining code doesn't fit in 64k, so give error
+too_many_remaining:
+           mov  si,offset remaining_str
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; display read error
@@ -205,7 +227,7 @@ display_error:
 transfer_sectors_long proc near uses eax ebx ecx edx si di
            
            push si         ; save service
-           mov  si,offset packet
+           mov  si,offset PACKET_OFFSET
            mov  word [si],0010h
            mov  [si+2],cx
 
@@ -288,18 +310,18 @@ col           dw 0
 
 drive         db 0
 
-packet        dup 26,0  ; needs to be at least 26 bytes in length
-
 sector_size   dw 0
+entry_offset  dd 0
 
 diskerrorS    db 'Error Reading from or Writing to disk.',0
 no_extentions_found db  'Requires int 13h extented read service.',0
 not_386       db 'Requires at least a 80x386 processor.',0
 bad_crc32     db 'Found Bad crc32: ',0
 bad_crc32_0   db '  Should be: ',0
+remaining_str db 'Remaining count more than 64k',0
 
 
-;%print ((200h-8-2-2-2)-$)  ; 40 bytes here
+; %print ((200h-8-2-2-2)-$)  ; 7 bytes here
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  at (0x200-header size)
@@ -312,7 +334,7 @@ signature  db 'EmbrrbmE'
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; the offset from LBA 0 where entries start
-           dw ((entry_hdr/SECT_SIZE) + 1)  ; hard coded / written to at EMBR build time
+sect_off   dw ((our_entry_hdr/SECT_SIZE) + 1)  ; hard coded / written to at EMBR build time
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; the count of sectors remaining which include the
@@ -358,6 +380,14 @@ remaining_code:
            and  al,(~(1<<3))
            dec  dx
            out  dx,al
+
+           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+           ; calculate and save the offset to the partition header
+           movzx eax,word sect_off    ; 
+           dec  eax                   ; was LBA 0 based
+           movzx ecx,word sector_size ; make it sector based
+           mul  ecx                   ; eax -> Partition Header
+           mov  entry_offset,eax      ; save the offset
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate the crc32 and see if it is correct
@@ -365,8 +395,8 @@ remaining_code:
            ;  calculate a new one when we update the date
            call crc32_initialize
 
-           mov  si,offset entry_hdr
-           mov  ebx,[si + S_EMBR->crc]
+           mov  esi,entry_offset
+           mov  ebx,[esi + S_EMBR->crc]
            call crc32_calculate
            cmp  ebx,eax
            je   short @f
@@ -413,8 +443,8 @@ remaining_code:
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; now get the entries.
            mov  word cur_start,0
-           mov  di,offset entry_hdr
-           mov  ax,[di + S_EMBR->entry_count]
+           mov  edi,entry_offset
+           mov  ax,[edi + S_EMBR->entry_count]
            mov  tot_entries,ax
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -423,10 +453,10 @@ remaining_code:
            xor  ebp,ebp  ; ebp:esi is largest date
            xor  esi,esi
            xor  bx,bx
-           add  di,sizeof(S_EMBR)
+           add  edi,sizeof(S_EMBR)
 get_last_boot1:
-           mov  eax,[di + S_EMBR_ENTRY->date_last_booted+0]
-           mov  edx,[di + S_EMBR_ENTRY->date_last_booted+4]
+           mov  eax,[edi + S_EMBR_ENTRY->date_last_booted + 0]
+           mov  edx,[edi + S_EMBR_ENTRY->date_last_booted + 4]
            cmp  edx,ebp
            jb   short get_last_next
            ja   short update_last_boot
@@ -446,7 +476,7 @@ get_last_next:
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate the entry to be displayed as selected
 get_last_boot_done:
-           mov  di,offset entry_hdr
+           mov  edi,entry_offset
            mov  ax,last_boot
            mov  cur_selected,ax
            sub  ax,(TOTAL_DISPLAY>>1)
@@ -472,8 +502,8 @@ again:     call update_scroll_bar
            mov  word col,7
            mov  word cur_entry,0
            mov  word cur_display,0
-           mov  di,offset entry_hdr
-           add  di,sizeof(S_EMBR)
+           mov  edi,entry_offset
+           add  edi,sizeof(S_EMBR)
            
 first:     mov  ax,cur_entry
            cmp  ax,cur_start
@@ -677,19 +707,19 @@ save_delay_count:
            mov  boot_delay,ax  ; update the value
 
            ; calculate the new crc           
+           mov  esi,entry_offset
            call crc32_calculate
-           mov  si,offset entry_hdr
-           mov  [si + S_EMBR->crc],eax
+           mov  [esi + S_EMBR->crc],eax
 
            mov  cx,1           ; 1 sector
            
            xor  ebx,ebx        ; ebx -> physical address of data to write
            mov  bx,ds          ;
            shl  ebx,4          ;
-           add  ebx,offset entry_hdr
+           add  ebx,esi
            
            xor  edx,edx        ; edx:eax = lba to write to
-           mov  eax,offset entry_hdr
+           mov  eax,esi
            shr  eax,9
            inc  eax            ; skip past mbr
  
@@ -703,7 +733,8 @@ not_t:     cmp  ax,1372h  ; 'R'
            je   short @f
            cmp  ax,1352h  ; 'r'
            jne  short not_r
-@@:        int  18h
+@@:        ; jmp to the reset vector FFFF:0000h
+           jmp  far 0, 0FFFFh
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; 
@@ -742,12 +773,12 @@ no_key_pressed:
 
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate the entry offset
-boot_it:   mov  di,offset entry_hdr   ;
+boot_it:   mov  edi,entry_offset
            mov  cx,last_boot
            xor  bx,bx
-           add  di,sizeof(S_EMBR)
+           add  edi,sizeof(S_EMBR)
 boot_it0:  jcxz short boot_it1
-           add  di,sizeof(S_EMBR_ENTRY)
+           add  edi,sizeof(S_EMBR_ENTRY)
            dec  cx
            inc  bx
            jmp  short boot_it0
@@ -771,9 +802,9 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate new crc
+           mov  esi,entry_offset
            call crc32_calculate
-           mov  si,offset entry_hdr
-           mov  [si + S_EMBR->crc],eax
+           mov  [esi + S_EMBR->crc],eax
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; now write the entries back to disk
@@ -791,10 +822,10 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            xor  ebx,ebx
            mov  bx,es
            shl  ebx,4
-           add  ebx,offset entry_hdr
+           add  ebx,esi
            
            xor  edx,edx
-           mov  eax,offset entry_hdr
+           mov  eax,esi
            movzx ecx,word sector_size
            div  ecx
            
@@ -837,7 +868,8 @@ boot_it1:  test byte [di + S_EMBR_ENTRY->flags],ENTRY_VALID
            mov  es,ax
            mov  si,7A00h
            mov  di,7C00h
-           mov  cx,(SECT_SIZE>>2)
+           mov  cx,sect_size
+           shr  cx,2
            rep
              movsd
            pop es
@@ -1190,12 +1222,12 @@ display_info proc near uses all
 
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; calculate the entry offset
-disp_it:   mov  di,offset entry_hdr   ;
+disp_it:   mov  edi,entry_offset
            mov  cx,ax
            xor  bx,bx
-           add  di,sizeof(S_EMBR)
+           add  edi,sizeof(S_EMBR)
 disp_it0:  jcxz short disp_it1
-           add  di,sizeof(S_EMBR_ENTRY)
+           add  edi,sizeof(S_EMBR_ENTRY)
            dec  cx
            inc  bx
            jmp  short disp_it0
@@ -1674,23 +1706,22 @@ crc32      endp
 
 ; calculates the crc of the header and all entries
 ; on entry
-;  nothing
+;  esi -> partition header + entries
 ; on return
 ;  eax = crc
 ; (preserves the current crc)
-crc32_calculate proc near uses ebx cx dx si
-           mov  si,offset entry_hdr
-           mov  ebx,[si + S_EMBR->crc]
-           mov  dword [si + S_EMBR->crc],0
+crc32_calculate proc near uses ebx cx dx
+           mov  ebx,[esi + S_EMBR->crc]
+           mov  dword [esi + S_EMBR->crc],0
            
-           mov  ax,[si + S_EMBR->entry_count]
+           mov  ax,[esi + S_EMBR->entry_count]
            mov  cx,sizeof(S_EMBR_ENTRY)
            mul  cx
            mov  cx,ax
            add  cx,sizeof(S_EMBR)
            call crc32
 
-           mov  [si + S_EMBR->crc],ebx
+           mov  [esi + S_EMBR->crc],ebx
            ret
 crc32_calculate endp
 
@@ -1712,7 +1743,7 @@ cur_selected dw  0    ; current entry selected
 tot_entries  dw  0    ; total entries
 
 
-menu_start  db        'ÕÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ  FYS OS (aka Konan) Multi-boot EMBR v0.95.10  ÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¸'
+menu_start  db        'ÕÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ  FYS OS (aka Konan) Multi-boot EMBR v0.95.20  ÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¸'
             db  13,10,'³                (C)opyright Forever Young Software 1984-2023                 ³'
             db  13,10,'³    ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿ ³'
             db  13,10,'³    ³                                                                      ',24,' ³'
@@ -1754,6 +1785,7 @@ legend      db        '³     ENTER = Boot current selected partition entry.     
             db  13,10,'³                                                                             ³',0
 
 
+
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; start of EMBR entries
 ; the rest of this should actually be written to the disk via a FDISK
@@ -1769,7 +1801,7 @@ legend      db        '³     ENTER = Boot current selected partition entry.     
 
 DEMO_THIS   equ 1  ; change '1' to '0' when not demonstrating 10 entries...
 
-entry_hdr   db  'EMBR'        ; sig0
+our_entry_hdr db  'EMBR'        ; sig0
 .if DEMO_THIS
 hdr_crc     dd  83FA7EEEh     ; crc32
             dw  10            ; total entries in table
@@ -1896,7 +1928,7 @@ boot_delay  db  20            ; boot delay
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  fill the remaining with 90h's
 
-;%print ((OCCUPY * SECT_SIZE)-$)  ; 8544 bytes here
+;%print (((OCCUPY - 1) * SECT_SIZE)-$)  ; 6880 bytes here
 
             org ((OCCUPY - 1) * SECT_SIZE)  ; this gets us to a total of 32 sectors (when we prepend mbr.bin)
 

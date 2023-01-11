@@ -55,7 +55,7 @@
  ; For more information, please visit:
  ;             http://www.fysnet.net/osdesign_book_series.htm
  
- ;  Last updated: 5 Jan 2023
+ ;  Last updated: 10 Jan 2023
 
 ENTRY_VALID    equ  (1<<0)
 ENTRY_HIDE     equ  (1<<1)
