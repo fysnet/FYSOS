@@ -772,7 +772,7 @@ no_key_pressed:
 @@:        mov  eax,ecx
            call display_dec
 
-           dec  ecx
+           dec  ecx        ; dec delay and loop again
            jnz  wait_loop
 
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -1808,14 +1808,16 @@ DEMO_THIS   equ 1  ; change '1' to '0' when not demonstrating 10 entries...
 
 our_entry_hdr db  'EMBR'        ; sig0
 .if DEMO_THIS
-            dd  83FA7EEEh     ; crc32
+            dd  0xE497F173    ; crc32
             dw  10            ; total entries in table
 .else
-            dd  0E663A8E3h    ; crc32
+            dd  0x7592C243    ; crc32
             dw  2             ; total entries in table
 .endif
             db  20            ; boot delay
-            dup 17,0          ; reserved
+            db  25h           ; version
+            dq  0             ; total sectors used
+            dup 8,0           ; reserved
             db  'RBME'        ; sig1
             
             ; entry 0 (zero based)
