@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2023
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -67,6 +67,10 @@
 
 #include "Embr.h"
 #include "EmbrEntry.h"
+
+#include "mbr.h"
+
+#include "Modeless.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -136,6 +140,7 @@ BEGIN_MESSAGE_MAP(CEmbr, CPropertyPage)
   ON_BN_CLICKED(IDC_SIG1_SET, OnSig1Set)
   ON_BN_CLICKED(IDC_SIGNATURE_SET, OnSignatureSet)
   ON_BN_CLICKED(ID_UPDATE_CODE, OnUpdateCode)
+  ON_BN_CLICKED(ID_CHECK, OnCheck)
   ON_EN_CHANGE(IDC_EMBR_VERSION, OnChangeEmbrVersion)
   ON_BN_CLICKED(IDC_UPDATE_TOT_SECTS, OnUpdateTotSects)
   ON_WM_HELPINFO()
@@ -244,7 +249,7 @@ bool CEmbr::Exists(DWORD64 LBA) {
     m_entry_offset.Format("%i", sig->offset);
     m_remaining.Format("%i", sig->remaining);
     m_boot_sig.Format("0x%04X", sig->boot_sig);
-    DumpIt(m_embr_dump, buffer, 0, 512, FALSE);
+    DumpIt(m_embr_dump, buffer, 0, 512, FALSE); // (first 512 bytes only)
     
     // allocate the memory for the entries
     m_entry_buffer = malloc((sig->remaining - sig->offset - 1) * dlg->m_sect_size);
@@ -271,7 +276,7 @@ bool CEmbr::Exists(DWORD64 LBA) {
     m_reserved.Empty();
     CString cs;
     for (i=0; i<8; i++) {
-      cs.Format("%02X ", hdr->resv1[i]);
+      cs.Format("%02X ", hdr->resv[i]);
       m_reserved += cs;
     }
     
@@ -359,16 +364,22 @@ BOOL CEmbr::CheckEntry(int index) {
   CString cs;
   int i;
   
+  // if the signature doesn't check, return TRUE
+  if (entries[index].signature != EMBR_ENTRY_SIG)
+    ret = TRUE;
+
   // check for overlapping of previous entries
   for (i=0; i<index; i++) {
-    start0 = entries[i].starting_sector;
-    last0 = entries[i].starting_sector + entries[i].sector_count - 1;
-    last1 = entries[index].starting_sector + entries[index].sector_count - 1;
-    if (((entries[index].starting_sector >= start0) && (entries[index].starting_sector <= last0)) ||
-        ((last1 >= start0) && (last1 <= last0))) {
-      cs.Format("eMBR: Entry #%i overlaps Entry #%i!", index, i);
-      AfxMessageBox(cs);
-      ret = TRUE;
+    if (entries[i].flags & EMBR_VALID_ENTRY) {
+      start0 = entries[i].starting_sector;
+      last0 = entries[i].starting_sector + entries[i].sector_count - 1;
+      last1 = entries[index].starting_sector + entries[index].sector_count - 1;
+      if (((entries[index].starting_sector >= start0) && (entries[index].starting_sector <= last0)) ||
+          ((last1 >= start0) && (last1 <= last0))) {
+        cs.Format("eMBR: Entry #%i overlaps Entry #%i!", index, i);
+        AfxMessageBox(cs);
+        ret = TRUE;
+      }
     }
   }
   
@@ -415,7 +426,7 @@ void CEmbr::OnEmbrApply() {
   for (i=0; i<8; i++) {
     // the format will be "00 00 00 00 ..."
     cs = "0x" + m_reserved.Mid(i * 3, 2);
-    hdr->resv1[i] = convert8(cs);
+    hdr->resv[i] = convert8(cs);
   }
   
   hdr->sig0 = convert32(m_sig0);
@@ -426,6 +437,24 @@ void CEmbr::OnEmbrApply() {
     if (m_Pages[i].m_dirty)
       m_Pages[i].OnEmbreApply();
   }
+
+  // update the crc?
+  const unsigned size = sizeof(struct S_EMBR_HDR) + (m_embr_entries * sizeof(struct S_EMBR_ENTRY));
+  GetDlgItemText(IDC_EMBR_CRC, cs);
+  DWORD org_crc = convert32(cs);  // value currently in the CRC field of the embr tab member
+  hdr->crc = 0;
+  DWORD new_crc = crc32(hdr, size);
+  if (new_crc != org_crc) {
+    if (AfxMessageBox("Update Checksum?", MB_YESNO, 0) == IDYES) {
+      hdr->crc = new_crc;
+      cs.Format("0x%08X", hdr->crc);
+      SetDlgItemText(IDC_EMBR_CRC, cs);
+    } else
+      hdr->crc = org_crc;
+  } else
+    hdr->crc = org_crc;
+
+  // write the items
   dlg->WriteToFile(m_entry_buffer, m_lba + sig->offset, sig->remaining - sig->offset - 1);
 }
 
@@ -511,35 +540,270 @@ void CEmbr::OnUpdateCode() {
   // apply all changes made (if any)
   OnEmbrApply();
   
-  // get the size of the code
-  UINT file_sectors = (UINT) ((file.GetLength() + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
-  
-  // read in the Signature in LBA 1 (LSN 0)
-  dlg->ReadFromFile(buffer, m_lba + 1, 1);
+  // make sure that the Signature Block is present
+  file.Read(buffer, 512); // no more than 512 bytes is needed
   struct S_EMBR_SIG *sig = (struct S_EMBR_SIG *) &buffer[0x1F2];
-  if (file_sectors > (unsigned) (sig->offset - 1)) {
-    AfxMessageBox("Code file is larger than space allocated prior to partition entries.\r\n"
-                  "Update the Offset field and try again.");
+  if (memcmp(&sig->sig, "EmbrrbmE", 8) != 0) {
+    AfxMessageBox("Did not find valid Signature Block!");
+    file.Close();
+    return;
+  }
+
+  // Check that this new code doesn't exceed the existing space
+  size_t file_sectors = sig->offset - 1;
+  if (file_sectors > (size_t) (convert16(m_entry_offset) - 1)) {
+    csPath.Format("Code file is larger than space allocated prior to partition entries. (%i) (%i)", file_sectors, convert16(m_entry_offset) - 1);
+    AfxMessageBox(csPath);
     file.Close();
     return;
   }
   
   // read in the code file
   BYTE *code = (BYTE *) malloc(file_sectors * dlg->m_sect_size);
-  file.Read(code, file_sectors * dlg->m_sect_size);
+  file.SeekToBegin();
+  file.Read(code, (UINT) (file_sectors * dlg->m_sect_size));
   file.Close();
   
   // Copy the current S_EMBR_SIG to the new code buffer
-  memcpy(&code[0x1F2], sig, sizeof(struct S_EMBR_SIG));
+  sig = (struct S_EMBR_SIG *) &code[0x1F2];
+  sig->offset = convert16(m_entry_offset);
+  sig->remaining = convert16(m_remaining);
+  sig->boot_sig = 0xAA55;
   
   // write the new code
-  dlg->WriteToFile(code, m_lba + 1, file_sectors);
+  dlg->WriteToFile(code, m_lba + 1, (long) file_sectors);
   
-  // update the dump display box
+  // update the dump display box (first 512 bytes only)
   DumpIt(m_embr_dump, code, 0, 512, FALSE);
   SetDlgItemText(IDC_EMBR_DUMP, m_embr_dump);
   
   free(code);
+
+  csPath.Format("Successfully wrote %i sectors to LBA %I64i", file_sectors, m_lba + 1);
+  AfxMessageBox(csPath);
+}
+
+// Some of these checks will be redundant since we wouldn't have
+//  gotten this far anyway without passing some of them.  We do them
+//  anyway so that we can show what to check for and incase a change
+//  was made.
+void CEmbr::OnCheck() {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  void *buffer;
+  int ErrorCount = 0, DiagCount = 0;
+  int i, j;
+  CString cs, csInfo;
+
+  // disable the button
+  GetDlgItem(ID_CHECK)->EnableWindow(FALSE);
+
+  CModeless modeless;
+  modeless.m_Title = "Checking eMBR";
+  modeless.m_modeless = TRUE;
+  modeless.Create(CModeless::IDD, this);
+  modeless.ShowWindow(SW_SHOW);
+  modeless.BringWindowToTop();
+
+  csInfo.Empty();
+
+  // read in the first sector
+  buffer = malloc(MAX_SECT_SIZE);
+  dlg->ReadFromFile(buffer, m_lba + 1, 1);
+
+  // Are we at LBA 1?
+  if ((m_lba + 1) != 1) {
+    cs.Format("We should be at LBA 1. We are at %I64i\r\n", m_lba + 1);
+    csInfo += cs;
+    ErrorCount++;
+  }
+  
+  /////////////// Signature block at LBA 1
+  cs.Format("Checking the Signature Block at LBA %I64i\r\n", m_lba + 1);
+  csInfo += cs;
+  
+  struct S_EMBR_SIG *sig = (struct S_EMBR_SIG *) ((BYTE *) buffer + 0x01F2);
+
+  // does the signature match?
+  if (memcmp(&sig->sig, "EmbrrbmE", 8) != 0) {
+    csInfo += "Signature doesn't match 'EmbrrbmE'\r\n";
+    ErrorCount++;
+  }
+  
+  // the legacy signature should be present
+  if (sig->boot_sig != 0xAA55) {
+    cs.Format("Legacy Signature doesn't match 0xAA55 (0x%04X)\r\n", sig->boot_sig);
+    csInfo += cs;
+    ErrorCount++;
+  }
+
+  // the remaining sectors times the sector size must be <= 64k
+  if ((((size_t) sig->remaining + 1) * dlg->m_sect_size) > 65536) {
+    cs.Format("The remaining count must be <= 64k. (%i * %i = %i)\r\n", sig->remaining + 1, dlg->m_sect_size, ((size_t) sig->remaining + 1) * dlg->m_sect_size);
+    csInfo += cs;
+    ErrorCount++;
+  }
+
+  // save the two needed values before we overwrite the buffer
+  size_t offset = sig->offset;
+  size_t remaining = sig->remaining;
+
+  /////////////// Partition Header at LBA sig->sect_offset
+  cs.Format("Checking the Partition Header at LBA %I64i\r\n", m_lba + 1 + offset);
+  csInfo += cs;
+  
+  // first, calculate and allocate the 'remaining' buffer size,
+  //  then read in the remaining sectors
+  free(buffer);
+  buffer = malloc((remaining - offset - 1) * dlg->m_sect_size);
+  dlg->ReadFromFile(buffer, m_lba + offset, (long) (remaining - offset - 1));
+  
+  // Partition Header
+  struct S_EMBR_HDR *hdr = (struct S_EMBR_HDR *) buffer;
+
+  // the two magic fields
+  if ((hdr->sig0 != EMBR_HDR_SIG0) || (hdr->sig1 != EMBR_HDR_SIG1)) {
+    cs.Format("One or both Partition Header magic fields not correct: 0x%08X 0x%08X\r\n", hdr->sig0, hdr->sig1);
+    csInfo += cs;
+    ErrorCount++;
+  }
+  
+  // check the CRC of the entries
+  DWORD crc, org_crc = hdr->crc;
+  hdr->crc = 0;
+  crc = crc32(hdr, sizeof(struct S_EMBR_HDR) + (hdr->entry_count * sizeof(struct S_EMBR_ENTRY)));
+  if (crc != org_crc) {
+    cs.Format("Found invalid hdr->crc of 0x%08X. Should be 0x%08X\r\n", org_crc, crc);
+    csInfo += cs;
+    ErrorCount++;
+  }
+  
+  // version field must be at least 1.05
+  int major = hdr->version >> 5;
+  int minor = hdr->version & 0x1F;
+  cs.Format("Found version %i.%02i\r\n", major, minor);
+  csInfo += cs;
+  if ((major != 1) || (minor < 5)) {
+    csInfo += "Version must be at least 1.05\r\n";
+    ErrorCount++;
+  }
+  
+  // we check the total_sectors value after we parse all the entries.
+  DWORD64 tot_sectors = 0;
+
+  // is the reserved area empty?
+  if (memcmp(&hdr->resv, "\0\0\0\0\0\0\0\0", 8) != 0) {
+    csInfo += "Reserved area not zeros.\r\n";
+    ErrorCount++;
+  }
+  
+  // we only allow 16 total entries at the moment
+  struct S_EMBR_ENTRY *entries = (struct S_EMBR_ENTRY *) ((BYTE *) buffer + sizeof(struct S_EMBR_HDR));
+  for (i=0; i<hdr->entry_count && i<MAX_EMBR_ENTRIES; i++) {
+    cs.Format("Checking entry #%i: (%svalid) %s\r\n", i, (entries[i].flags & EMBR_VALID_ENTRY) ? "" : "in", (entries[i].flags & EMBR_HIDDN_ENTRY) ? "(hidden)" : "");
+    csInfo += cs;
+
+    // flags
+    if (entries[i].flags & ~(EMBR_HIDDN_ENTRY | EMBR_VALID_ENTRY)) {
+      csInfo += " Unknown bits in entry flags member\r\n";
+      ErrorCount++;
+    }
+    if (entries[i].flags & EMBR_VALID_ENTRY) {
+      // magic
+      if (entries[i].signature != EMBR_ENTRY_SIG) {
+        cs.Format(" Entry magic field not correct: 0x%08X\r\n", entries[i].signature);
+        csInfo += cs;
+        ErrorCount++;
+      }
+      // check for overlapping of previous entries
+      for (j=0; j<i; j++) {
+        DWORD64 start0, last0, last1;
+        if (entries[j].flags & EMBR_VALID_ENTRY) {
+          start0 = entries[j].starting_sector;
+          last0 = entries[j].starting_sector + entries[j].sector_count - 1;
+          last1 = entries[i].starting_sector + entries[i].sector_count - 1;
+          if (((entries[i].starting_sector >= start0) && (entries[i].starting_sector <= last0)) ||
+              ((last1 >= start0) && (last1 <= last0))) {
+            cs.Format(" Entry #%i overlaps Entry #%i!\r\n", i, j);
+            csInfo += cs;
+            ErrorCount++;
+          }
+        }
+      }
+
+      // update tot_sectors
+      if ((entries[i].starting_sector + entries[i].sector_count) > tot_sectors)
+        tot_sectors = (entries[i].starting_sector + entries[i].sector_count);
+      // reserved area should be emtpy
+      if (!IsBufferEmpty(entries[i].reserved, 16)) {
+        csInfo += " Reserved area not zeros.\r\n";
+        ErrorCount++;
+      }
+    }
+  }
+  
+  // check total sectors used
+  cs.Format("Calculated total sectors used: %I64i\r\n", tot_sectors);
+  csInfo += cs;
+  if (hdr->total_sectors != tot_sectors) {
+    cs.Format(" Doesn't match Partition Header member of: %I64i\r\n", hdr->total_sectors);
+    csInfo += cs;
+    DiagCount++;
+  }
+
+  // now check the MBR's first partition entry
+  free(buffer);
+  buffer = malloc(dlg->m_sect_size);
+  dlg->ReadFromFile(buffer, m_lba, 1);
+
+  struct MBR_PART_ENTRY *entry = (struct MBR_PART_ENTRY *) ((BYTE *) buffer + (512-2-(4*16)));
+  if (entry->boot_id != 0x80) {
+    cs.Format(" MBR's first partition entry's boot_id doesn't = 0x80 (0x%02X)\r\n", entry->boot_id);
+    csInfo += cs;
+    DiagCount++;
+  }
+  if (entry->sys_id != 0xE0) {
+    cs.Format(" MBR's first partition entry's sys_id doesn't = 0xE0 (0x%02X)\r\n", entry->sys_id);
+    csInfo += cs;
+    ErrorCount++;
+  }
+  if (entry->start_lba != 1) {
+    cs.Format(" MBR's first partition entry's start doesn't = 1 (%i)\r\n", entry->start_lba);
+    csInfo += cs;
+    DiagCount++;
+  }
+  if (tot_sectors <= 0xFFFFFFFFULL) {
+    if (entry->sectors != tot_sectors) {
+      cs.Format(" MBR's first partition entry's count doesn't = %I64i (%i)\r\n", tot_sectors, entry->sectors);
+      csInfo += cs;
+      DiagCount++;
+    }
+  } else {
+    if (entry->sectors != 0xFFFFFFFFULL) {
+      cs.Format(" MBR's first partition entry's count doesn't = 0xFFFFFFFF (%i)\r\n", entry->sectors);
+      csInfo += cs;
+      DiagCount++;
+    }
+  }
+  
+  // free the buffer used
+  free(buffer);
+
+  cs.Format("\r\n  Found %i errors\r\n"
+                "  Found %i diagnostics\r\n", ErrorCount, DiagCount);
+  csInfo += cs;
+  csInfo += "\r\nUse the COPY button to copy all to the clipboard or the DONE button to exit\r\n";
+
+  // now "copy" the modeless to a modal and
+  //  destroy the modeless and display the modal
+  CModeless modal;
+  modal.m_edit = csInfo;
+  modal.m_Title = modeless.m_Title;
+  modeless.DestroyWindow();
+  modal.m_modeless = FALSE;
+  modal.DoModal();
+
+  // re-enable the button
+  GetDlgItem(ID_CHECK)->EnableWindow(TRUE);
 }
 
 void CEmbr::OnChangeEmbrVersion() {

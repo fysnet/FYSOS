@@ -321,6 +321,13 @@ void CImageBar::ImageParseVolume(const BYTE type, const DWORD64 lba, const DWORD
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   DWORD color;
   int fs_type;
+  CString cs;
+
+  // Warn that specified partition is larger than image file.
+  if (size > TotalBlocks) {
+    cs.Format("Partition at LBA %I64i:\r\nSpecified Size (%I64i) > Total Size of image (%I64i).", lba, size, TotalBlocks);
+    AfxMessageBox(cs);
+  }
   
   // detect file system...
   fs_type = DetectFileSystem(lba, size);

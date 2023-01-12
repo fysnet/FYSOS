@@ -762,10 +762,15 @@ void CLean::OnUpdateCode() {
 }
 
 void CLean::OnLeanCrcUpdate() {
-  BYTE *buffer = (BYTE *) calloc(m_block_size, 1);
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE *buffer = (BYTE *) malloc(m_block_size);
 
   ReceiveFromDialog(&m_super);
 
+  // first, read in what we already have (so we include the reserved area)
+  dlg->ReadBlocks(buffer, m_lba, 0, m_block_size, 1);
+
+  // copy the dialog's super contents to the buffer
   memcpy(buffer, &m_super, sizeof(struct S_LEAN_SUPER));
   
   m_super.checksum = computeChecksum(buffer, m_block_size, TRUE);

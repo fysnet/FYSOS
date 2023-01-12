@@ -1303,7 +1303,7 @@ DWORD CFat::CalcDataClusters(const void *bpb, const int fat_size) {
   if (fat_size == FS_FAT32)
     dword1 = bpb32->sect_per_fat32 * bpb32->bytes_per_sect * bpb32->sect_per_clust / 4;
   else if (fat_size == FS_FAT16)
-    dword1 = bpb32->sect_per_fat * bpb32->bytes_per_sect * bpb12->sect_per_clust / 2;
+    dword1 = bpb12->sect_per_fat * bpb12->bytes_per_sect * bpb12->sect_per_clust / 2;
   else
     dword1 = (DWORD) (((DWORD) bpb12->sect_per_fat * bpb12->bytes_per_sect * bpb12->sect_per_clust) / 1.5);
   

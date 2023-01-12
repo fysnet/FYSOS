@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2023
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -85,11 +85,11 @@ struct S_EMBR_SIG {
 struct S_EMBR_HDR {
   DWORD   sig0;          // 'EMBR'
   DWORD   crc;           // crc of this sector
-  WORD    entry_count;   // total entries in EMBR (reserved in all but first sector)
-  BYTE    boot_delay;    // seconds to delay before booting last booted (reserved in all but first sector)
+  WORD    entry_count;   // total entries in EMBR
+  BYTE    boot_delay;    // seconds to delay before booting last booted
   BYTE    version;       //  1.05 = 001_00101b
   DWORD64 total_sectors; // total sectors this eMBR encompasses
-  BYTE    resv1[8];      // 
+  BYTE    resv[8];       // 
   DWORD   sig1;          // 'RBME'
 };
 
@@ -184,6 +184,7 @@ protected:
   afx_msg void OnSig1Set();
   afx_msg void OnSignatureSet();
   afx_msg void OnUpdateCode();
+  afx_msg void OnCheck();
   afx_msg void OnChangeEmbrVersion();
   afx_msg void OnUpdateTotSects();
   //}}AFX_MSG

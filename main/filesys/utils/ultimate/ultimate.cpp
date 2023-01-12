@@ -235,10 +235,8 @@ BYTE convert8(CString &csSrc) {
 DWORD crc32_table[256]; // CRC lookup table array.
 
 void crc32_initialize(void) {
-  memset(crc32_table, 0, sizeof(crc32_table));
-  
   // 256 values representing ASCII character codes.
-  for (int i=0; i<=0xFF; i++) {
+  for (int i=0; i<256; i++) {
     crc32_table[i] = crc32_reflect(i, 8) << 24;
     
     for (int j=0; j<8; j++)

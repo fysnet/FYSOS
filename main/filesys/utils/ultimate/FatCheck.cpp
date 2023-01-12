@@ -125,7 +125,7 @@ void CFat::OnFatCheck() {
   else
     cluster_count = (sect_per_fat * bpb12->bytes_per_sect) / 4;
 
-  // Check 1: // Check items in the BPB
+  // Check items in the BPB
   fcInfo += "Checking the BPB\r\n";
   if (bpb12->jmp[2] != 0x90)
     fcInfo += "[Diag] BPB.JMP[2] != 0x90\r\n";
@@ -147,8 +147,13 @@ void CFat::OnFatCheck() {
     cs.Format("[Diag] BPB.HiddenSectors != Current Base of 0x%08X\r\n", (DWORD) m_lba);
     fcInfo += cs;
   }
+  if (bpb12->sect_extnd > m_size) {
+    cs.Format("BPB.Extended Sectors (%I64i) > Count of Total Sectors in image file. (%I64i).\r\n", (DWORD64) bpb12->sect_extnd, m_size);
+    fcInfo += cs;
+    fcErrorCount++;
+  }
   
-  // Check 2: Cluster Count
+  // Cluster Count
   // A Fat-12 must be less than 4085 clusters
   // A Fat-16 must be at least 4085 and less than 65525 clusters
   // A Fat-32 must be at least 65525 clusters
@@ -173,7 +178,7 @@ void CFat::OnFatCheck() {
     }
   }
   
-  // Check 3: // Does each FAT match the first FAT?
+  // Does each FAT match the first FAT?
   fcInfo += "Checking the FAT(s)\r\n";
   modeless.SetDlgItemText(IDC_EDIT, fcInfo);
   modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
@@ -302,7 +307,7 @@ void CFat::OnFatCheck() {
     }
   }
   
-  // Check 4: // check the directory entries
+  // check the directory entries
   fcInfo += "Checking Root/Sub directory(s)\r\n";
   modeless.SetDlgItemText(IDC_EDIT, fcInfo);
   modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
@@ -337,7 +342,6 @@ void CFat::OnFatCheck() {
   modeless.SetDlgItemText(IDC_EDIT, fcInfo);
   modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
 
-  // Check 5: // ?????
   
   
   
