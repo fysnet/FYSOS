@@ -34,8 +34,8 @@
 #define MALLOC_FLAGS_LOW16MEG   (1 << 4)   // must be before the 16 Meg mark, inclusive
 #define MALLOC_FLAGS_LOW4GIG    (1 << 5)   // must be before the 4 Gig mark, inclusive
 #define MALLOC_FLAGS_ALIGNED    (1 << 6)   // must be aligned.  The aligned parameter is now used, else it is ignored.
-define MALLOC_HARDWARE32       (MALLOC_FLAGS_LOW4GIG | MALLOC_FLAGS_PHYSICAL | MALLOC_FLAGS_CLEAR)
-#define MALLOC_HARDWARE64      (                       MALLOC_FLAGS_PHYSICAL | MALLOC_FLAGS_CLEAR)
+#define MALLOC_HARDWARE32       (MALLOC_FLAGS_LOW4GIG | MALLOC_FLAGS_PHYSICAL | MALLOC_FLAGS_CLEAR)
+#define MALLOC_HARDWARE64       (                       MALLOC_FLAGS_PHYSICAL | MALLOC_FLAGS_CLEAR)
 
 //  A few comments about the code:
 // there are a few non-standard typedef's within this code.
