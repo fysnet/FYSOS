@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  22 Jan 2023
+ * Last update:  27 Jan 2023
  *
  */
 
@@ -79,25 +79,37 @@ struct S_REGISTRY_BASE {
  */
 
 typedef enum {
-  RegistryTypeBool = 1,  // 32-bit value of 0 or non-zero
-  RegistryTypeInt,       // 32-bit value 
-  RegistryTypeStr,       // UTF-8 string (may or may not be null-terminated)
-  RegistryTypeBin        // Up to 65536 bytes of data
+  RegistryTypeExist = 0,     // no data, empty cell
+  RegistryTypeBool,          // 32-bit value of 0 or non-zero
+  RegistryTypeInt,           // 32-bit signed integer value 
+  RegistryTypeUnsigned,      // 32-bit unsigned integer value 
+  RegistryTypeIntLong,       // 64-bit signed long integer value 
+  RegistryTypeUnsignedLong,  // 64-bit unsigned long integer value 
+  RegistryTypeStr,           // UTF-8 string (must be null-terminated)
+  RegistryTypeBin            // Up to 65536 bytes of data
 } REGISTRY_TYPE;
 
 
 int allocate_initialize_registry(size_t size);
+void free_registry(void);
 
 int registry_exist(const char *path);
 
 int registry_read_boolean(const char *path, bool *value);
 int registry_read_int(const char *path, int *value);
+int registry_read_unsigned(const char *path, unsigned int *value);
+int registry_read_int_long(const char *path, int64_t *value);
+int registry_read_unsigned_long(const char *path, uint64_t *value);
 int registry_read_string(const char *path, char *str, const size_t max_len);
 int registry_read_binary(const char *path, void *bin, const size_t max_len);
 int registry_read(const char *path, void *data, size_t len, const REGISTRY_TYPE type);
 
+int registry_write_exist(const char *path);
 int registry_write_boolean(const char *path, const bool value);
 int registry_write_int(const char *path, const int value);
+int registry_write_unsigned(const char *path, const unsigned int value);
+int registry_write_int_long(const char *path, const int64_t value);
+int registry_write_unsigned_long(const char *path, const uint64_t value);
 int registry_write_string(const char *path, const char *str);
 int registry_write_binary(const char *path, const void *bin, const size_t len);
 int registry_write(const char *path, const void *data, size_t len, const REGISTRY_TYPE type);

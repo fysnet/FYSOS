@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  23 Jan 2023
+ * Last update:  27 Jan 2023
  *
  */
 
@@ -80,6 +80,12 @@ int allocate_initialize_registry(size_t size) {
   return 0;
 }
 
+// simply free's the memory used by the registry
+void free_registry(void) {
+  free(kernel_reg);
+  kernel_reg = NULL;
+}
+
 int registry_read_boolean(const char *path, bool *value) {
   uint32_t bval;
 
@@ -96,6 +102,36 @@ int registry_read_int(const char *path, int *value) {
   int ret = registry_read(path, &ival, sizeof(int), RegistryTypeInt);
   if ((ret > 0) && value)
     *value = ival;
+  
+  return ret;
+}
+
+int registry_read_unsigned(const char *path, unsigned int *value) {
+  int uval;
+
+  int ret = registry_read(path, &uval, sizeof(unsigned int), RegistryTypeUnsigned);
+  if ((ret > 0) && value)
+    *value = uval;
+  
+  return ret;
+}
+
+int registry_read_int_long(const char *path, int64_t *value) {
+  int64_t ilval;
+
+  int ret = registry_read(path, &ilval, sizeof(int64_t), RegistryTypeIntLong);
+  if ((ret > 0) && value)
+    *value = ilval;
+  
+  return ret;
+}
+
+int registry_read_unsigned_long(const char *path, uint64_t *value) {
+  uint64_t ulval;
+
+  int ret = registry_read(path, &ulval, sizeof(uint64_t), RegistryTypeUnsignedLong);
+  if ((ret > 0) && value)
+    *value = ulval;
   
   return ret;
 }
@@ -122,6 +158,10 @@ int registry_read_binary(const char *path, void *bin, const size_t max_len) {
   return ret;
 }
 
+int registry_write_exist(const char *path) {
+  return registry_write(path, NULL, 0, RegistryTypeExist);
+}
+
 int registry_write_boolean(const char *path, const bool value) {
   const uint32_t bval = (uint32_t) value & 0xFF;
   return registry_write(path, &bval, 4, RegistryTypeBool);
@@ -130,6 +170,21 @@ int registry_write_boolean(const char *path, const bool value) {
 int registry_write_int(const char *path, const int value) {
   const int ival = value;
   return registry_write(path, &ival, sizeof(int), RegistryTypeInt);
+}
+
+int registry_write_unsigned(const char *path, const unsigned int value) {
+  const unsigned int uval = value;
+  return registry_write(path, &uval, sizeof(unsigned int), RegistryTypeUnsigned);
+}
+
+int registry_write_int_long(const char *path, const int64_t value) {
+  const int64_t ilval = value;
+  return registry_write(path, &ilval, sizeof(int64_t), RegistryTypeIntLong);
+}
+
+int registry_write_unsigned_long(const char *path, const uint64_t value) {
+  const uint64_t ulval = value;
+  return registry_write(path, &ulval, sizeof(uint64_t), RegistryTypeUnsignedLong);
 }
 
 int registry_write_string(const char *path, const char *str) {
@@ -249,7 +304,7 @@ uint32_t *registry_find_item(uint32_t *pos, const char *name, const uint32_t sig
     } else if (pos[0] == REG_CELL_SIG_S) {
       if ((depth == 1) && (pos[0] == sig) && (strcmp((const char *) &pos[1], name) == 0))
         return pos;
-      pos += 11 + (size_t) pos[10] + 1;
+      pos += 11 + (size_t) pos[10] + 1;  // pos[10] can = zero
     } else if (pos[0] == REG_HIVE_SIG_E) {
       depth--;
       if (depth <= 0)
@@ -283,7 +338,7 @@ uint32_t *registry_find_end_tag(uint32_t *pos) {
     } else if (*pos == REG_BASE_SIG_E) {
       break;
     } else if (*pos == REG_CELL_SIG_S) {
-      pos += 11 + (size_t) pos[10];
+      pos += 11 + (size_t) pos[10];  // pos[10] can = zero
     }
     pos++;
   }
@@ -358,7 +413,7 @@ uint32_t *registry_remove_item(uint32_t *pos) {
 
   // make sure we are at a Cell or a Hive
   if (*pos == REG_CELL_SIG_S)
-    end = pos + 11 + pos[10] + 1;
+    end = pos + 11 + pos[10] + 1;  // pos[10] can = zero
   else if (*pos == REG_HIVE_SIG_S) {
     // find the ending hive tag
     end = registry_find_end_tag(pos);
@@ -459,8 +514,20 @@ int registry_read(const char *path, void *data, size_t max_len, const REGISTRY_T
           switch (type) {
             case RegistryTypeBool:
             case RegistryTypeInt:
-              * (uint32_t *) data = pos[11];
-              ret = 4;
+            case RegistryTypeUnsigned:
+              if (max_len >= 4) {
+                * (uint32_t *) data = pos[11];
+                ret = 4;
+              } else
+                ret = 0;
+              break;
+            case RegistryTypeIntLong:
+            case RegistryTypeUnsignedLong:
+              if (max_len >= 4) {
+                * (uint64_t *) data = * (uint64_t *) &pos[11];
+                ret = 8;
+              } else
+                ret = 0;
               break;
             case RegistryTypeStr:
             case RegistryTypeBin:
@@ -530,11 +597,19 @@ int registry_write(const char *path, const void *data, size_t len, const REGISTR
       pos[9] = type; 
       pos[10] = (uint32_t) len / 4;
       switch (type) {
+        case RegistryTypeExist:
+          // do nothing (the data[] member is non-existent. len = 0)
+          break;
         case RegistryTypeBool:
           pos[11] = (* (uint32_t *) data) != 0;
           break;
         case RegistryTypeInt:
+        case RegistryTypeUnsigned:
           pos[11] = * (uint32_t *) data;
+          break;
+        case RegistryTypeIntLong:
+        case RegistryTypeUnsignedLong:
+          * (uint64_t *) &pos[11] = * (uint64_t *) data;
           break;
         case RegistryTypeStr:
         case RegistryTypeBin:
@@ -654,10 +729,12 @@ uint32_t *dump_reg_rec(uint32_t *pos, int depth) {
                                printf(" Name: '%s'", (char *) &pos[1]);
                                printf(" Type: %08X", pos[9]);
                                printf(" Length: %i * 4", pos[10]);
-      data = (uint8_t *) &pos[11];
-      printf(" Data: ");
-      for (i=0; i<(pos[10] * 4); i++)
-        printf("%02X", data[i]);
+      if (pos[10] > 0) {
+        data = (uint8_t *) &pos[11];
+        printf(" Data: ");
+        for (i=0; i<(pos[10] * 4); i++)
+          printf("%02X ", data[i]);
+      }
       puts("");
 
       pos += 11 + (size_t) pos[10];
@@ -667,7 +744,7 @@ uint32_t *dump_reg_rec(uint32_t *pos, int depth) {
     } else
       break;
   }
-
+  
   return pos;
 }
 
