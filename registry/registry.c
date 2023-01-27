@@ -439,6 +439,7 @@ uint32_t *registry_remove_item(uint32_t *pos) {
 }
 
 // see if a registry item exists.
+// Path can end in hive or cell. Will return existence of either.
 // ('/System' is assumed.  we start at '/System'.  Everything is a child of '/System')
 // returns 1 if exist
 // returns 0 if item was not found
@@ -463,10 +464,11 @@ int registry_exist(const char *path) {
         break;
     }
     
-    // now we are at the "item" to add/update
+    // now we are at the "item" to check
     if (pos != NULL) {
-      pos = registry_find_item(pos, arr[i], REG_CELL_SIG_S);
-      ret = (pos == NULL) ? 0 : 1;
+      // is the item a cell or a hive
+      ret = ((registry_find_item(pos, arr[i], REG_CELL_SIG_S) != NULL) || 
+             (registry_find_item(pos, arr[i], REG_HIVE_SIG_S) != NULL)) ? 1 : 0;
     }
     
     // free the memory used by the names
