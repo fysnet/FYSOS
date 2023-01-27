@@ -47,8 +47,8 @@ struct S_REGISTRY_BASE {
   uint32_t  crc;
   uint32_t  version;
   uint32_t  padding;
-  size_t    size;       // size in bytes of allocated memory
-  size_t    length;     // count of dwords used
+  uint64_t  size;       // size in bytes of allocated memory
+  uint64_t  length;     // count of dwords used
   uint64_t  last_modified;
   uint64_t  reserved;   // reserved for future use
 };

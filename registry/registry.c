@@ -466,7 +466,7 @@ int registry_exist(const char *path) {
     
     // now we are at the "item" to check
     if (pos != NULL) {
-      // is the item a cell or a hive
+      // is the item an existing cell or hive?
       ret = ((registry_find_item(pos, arr[i], REG_CELL_SIG_S) != NULL) || 
              (registry_find_item(pos, arr[i], REG_HIVE_SIG_S) != NULL)) ? 1 : 0;
     }
