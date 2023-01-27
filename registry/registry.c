@@ -202,9 +202,6 @@ int registry_write_binary(const char *path, const void *bin, const size_t len) {
     return 0;
 }
 
-// valid chars in a path (not counting the '/')
-//char registry_valid_chars[] = "abcdefghijklmnopqrstuvwxyz0123456789_";
-
 // gets the item name from a path.
 // the path could start with a '/' (just ignore)
 // the name should not be longer than max_len on entry and on exit
@@ -212,29 +209,25 @@ int registry_write_binary(const char *path, const void *bin, const size_t len) {
 // returns the null terminated name in 'name'
 const char *registry_get_name(const char *path, char *name, size_t max_len) {
   char *n = name;
-
+  
   // if the user started with a '/', ignore it
   if (*path == '/')
     path++;
-
+  
   while (*path && (*path != '/') && max_len) {
-    //if (!strchr(registry_valid_chars, tolower(*path))) {
-    //  n = name;
-    //  break;
-    //}
     *n++ = *path++;
     max_len--;
   }
   *n = '\0';
-
+  
   // if we found a name longer than we allow, return NULL
   if ((max_len == 0) && *path && (*path != '/'))
     return NULL;
-
+  
   // if we didn't get a name, return an error
   if (name[0] == '\0')
     return NULL;
-
+  
   return path;
 }
 
@@ -525,7 +518,7 @@ int registry_read(const char *path, void *data, size_t max_len, const REGISTRY_T
               break;
             case RegistryTypeIntLong:
             case RegistryTypeUnsignedLong:
-              if (max_len >= 4) {
+              if (max_len >= 8) {
                 * (uint64_t *) data = * (uint64_t *) &pos[11];
                 ret = 8;
               } else
