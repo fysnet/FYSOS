@@ -704,7 +704,7 @@ void dump_reg_lines(int depth) {
 
 uint32_t *dump_reg_rec(uint32_t *pos, int depth) {
   uint8_t *data;
-  uint32_t i;
+  uint32_t i, l;
 
   while (1) {
     if (pos[0] == REG_HIVE_SIG_S) {
@@ -721,14 +721,17 @@ uint32_t *dump_reg_rec(uint32_t *pos, int depth) {
       pos++;
     } else if (pos[0] == REG_CELL_SIG_S) {
       dump_reg_lines(depth-1); printf("--> Cell: (%'p)", pos);
-                               printf(" Name: '%s'", (char *) &pos[1]);
-                               printf(" Type: %08X", pos[9]);
-                               printf(" Length: %i * 4", pos[10]);
+                               printf(" Name: '%s',", (char *) &pos[1]);
+                               printf(" Type: %i,", pos[9]);
+                               printf(" Length: %5i", pos[10] * 4);
       if (pos[10] > 0) {
         data = (uint8_t *) &pos[11];
-        printf(" Data: ");
-        for (i=0; i<(pos[10] * 4); i++)
+        printf(", Data: ");
+        l = ((pos[10] * 4) < 32) ? (pos[10] * 4) : 32;
+        for (i=0; i<l; i++)
           printf("%02X ", data[i]);
+        if (l < (pos[10] * 4))
+          printf("...");
       }
       puts("");
 
