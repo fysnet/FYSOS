@@ -110,21 +110,22 @@ void remove_bucket(struct S_MEMORY_BUCKET *bucket) {
 }
 
 // run through the bucket and get the (possibly) new largest size
-size_t bucket_update_largest(struct S_MEMORY_BUCKET *bucket) {
-  struct S_MEMORY_PEBBLE *p = bucket->first;
-  size_t ret = 0;
+size_t bucket_update_largest(struct S_MEMORY_BUCKET *bucket) 
+{ 
+    struct S_MEMORY_PEBBLE *p = bucket->first; 
+    size_t ret = 0;
 
-  while (p != NULL) {
-    if (p->size > ret)
-      ret = p->size;
-    p = p->next;
-  }
+    // check if the pointer is not NULL before accessing its members (this prevents a GP fault in long mode if a non-canonical address is encountered)
+    while (p != NULL && p->size > ret) { 
+        ret = p->size; 
+        p = p->next; 
+    } 
 
-  // update the value
-  bucket->largest = ret;
+    // update the value 
+    bucket->largest = ret;
 
-  return ret;
-}
+    return ret; 
+} 
 
 // this takes an already created pebble and tries to place it in a bucket
 // it is assumed that the caller has already checked that this bucket
