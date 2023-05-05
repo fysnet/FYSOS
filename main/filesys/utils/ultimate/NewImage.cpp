@@ -619,7 +619,11 @@ void CNewImage::OnCreateImage() {
         // we haven't changed to the DLG_FILE_TYPE_VB_VDI type yet,
         //  so we must calculate it as a raw flat file
         large_int.QuadPart = dlg->m_vdi_offset_data + (u * dlg->m_vdi_block_size);
-        ::SetFilePointerEx((HANDLE) dlg->m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#ifdef _WIN64
+        SetFilePointerEx((HANDLE) dlg->m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#else
+        SetFilePointer((HANDLE) dlg->m_file.m_hFile, large_int.LowPart, &large_int.HighPart, FILE_BEGIN);
+#endif
         dlg->m_file.Write(zero_block, dlg->m_vdi_block_size);
       }
       free(zero_block);

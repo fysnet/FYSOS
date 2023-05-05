@@ -452,7 +452,11 @@ int CUltimateDlg::vdi_open_file(struct VDI_HEADER *vdi_header) {
   m_vdi_blocks = (DWORD *) calloc(m_vdi_block_count * sizeof(DWORD), 1);
 
   large_int.QuadPart = m_vdi_offset_blocks;
-  ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#ifdef _WIN64
+  SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#else
+  SetFilePointer((HANDLE) m_file.m_hFile, large_int.LowPart, &large_int.HighPart, FILE_BEGIN);
+#endif
   m_file.Read(m_vdi_blocks, m_vdi_block_count * sizeof(DWORD));
     
   return DLG_FILE_TYPE_VB_VDI;
@@ -468,16 +472,28 @@ void CUltimateDlg::vdi_close_file() {
     // if we changed the block table, we need to write it back
     if (m_vdi_table_dirty) {
       large_int.QuadPart = m_vdi_offset_blocks;
-      ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#ifdef _WIN64
+      SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#else
+      SetFilePointer((HANDLE) m_file.m_hFile, large_int.LowPart, &large_int.HighPart, FILE_BEGIN);
+#endif
       m_file.Write(m_vdi_blocks, m_vdi_block_count * sizeof(DWORD));
       m_vdi_table_dirty = FALSE;
       
       // now update the allocated count, etc.
       large_int.QuadPart = 0;
-      ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#ifdef _WIN64
+      SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#else
+      SetFilePointer((HANDLE) m_file.m_hFile, large_int.LowPart, &large_int.HighPart, FILE_BEGIN);
+#endif
       m_file.Read(buffer, 512);
       vdi_header->blocks_allocated = m_vdi_blocks_allocated;
-      ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#ifdef _WIN64
+      SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#else
+      SetFilePointer((HANDLE) m_file.m_hFile, large_int.LowPart, &large_int.HighPart, FILE_BEGIN);
+#endif
       m_file.Write(buffer, 512);
     }
     
@@ -903,11 +919,17 @@ void CUltimateDlg::OnToolsAppendVHD() {
 
   // move to the end of the file
   large_int.QuadPart = 0;
-  if (::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, &large_size, FILE_END) == 0) {
+#ifdef _WIN64
+  if (SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, &large_size, FILE_END) == 0) {
+#else
+  large_size.HighPart = large_int.HighPart;
+  large_size.LowPart = SetFilePointer((HANDLE) m_file.m_hFile, large_int.LowPart, &large_size.HighPart, FILE_END);
+  if (large_size.LowPart == INVALID_SET_FILE_POINTER) {
+#endif
     AfxMessageBox("Error moving to end of file.");
     return;
   }
-
+  
   const WORD cyl = (WORD) ((large_size.QuadPart / m_sect_size) / 63 / 16);
   BYTE *buffer = (BYTE *) calloc(m_sect_size, 1);
   struct VHD_FOOTER *footer = (struct VHD_FOOTER *) buffer;
@@ -955,7 +977,11 @@ void CUltimateDlg::OnToolsErase() {
     BYTE *buffer = (BYTE *) calloc(m_sect_size, 1);
     Size = m_file_length.QuadPart / m_sect_size;
     large_int.QuadPart = 0;
-    ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#ifdef _WIN64
+    SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#else
+    SetFilePointer((HANDLE) m_file.m_hFile, large_int.LowPart, &large_int.HighPart, FILE_BEGIN);
+#endif
     for (DWORD64 lba=0; lba<Size; lba++)
       m_file.Write(buffer, m_sect_size);
     free(buffer);
@@ -1325,7 +1351,11 @@ LARGE_INTEGER CUltimateDlg::GetFileLength(HANDLE hFile) {
   large.QuadPart = 0;
   switch (m_file_type) {
     case DLG_FILE_TYPE_FLAT:
-      ::GetFileSizeEx(hFile, &large);
+#ifdef _WIN64
+      GetFileSizeEx(hFile, &large);
+#else
+      large.LowPart = GetFileSize(hFile, (DWORD *) &large.HighPart);
+#endif
       break;
     case DLG_FILE_TYPE_VB_VDI:
       large.QuadPart = m_vdi_disk_size;
@@ -1352,8 +1382,13 @@ BOOL CUltimateDlg::SetFileLength(HANDLE hFile, const DWORD64 Size) {
   large.QuadPart = Size;
   switch (m_file_type) {
     case DLG_FILE_TYPE_FLAT:
-      ret = ::SetFilePointerEx(hFile, large, NULL, FILE_BEGIN);
+#ifdef _WIN64
+      ret = SetFilePointerEx(hFile, large, NULL, FILE_BEGIN);
       if (ret != 0)
+#else
+      ret = SetFilePointer((HANDLE) hFile, large.LowPart, &large.HighPart, FILE_BEGIN);
+      if (ret != INVALID_SET_FILE_POINTER)
+#endif
         ret = ::SetEndOfFile(hFile);
       break;
     case DLG_FILE_TYPE_VB_VDI:
@@ -1404,7 +1439,11 @@ long CUltimateDlg::ReadFromFile(void *buffer, DWORD64 lba, long count) {
         return 0;
       }
       
-      ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#ifdef _WIN64
+      SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#else
+      SetFilePointer((HANDLE) m_file.m_hFile, large_int.LowPart, &large_int.HighPart, FILE_BEGIN);
+#endif
       if (m_file.Read(buffer, count * m_sect_size) != count * m_sect_size) {
         cs.Format("Error reading %i sectors from LBA %I64i", count, lba);
         AfxMessageBox(cs);
@@ -1442,7 +1481,11 @@ long CUltimateDlg::ReadFromFile(void *buffer, DWORD64 lba, long count) {
         } else if (block < m_vdi_blocks_allocated) {
           // get the block and extract the sector
           large_int.QuadPart = m_vdi_offset_data + (block * m_vdi_block_size) + (ByteOffset % m_vdi_block_size);
-          ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#ifdef _WIN64
+          SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#else
+          SetFilePointer((HANDLE) m_file.m_hFile, large_int.LowPart, &large_int.HighPart, FILE_BEGIN);
+#endif
           if (m_file.Read(ptr, m_sect_size) != m_sect_size) {
             cs.Format("Error reading %i sectors from LBA %I64i", count, lba);
             AfxMessageBox(cs);
@@ -1490,7 +1533,11 @@ void CUltimateDlg::WriteToFile(void *buffer, DWORD64 lba, long count) {
             return;
           }
         
-        ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#ifdef _WIN64
+        SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#else
+        SetFilePointer((HANDLE) m_file.m_hFile, large_int.LowPart, &large_int.HighPart, FILE_BEGIN);
+#endif
         m_file.Write(buffer, count * m_sect_size);
       } break;
         
@@ -1520,7 +1567,11 @@ void CUltimateDlg::WriteToFile(void *buffer, DWORD64 lba, long count) {
               
               // move to that block area and write a full block of zeros (plus this sector's data)
               large_int.QuadPart = m_vdi_offset_data + (block * m_vdi_block_size);
-              ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#ifdef _WIN64
+              SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#else
+              SetFilePointer((HANDLE) m_file.m_hFile, large_int.LowPart, &large_int.HighPart, FILE_BEGIN);
+#endif
               BYTE *zeros = (BYTE *) calloc(m_vdi_block_size, 1);
               memcpy(zeros + (ByteOffset % m_vdi_block_size), ptr, m_sect_size);
               m_file.Write(zeros, m_vdi_block_size);
@@ -1540,7 +1591,11 @@ void CUltimateDlg::WriteToFile(void *buffer, DWORD64 lba, long count) {
           } else if (block < m_vdi_blocks_allocated) {
             // get the block and extract the sector
             large_int.QuadPart = m_vdi_offset_data + (block * m_vdi_block_size) + (ByteOffset % m_vdi_block_size);
-            ::SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#ifdef _WIN64
+            SetFilePointerEx((HANDLE) m_file.m_hFile, large_int, NULL, FILE_BEGIN);
+#else
+            SetFilePointer((HANDLE) m_file.m_hFile, large_int.LowPart, &large_int.HighPart, FILE_BEGIN);
+#endif
             m_file.Write(ptr, m_sect_size);
           } else {
             // if the block number is more than the currently allocated blocks, we have an error
