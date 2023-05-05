@@ -104,6 +104,7 @@ CISOPrimary::CISOPrimary() : CPropertyPage(CISOPrimary::IDD) {
 }
 
 CISOPrimary::~CISOPrimary() {
+  m_is_valid = FALSE;
 }
 
 void CISOPrimary::DoDataExchange(CDataExchange* pDX) {

@@ -886,12 +886,15 @@ void CNewImage::OnCreateImage() {
       // either continue to pad partition (or)
       //  no partition file was given, so fill partition with zeros.
       memset(buffer, 0, m_sector_size);
-      LONG lIdle = 0;
       int percent;
       for (; qword<partition->m_sectors; qword++) {
-        //dlg->m_file.Write(buffer, m_sector_size);
         dlg->WriteToFile(buffer, partition->m_lba + qword, 1);
-        //AfxGetApp()->OnIdle(lIdle++);  // avoid "Not Responding" notice
+        // avoid "Not Responding" notice
+        MSG msg;
+        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+          TranslateMessage(&msg);
+          DispatchMessage(&msg);
+        }
         percent = (int) (((double) qword / (double) partition->m_sectors) * 100.0);
         m_progress.SetPos(10 + percent);
       }
@@ -1098,7 +1101,7 @@ void CNewImage::OnCreateImage() {
       dlg->m_file.Write(buffer, 1 * 2048);
       
       // we are "100% + 1" done
-      m_progress.SetPos(101);  // total of 110 for completely 100% done
+      m_progress.SetPos(110);  // total of 110 for completely 100% done
       
       if (img_size > 0) {  // has boot image file
         // create Boot Descriptor

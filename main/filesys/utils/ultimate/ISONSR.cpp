@@ -116,6 +116,7 @@ CISONSR::CISONSR() : CPropertyPage(CISONSR::IDD) {
 }
 
 CISONSR::~CISONSR() {
+  m_is_valid = FALSE;
   if (m_descriptors)
     free(m_descriptors);
 }

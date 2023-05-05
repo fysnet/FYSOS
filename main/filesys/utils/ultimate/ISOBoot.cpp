@@ -102,6 +102,7 @@ CISOBoot::CISOBoot() : CPropertyPage(CISOBoot::IDD) {
 }
 
 CISOBoot::~CISOBoot() {
+  m_is_valid = FALSE;
 }
 
 void CISOBoot::DoDataExchange(CDataExchange* pDX) {

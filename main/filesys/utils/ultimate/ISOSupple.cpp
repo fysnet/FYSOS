@@ -106,6 +106,7 @@ CISOSupple::CISOSupple() : CPropertyPage(CISOSupple::IDD) {
 }
 
 CISOSupple::~CISOSupple() {
+  m_is_valid = FALSE;
 }
 
 void CISOSupple::DoDataExchange(CDataExchange* pDX) {

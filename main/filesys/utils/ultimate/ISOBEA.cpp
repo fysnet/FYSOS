@@ -87,6 +87,7 @@ CISOBEA::CISOBEA() : CPropertyPage(CISOBEA::IDD) {
 }
 
 CISOBEA::~CISOBEA() {
+  m_is_valid = FALSE;
 }
 
 void CISOBEA::DoDataExchange(CDataExchange* pDX) {

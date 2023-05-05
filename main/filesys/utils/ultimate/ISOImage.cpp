@@ -110,6 +110,12 @@ bool CISOImage::Start(void) {
   DWORD64 lba = 16;
   int     cindex = 0;
   BOOL    cont = TRUE;
+
+  m_PVD.m_is_valid = FALSE;
+  m_SVD.m_is_valid = FALSE;
+  m_BVD.m_is_valid = FALSE;
+  m_BEA.m_is_valid = FALSE;
+  m_NSR.m_is_valid = FALSE;
   
   while (cont) {
     dlg->ReadFromFile(buffer, lba, 1);
