@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2023
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -69,7 +69,7 @@
  *     than mentioned here.
  *   - Must have full access to said hardware.
  *
- *  Last updated: 5 Jan 2022
+ *  Last updated: 9 May 2023
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os gd_xhci.c -o gd_xhci.exe -s
@@ -369,6 +369,22 @@ bool process_xhci(struct PCI_DEV *pci_dev, struct PCI_POS *pos) {
   
   // write the address to the controller
   xhci_write_op_reg64(xHC_OPS_USBDcbaap, dcbaap_start);
+  
+  // Allocate the Scratchpad buffer(s)
+  bit32u scratch_buff_array_start;
+  bit32u scratch_buff_start;
+  bit32u max_scratch_buffs = /* ((hcsparams2 & 0x03E00000) >> 16)  | */ ((hcsparams2 & 0xF8000000) >> 27);
+  
+  if (max_scratch_buffs > 0) {
+    scratch_buff_array_start = heap_alloc(max_scratch_buffs * 8, 64, page_size);
+    scratch_buff_start = heap_alloc(max_scratch_buffs * page_size, page_size, 0);
+    
+    xhci_write_phy_mem64(dcbaap_start, scratch_buff_array_start);
+    
+    for (i=0; i < max_scratch_buffs; i++) {
+      xhci_write_phy_mem64(scratch_buff_array_start + i * 8, scratch_buff_start + i * page_size);
+    }
+  }
   
   // create the command ring, returning the physical address of the ring
   cmnd_ring_addr = cmnd_trb_addr = create_ring(CMND_RING_TRBS);
