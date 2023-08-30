@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2023
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -69,7 +69,7 @@
  *     than mentioned here.
  *   - Must have full access to said hardware.
  *
- *  Last updated: 5 Jan 2022
+ *  Last updated: 30 Aug 2023
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os gd_uhci.c -o gd_uhci.exe -s
@@ -276,42 +276,43 @@ bool uhci_port_pres(bit16u base, bit8u port) {
 }
 
 bool uhci_port_reset(bit16u base, bit8u port) {
-  int i;
   bit16u val = 0;
-  bool ret = FALSE;
   
-  outpw(base+port, inpw(base + port) | (1<<9));
+  // reset the port, holding the bit set at least 50 ms for a root hub
+  val = inpw(base + port);
+  outpw(base + port, val | (1<<9));
   mdelay(USB_TDRSTR);
-  outpw(base + port, inpw(base+port) & ~(1<<9));
   
-  for (i=0; i<10; i++) {
-    mdelay(USB_TRSTRCY);  // hold for USB_TRSTRCY ms (reset recovery time)
-    
-    val = inpw(base + port);
-    
-    // if bit 0 is clear, nothing attached, don't enable
-    if (!(val & (1<<0))) {
-      ret = TRUE;
-      break;
-    }
-    
-    // if either enable_change or connection_change, clear them and continue.
-    if (val & ((1<<3) | (1<<1))) {
-      outpw(base + port, val & UHCI_PORT_WRITE_MASK);
-      continue;
-    }
-    
-    // if the enable bit is set, break.
-    if (val & (1<<2)) {
-      ret = TRUE;
-      break;
-    }
-    
-    // else, set the enable bit
-    outpw(base + port, val | (1<<2));
-  }
+  // clear the reset bit, do not clear the CSC bit while
+  //  we clear the reset.  The controller needs to have
+  //  it cleared (written to) while *not* in reset
+  // also, write a zero to the enable bit
+  val = inpw(base + port);
+  outpw(base + port, val & 0xFCB1);
+  udelay(300);  // note that this is *not* the USB specification delay
+  // if we wait the recommended USB_TRSTRCY time after clearing the reset,
+  //  the device will not enable when we set the enable bit below.
   
-  return ret;
+  // the CSC bit must be clear *before* we set the Enable bit
+  //  so clear the CSC bit (Write Clear), then set the Enable bit
+  val = inpw(base + port);
+  outpw(base + port, val | 0x0003);
+  outpw(base + port, val | 0x0005);
+  
+  // wait for it to be enabled
+  udelay(50);
+  
+  // now clear the PEDC bit, and CSC if it still
+  //  happens to be set, while making sure to keep the
+  //  Enable bit and CCS bits set
+  val = inpw(base + port);
+  outpw(base + port, val | 0x000F);
+  
+  // short delay before we start sending packets
+  mdelay(50);
+  
+  val = inpw(base + port);
+  return (val & 0x0004) > 0;
 }
 
 // set up a queue, and enough TD's to get 'size' bytes
