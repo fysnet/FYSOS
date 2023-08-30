@@ -276,7 +276,7 @@ bool uhci_port_pres(bit16u base, bit8u port) {
 }
 
 bool uhci_port_reset(bit16u base, bit8u port) {
-  bit16u val = 0;
+  bit16u val;
   
   // reset the port, holding the bit set at least 50 ms for a root hub
   val = inpw(base + port);
