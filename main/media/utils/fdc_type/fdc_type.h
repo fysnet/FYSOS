@@ -72,6 +72,10 @@
 #define  FDC_DOR    0x002      // FDC Digital Output Register at 3x2h  (all systems)
 #define  FDC_TDR    0x003
 #define  FDC_MSR    0x004      // FDC Main Status Register at 3x4h  (all systems)
+  #define  FDC_MSR_RQM        0x80
+  #define  FDC_MSR_DIO        0x40
+  #define  FDC_MSR_NDMA       0x20
+  #define  FDC_MSR_CBZY       0x10
 #define  FDC_DSR    0x004
 #define  FDC_CSR    0x005      // FDC Command Status Register 0 at 3x5h  (all systems)
 #define  FDC_FIFO   0x005
@@ -181,6 +185,7 @@ enum {
   FDC_TYPE_DP8473,
   FDC_TYPE_NEC72065B,
   FDC_TYPE_W83977,
+  FDC_TYPE_37c78,
   FDC_TYPE_UNKNOWN
 };
 
@@ -250,7 +255,7 @@ struct S_FLOPPY_CNTRLR {
   bool   enhanced;             // is it an enhanced controller?
   bool   implied_seek;         // can the controller seek for us?
   bool   dump_valid;
-  struct {
+  struct S_DUMP_REGS {
     bit8u  pcn0;
     bit8u  pcn1;
     bit8u  pcn2;
@@ -288,9 +293,9 @@ bool fdc_get_cur_pos(struct S_FLOPPY *, const bit8u, bit32u *, bit32u *, bit32u 
 bool fdc_detect_implied_seek(struct S_FLOPPY *);
 bool fdc_configure(struct S_FLOPPY_CNTRLR *, const bit8u, const bit8u);
 
-bool fdc_command(struct S_FLOPPY_CNTRLR *, const bit8u *, bit8u);
+bool fdc_command(const struct S_FLOPPY_CNTRLR *, const bit8u *, bit8u, bool);
+bit8u fdc_result(const struct S_FLOPPY_CNTRLR *, const bit8u, bit8u *);
 bool fdc_command_int(struct S_FLOPPY *fdd, const bit8u *buf, bit8u cnt, bit8u *ret_cnt, bit8u *status, bit8u *cur_cyl);
-bit8u fdc_return(struct S_FLOPPY_CNTRLR *, const bit8u, bit8u *);
 
 bool fdd_recalibrate(struct S_FLOPPY *);
 

@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2023
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -67,7 +67,7 @@
  *     than mentioned here.
  *   - Must have full access to said hardware.
  *
- *  Last updated: 15 July 2020
+ *  Last updated: 20 Nov 2023
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os fdc_type.cpp -o fdc_type.exe -s
@@ -94,11 +94,14 @@
 #include "..\include\ctype.h"
 #include "..\include\dma.h"
 #include "..\include\pci.h"
+#include "..\include\timer.h"
 
 #include "fdc_type.h"
 
 // lock all memory, to prevent it being swapped or paged out
 int _crt0_startup_flags = _CRT0_FLAG_LOCK_MEMORY;
+
+volatile bool fdc_drv_stats = FALSE;
 
 struct S_FLOPPY_CNTRLR s_fdc[2] = {
   { 0x3F0, },
@@ -123,6 +126,7 @@ const char *fdc_dev_types[] = {
   "DP8473",
   "NEC 72065B",
   "Winbond W83977",
+  "37c78",
   "Unknown or faulty"
 };
 
@@ -152,8 +156,8 @@ const struct S_FLOPPY floppy_media[MEDIA_COUNT] = {
     |  |                    |   |  |  |   |   |  | |  |  |   |   |   |  |    |  |    |          | | cur_cly
     |  |                    |   |  |  |   |   |  | |  |  |  / \  |   |  |    |  |    |          | |     |   *cntrlr         media desc ? */
   { 0, FLOPPY_MEDIA_UNKNOWN, 0, 0, 0, 0,   0, 0, 0,0, 0, 0, 0,0, 0,  0,  0,  0, 0,           0, 0,0,    0,    0 },  //          |
-  { 0, FLOPPY_MEDIA_160,   320, 40,1, 8, 512, 2,15,0,13, 0, 0,0, 2, 42,255, 84, 0, FDC_250KBPS, 0,0, 0xFF, 0x00 },  //  160k  (0xFE)
-  { 0, FLOPPY_MEDIA_180,   360, 40,1, 9, 512, 2,15,0,13, 0, 0,0, 2, 42,255, 84, 0, FDC_250KBPS, 0,0, 0xFF, 0x00 },  //  180k  (0xFC)
+  { 0, FLOPPY_MEDIA_160,   320, 40,1, 8, 512, 2,15,0,13, 1, 0,0, 2, 42,255, 84, 0, FDC_250KBPS, 0,0, 0xFF, 0x00 },  //  160k  (0xFE)
+  { 0, FLOPPY_MEDIA_180,   360, 40,1, 9, 512, 2,15,0,13, 1, 0,0, 2, 42,255, 84, 0, FDC_250KBPS, 0,0, 0xFF, 0x00 },  //  180k  (0xFC)
   { 0, FLOPPY_MEDIA_320,   640, 40,2, 8, 512, 2,15,0,13, 1, 0,1, 2, 42,255, 84, 0, FDC_250KBPS, 0,0, 0xFF, 0x00 },  //  320k  (0xFF)
   { 0, FLOPPY_MEDIA_360,   720, 40,2, 9, 512, 2,15,0,13, 1, 0,1, 2, 35,255, 80, 0, FDC_250KBPS, 0,0, 0xFF, 0x00 },  //  360k  (0xFD)
   { 0, FLOPPY_MEDIA_1_20, 2400, 80,2,15, 512, 2,15,0,13, 1, 0,1, 2, 27,255, 84, 0, FDC_500KBPS, 0,0, 0xFF, 0x00 },  // 1.20m  (0xF9)
@@ -178,6 +182,12 @@ int main(int argc, char *argv[]) {
   
   // Initialize and allow interrupts for the FDC
   init_ext_int();
+
+  // setup our delay system
+  if (!setup_timer()) {
+    printf("Error setting up the timer...\n");
+    return -2;
+  }
   
   // two controller ports
   for (j=0; j<2; j++) {
@@ -224,8 +234,24 @@ int main(int argc, char *argv[]) {
       
       // reset the controller
       outpb(s_fdc[j].base + FDC_DOR, 0x00);  // reset drive
-      delay(2);                             // hold for 2 milliseconds
+      mdelay(2);                             // hold for 2 milliseconds
       outpb(s_fdc[j].base + FDC_DOR, 0x0C);  // release reset
+      
+      // wait for the interrupt, then sense an interrupt on all four drives
+      // Page 41 of the FDC 82077AA specs
+      if (fdc_wait_int(FDC_TIMEOUT_INT)) {
+        bit8u buf[16];
+        for (int i=0; i<4; i++) {
+          buf[0] = FDC_CMD_SENSE_INT;
+          fdc_command(&s_fdc[j], buf, 1, FALSE);
+          fdc_result(&s_fdc[j], 2, buf);
+        }
+      } else {
+        printf("No interrupt....\n");
+        return FALSE;
+      }
+      fdc_configure(&s_fdc[j], FDC_IMPLIED_SEEK | FDC_DISABLE_POLL, 16);
+
     }
   }
   
@@ -239,18 +265,31 @@ bool fdc_detect(struct S_FLOPPY_CNTRLR *fdc) {
   bit8u dir;
   bit8u buf[16];
   clock_t delayms;
+
+  fdc_drv_stats = 0;
   
   // initial reading should not be 0xFF
   if (inpb(fdc->base + FDC_MSR) == 0xFF)
     return FALSE;
   
-  // the minimum duration of the reset should be 500ns.
-  // A write duration to an ISA I/O port takes longer than that.
-  // Therefore, if we write it twice, we will be sure to be long enough.
-  outpb(fdc->base + FDC_DOR, 0x00); // reset drive
-  outpb(fdc->base + FDC_DOR, 0x00);
+  // reset the controller
+  outpb(fdc->base + FDC_DOR, 0x00);  // reset
+  mdelay(2);                         // hold for 2 milliseconds
+  outpb(fdc->base + FDC_DOR, 0x0C);  // release
+  mdelay(2);                         // hold for 2 milliseconds
   
-  outpb(fdc->base + FDC_DOR, 0x04); // release reset
+  // wait for the interrupt, then sense an interrupt on all four drives
+  // Page 41 of the FDC 82077AA specs
+  if (fdc_wait_int(FDC_TIMEOUT_INT)) {
+    for (int i=0; i<4; i++) {
+      buf[0] = FDC_CMD_SENSE_INT;
+      fdc_command(fdc, buf, 1, FALSE);
+      fdc_result(fdc, 2, buf);
+    }
+  } else {
+    printf("No interrupt....\n");
+    return FALSE;
+  }
   
   // If FDC_MSR:RQM set and FDC_MSR:CB clear before 200 ms,
   //  then controller found
@@ -260,7 +299,7 @@ bool fdc_detect(struct S_FLOPPY_CNTRLR *fdc) {
       break;
   }
   
-  // if the controller isn't read for input after the delay, return FALSE
+  // if the controller isn't ready for input after the delay, return FALSE
   if (inpb(fdc->base + FDC_MSR) != 0x80)
     return FALSE;
   
@@ -273,7 +312,7 @@ bool fdc_detect(struct S_FLOPPY_CNTRLR *fdc) {
   buf[0] = FDC_CMD_SPECIFY;
   buf[1] = 0xAF;
   buf[2] = 0x1E;
-  if (!fdc_command(fdc, buf, 3))
+  if (!fdc_command(fdc, buf, 3, TRUE))
     return FALSE;
   
   if (verbose)
@@ -283,11 +322,11 @@ bool fdc_detect(struct S_FLOPPY_CNTRLR *fdc) {
            "       Digital Output: %02X\n"
            "           Tape Drive: %02X\n"
            " Main Status Register: %02X\n"
-           " Data (FIFO) Register: %02X\n"
+       /*  " Data (FIFO) Register: %02X\n" */ // Reading the FIFO with DIO = Write, has undefined results.
            "             Reserved: %02X\n"
            "        Digital Input: %02X\n",
       inpb(fdc->base + 0), inpb(fdc->base + 1), inpb(fdc->base + 2), inpb(fdc->base + 3),
-      inpb(fdc->base + 4), inpb(fdc->base + 5), inpb(fdc->base + 6), inpb(fdc->base + 7));
+      inpb(fdc->base + 4), /* inpb(fdc->base + 5), */ inpb(fdc->base + 6), inpb(fdc->base + 7));
   
   // if we get here, a controller was found
   // get the type of controller
@@ -297,163 +336,107 @@ bool fdc_detect(struct S_FLOPPY_CNTRLR *fdc) {
 }
 
 /* Get Controller Type
- *  I have checked and have specifications for the following controller types.
- *   These are in order of the tests below by Pass/Fail.
- *       Name        Product Name and Manufacture  (Enhanced)  Test:  1 2 3 4  (F = Fail, P = Pass)
- *   - PC87306       (National Semiconductor)         Y               P P - -
- *   - 82078         (Intel 82078 44-pin)             Y               P P - -
- *   - 82078SL       (Intel 82078 64-pin)             Y               P P - -
- *   - 82077         (Intel 82077AA)                  Y               P F P F
- *   - PC8477B       (National Semiconductor)         Y               P F P P
- *   - 37C78         (SMSC FDC37C78)                  Y               P F P P
- *   - W83977        (W83977(a)F Winbond)             Y               P F P P
- *   - 82072         (Intel 82072)                    Y*              P F F -  (*Dump Regs passes, Version does not)
- *   - 765B          (NEC uPD765b)                    N               F P - -
- *   - DP8473        (National Semiconductor)         N               F F P -
- *   - 72065A        (NEC uPD72065A / NEC uPD72066)   N               F F F P
- *   - 765A and 765B (NEC uPD765a / NEC uPD765b)      N               F F F F 
- *   - 8272          (Intel 8272A)                    N               F F F F
  *  The code below will send specific commands to the controller, eliminating those
  *   that don't support that command, until only one is left, to determine what
  *   controller is present.
- *  This is from my own research and testing and is of the best of my knowledge.
- *   I do not have all of these controllers to test on.
  */
 bit8u fdc_get_type(struct S_FLOPPY_CNTRLR *fdc, const bit8u dir) {
-  bit8u r, buf[32];
+  bit8u r = 0, buf[32];
+  fdc->enhanced = FALSE;
   
-  // Test 1: Dump Registers
-  write_fdc(fdc, FDC_CMD_DUMP_REGS);
-  r = fdc_return(fdc, 10, (bit8u *) &fdc->dump_regs);
-  if ((r == 1) && (fdc->dump_regs.pcn0 == 0x80)) {
-    fdc->enhanced = FALSE;
-    
-    // Test 2: Version
-    // Dump Registers failed, so test for the Version Byte command
-    // Of the controllers that fail on DumpRegisters, only the 765A/B
-    //  has the GetVersion command
-    // Please note, the 765A may not actually support the Version command, since
-    //  an invalid command will return 0x80 anyway.  However, this is how you
-    //  determine between a 765A and 765B.
-    write_fdc(fdc, FDC_CMD_VERSION);
-    r = fdc_return(fdc, 1, buf);
-    if (r == 1) {
-      if (buf[0] == 0x80) {
-        // Test 3: Internal Track Number
-        // the DP8473 has an Internal Track Number register that we can read/write
-        buf[0] = (0 << 6) | FDC_CMD_SET_TRK; // read current internal track number
-        buf[1] = 0x30 | (0 << 2) | 0;        // read LSB
-        buf[2] = 0;                          // not used on the read
-        if (!fdc_command(fdc, buf, 3) && (fdc_return(fdc, 1, buf) == 1))
-          return FDC_TYPE_8272A;   // Type 8272A compatible FDC
-        
-        // Test 4: Exit Standby
-        // the 72065A as the PowerControl/Standby commands
-        write_fdc(fdc, FDC_CMD_EXIT_STND);
-        r = fdc_return(fdc, 1, buf);
-        // if it returned a single byte of 0x80, the command was not supported.
-        // if no return, the command was supported.
-        if (r == 0)
-          return FDC_TYPE_72065A;
-        
-        // Now we should just have the 765A and 8272 left.
-        // At this time, I don't know the difference between these two or how to
-        //  detect them, so we will just return a 765A since it was probably a 765A
-        //  returning 0x80 as either supporting the version command and returning a
-        //  version of 0x80, or most likely, not supporting the command and returing
-        //  ST0 = 0x80 (invalid command)
-        return FDC_TYPE_765A;
-      } else if (buf[0] == 0x90) {
+  if (fdc_configure(fdc, FDC_IMPLIED_SEEK | FDC_DISABLE_POLL, 16))
+    fdc->implied_seek = TRUE;
+  else
+    printf("fdc_configure returned false\n");
+  
+  // first see if dumpregs command works
+  // supported: 82077AA  82078  37c78  PC87306
+  // not supported: NEC765  DP8473
+  
+  buf[0] = FDC_CMD_DUMP_REGS;
+  if (fdc_command(fdc, buf, 1, FALSE))
+    r = fdc_result(fdc, 10, (bit8u *) &fdc->dump_regs);
+  if (r == 0) {
+    // could be a 765A, 765B, or DP8473
+    // Of these three, only the 765B supports the version command
+    buf[0] = FDC_CMD_VERSION;
+    if (fdc_command(fdc, buf, 1, FALSE) && 
+       (fdc_result(fdc, 1, buf) == 1)) {
+      if (buf[0] == 0x90)
         return FDC_TYPE_765B;
-      } else {
-        // We found a controller that doesn't pass on the DumpRegisters command,
-        //  but does have the Version Command
-        printf("Found Controller w/o Dump, but w/ Version... (0x%02X)", buf[0]);
-        return FDC_TYPE_UNKNOWN;
-      }
+      // unknown controller that doesn't have DUMP, but does have VERSION
+      return FDC_TYPE_UNKNOWN;
+      
+    } else {
+      // could be a 765A or DP8473
+      // the DP8473 has an Internal Track Number register that we can read/write, the other three do not
+      buf[0] = FDC_CMD_SET_TRK;     // read current internal track number
+      buf[1] = 0x30 | (0 << 2) | 0; // read LSB
+      buf[2] = 0;                   // not used on the read
+      if (fdc_command(fdc, buf, 3, FALSE) &&
+         (fdc_result(fdc, 1, buf) == 1))
+        return FDC_TYPE_DP8473;  // Type DP8473 compatible FDC
+      return FDC_TYPE_765A;    // Type 765A compatible FDC
     }
   }
-   
-  // the Dump command is an enhanced command.
-  fdc->enhanced = TRUE;
   
-  // At this point, the dump command was supported and may or may not returned
-  //  all 10 bytes
-  if (r == 10)
+  // if it did not return 10 bytes, unexpected
+  // (the DUMP command is an enhanced command, so mark as so)
+  if (r == 10) {
+    // if both the DUMP REGISTERS and the VERSION commands are supported,
+    //  we have an enhanced controller.
+    buf[0] = FDC_CMD_VERSION;
+    if (((fdc_command(fdc, buf, 1, FALSE)) && 
+         (fdc_result(fdc, 1, buf) == 1)) && 
+         (buf[0] == 0x90))
+      fdc->enhanced = TRUE;
     fdc->dump_valid = TRUE;
-  else if (r > 0)
-    printf("\nDumpregs: unexpected count of returned bytes: %i", r);
+  } else
+    printf("Dumpregs: unexpected count of returned bytes: %i\n", r);
   
-  // The remaining (known) controllers should all support the Configure command
-  // We do this so that we can eliminate any unknown controllers, and get the
-  //  implied_seek flag.
-  if (fdc_configure(fdc, FDC_IMPLIED_SEEK | FDC_DISABLE_POLL, 16)) {
-    fdc->implied_seek = TRUE;
-    
-    // Test 2: PartID command
-    // If the controller supports the PartID command, this will eliminate some
-    //  controllers as well as give a version for those that do support it.
-    // Try the PartID command
-    write_fdc(fdc, FDC_CMD_PARTID);
-    r = fdc_return(fdc, 1, buf);
-    if ((r == 1) && (buf[0] != 0x80)) {
-      fdc->partid_valid = TRUE;
-      fdc->partid = buf[0];
-      switch (buf[0]) {
-        case 0:  // 000xxxx1
-          return FDC_TYPE_82078SL;  // 64-pin 82078
-        case 2:  // 010xxxx1
-          return FDC_TYPE_44_82078; // 44-pin 82078
-        case 3:  // 010xxxx1
-          return FDC_TYPE_NS_PC87306; // 160-pin 82078 compatible
-        default: // ???xxxx1
-          return FDC_TYPE_82078;    // must be a 82078 compatible controller????
-      }
-    } else {
-      fdc->partid_valid = FALSE;
-      
-      // Test 2 above eliminated all the 82072 compatibles, so we now have the
-      //  PC8477B, 82072, 82077, 37C78, and W83977.
-      
-      // Test 3: Perp288 command
-      // The 82072 does not know the PERP288 command
-      if (write_fdc(fdc, FDC_CMD_PERP288) && fdc_want_more(fdc)) {
-        write_fdc(fdc, 0x80);  // finish the command
-        
-        // controllers left: PC8477B, 82077, 37C78, and W83977.
-        // The PC8477B is an enhanced version of the DP8473 which is
-        //  compatible with the 82077AA.
-        // The 37C78 is compatible with the 82077AA.
-        // The W83977 contains an FDC compatible with the 82077 / 765
-        //  but has the enhanced features of the 82077AA.
-        
-        // Test 4: Unlock
-        // The original 82077 didn't like the unlock command
-        write_fdc(fdc, FDC_CMD_UNLOCK);
-        r = fdc_return(fdc, 1, buf);
-        if ((r == 1) && (buf[0] != 0x80)) {
-          // I have found the the W83977 has a DIR initial register value of 0x7F
-          //  (all unused bits high), while the 82077AA has them low.
-          if (dir == 0x7F)
-            return FDC_TYPE_W83977;
-          
-          // We return an 82077AA for the PC8477B, later 82077(AA), and 37C78
-          return FDC_TYPE_82077AA;
-        } else {
-          // Pre-1991 82077, doesn't know LOCK/UNLOCK
-          return FDC_TYPE_82077_ORIG;
-        }
-      } else
-        return FDC_TYPE_82072;
+  // could be a 82077AA  82078  37c78  PC87306
+  // the 82072 is the only (known) controller with the MOTOR_ON_OFF command.
+  //  (the 82072 is not register compatible with the remaining. We can not support it yet)
+  //buf[0] = FDC_CMD_MOTOR_ON;
+  //if (fdc_command(fdc, buf, 1, TRUE))
+  //  return FDC_TYPE_82072;
+
+  // could be a 82077AA  82078  37c78  PC87306
+  // Try the Save command.  The Intel 82078(44) and the 82078SL(64) have this command
+  buf[0] = FDC_CMD_SAVE;
+  if (fdc_command(fdc, buf, 1, FALSE) &&
+     (fdc_result(fdc, 16, buf) >= 15)) {
+    // TODO: now determine which it is
+    // the difference is that the 82078 has StatusA reserved (base+0)
+    //  or
+    // the 82078SL returns 0x41 in the part_id command, the 82078 returns 0x01
+    buf[0] = FDC_CMD_PARTID;
+    if (fdc_command(fdc, buf, 1, FALSE) &&
+       (fdc_result(fdc, 1, buf) == 1)) {
+      if (buf[0] == 0x01)
+        return FDC_TYPE_82078SL;
+      if (buf[0] == 0x41)
+        return FDC_TYPE_82078;
     }
-  } else {
-    fdc->enhanced = FALSE;
-    
-    // we found a controller that supports the DumpRegisters command, but not
-    //  the configure command.  This should be rare...
-    printf("Found Controller w/ Dump, but w/o Configure.");
     return FDC_TYPE_UNKNOWN;
   }
+  
+  // could be a 82077AA  37c78  PC87306
+  // the PC87306 has part_id, the other two do not
+  buf[0] = FDC_CMD_PARTID;
+  if (fdc_command(fdc, buf, 1, FALSE) &&
+     (fdc_result(fdc, 1, buf) == 1))
+    return FDC_TYPE_NS_PC87306;
+  
+  // could be a 82077AA  37c78
+  // the 82077AA has the scan commands, the 37c78 does not
+  // however, the 82077AA has StatusRegA and B, the 37c78 does not.
+  // we assume a non-supported will return 0xFF and a supported will return !0xFF
+  if (inpb(fdc->base+FDC_SRA) != 0xFF)
+    return FDC_TYPE_82077AA;
+  
+  // probably is the 37c78
+  return FDC_TYPE_37c78;
 }
 
 /* Calculate the size of the FIFO
@@ -464,19 +447,21 @@ bit8u fdc_get_type(struct S_FLOPPY_CNTRLR *fdc, const bit8u dir) {
  */
 int get_max_FIFO_size(struct S_FLOPPY_CNTRLR *fdc) {
   bit8u buf[16];
-  int r, size = 15;
+  int size = 23; // try a max size of 24 (most will be 16)
   
   while (size >= 0) {
     buf[0] = FDC_CMD_CONFIGURE;
     buf[1] = 0;     // zero
     buf[2] = 0x50 | (bit8u) size;  // EIS = TRUE, Disable Poll, Enable FIFO, FIFO = x bytes
     buf[3] = 0;     // pretrk = 0
-    if (!fdc_command(fdc, buf, 4))
+    if (!fdc_command(fdc, buf, 4, TRUE))
       return 0;
     
-    write_fdc(fdc, FDC_CMD_DUMP_REGS);
-    r = fdc_return(fdc, 10, buf);
-    if ((r != 10) || (buf[0] == 0x80))
+    int r = 0;
+    buf[0] = FDC_CMD_DUMP_REGS;
+    if (fdc_command(fdc, buf, 1, FALSE))
+      r = fdc_result(fdc, 10, buf);
+    if (r != 10)
       return 0;
     
     if ((int) (buf[8] & 0xF) == size)
@@ -505,14 +490,14 @@ bool det_floppy_drive(struct S_FLOPPY *fdd) {
   fdc_command_int(fdd, buf, 3, NULL, NULL, NULL);
   
   // wait for the head to settle
-  delay(FDC_SLT_AFTER_SEEK);
+  mdelay(FDC_SLT_AFTER_SEEK);
   
   // sense drive status
   // Track Zero Bit should be set
   buf[0] = FDC_CMD_STATUS;
   buf[1] = CMD_STATUS_MOT | fdd->drv;
-  fdc_command(fdd->cntrlr, buf, 2);
-  cnt = fdc_return(fdd->cntrlr, 1, &status);
+  fdc_command(fdd->cntrlr, buf, 2, FALSE);
+  cnt = fdc_result(fdd->cntrlr, 1, &status);
   
   if ((cnt != 1) || ((status & 0x13) != (0x10 | fdd->drv)))
     return FALSE;
@@ -524,14 +509,14 @@ bool det_floppy_drive(struct S_FLOPPY *fdd) {
   fdc_command_int(fdd, buf, 3, NULL, NULL, NULL);
   
   // wait for the head to settle
-  delay(FDC_SLT_AFTER_SEEK);
+  mdelay(FDC_SLT_AFTER_SEEK);
   
   // sense drive status
   // Track Zero Bit should be clear
   buf[0] = FDC_CMD_STATUS;
   buf[1] = CMD_STATUS_MOT | fdd->drv;
-  fdc_command(fdd->cntrlr, buf, 2);
-  cnt = fdc_return(fdd->cntrlr, 1, &status);
+  fdc_command(fdd->cntrlr, buf, 2, FALSE);
+  cnt = fdc_result(fdd->cntrlr, 1, &status);
   if ((cnt != 1) || ((status & 0x13) != fdd->drv))
     return FALSE;
   
@@ -542,14 +527,14 @@ bool det_floppy_drive(struct S_FLOPPY *fdd) {
   fdc_command_int(fdd, buf, 3, NULL, NULL, NULL);
   
   // wait for the head to settle
-  delay(FDC_SLT_AFTER_SEEK);
+  mdelay(FDC_SLT_AFTER_SEEK);
   
   // sense drive status
   // Track Zero Bit should be set
   buf[0] = FDC_CMD_STATUS;
   buf[1] = CMD_STATUS_MOT | fdd->drv;
-  fdc_command(fdd->cntrlr, buf, 2);
-  cnt = fdc_return(fdd->cntrlr, 1, &status);
+  fdc_command(fdd->cntrlr, buf, 2, FALSE);
+  cnt = fdc_result(fdd->cntrlr, 1, &status);
   if ((cnt != 1) || ((status & 0x13) != (0x10 | fdd->drv)))
     return FALSE;
   
@@ -566,7 +551,7 @@ bool det_floppy_drive(struct S_FLOPPY *fdd) {
       buf[0] = FDC_CMD_SPECIFY;
       buf[1] = (fdd->steprate << 4) | fdd->headunload;
       buf[2] = (fdd->headsttl << 1) | 0;
-      fdc_command(fdd->cntrlr, buf, 3);
+      fdc_command(fdd->cntrlr, buf, 3, TRUE);
       
       // set data rate speed
       outpb(fdd->cntrlr->base + FDC_CCR, fdd->trans_speed);
@@ -623,7 +608,7 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
     return FALSE;
   
   // wait for the head to settle
-  delay(FDC_SLT_AFTER_SEEK);
+  mdelay(FDC_SLT_AFTER_SEEK);
   
   // seek back to track zero
   buf[0] = FDC_CMD_SEEK;
@@ -634,7 +619,7 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
     return FALSE;
   
   // wait for the head to settle
-  delay(FDC_SLT_AFTER_SEEK);
+  mdelay(FDC_SLT_AFTER_SEEK);
   
   // Configure 
   if (fdd->cntrlr->enhanced) {
@@ -642,7 +627,7 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
     buf[1] = 0;     // zero
     buf[2] = 0x5F;  // EIS = TRUE, Disable Poll, Enable FIFO, FIFO = 16 bytes
     buf[3] = 0;     // pretrk = 0
-    if (!fdc_command(fdd->cntrlr, buf, 4))
+    if (!fdc_command(fdd->cntrlr, buf, 4, TRUE))
       return FALSE;
   }
   
@@ -653,7 +638,7 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
   buf[0] = FDC_CMD_SPECIFY;
   buf[1] = 0xAF;          // Step Rate of 0x0A, Head Unload Time of 0x0F
   buf[2] = (1 << 1) | 0;  // Head Load Time of 0x01, NonDMA if FALSE
-  if (!fdc_command(fdd->cntrlr, buf, 3))
+  if (!fdc_command(fdd->cntrlr, buf, 3, TRUE))
     return FALSE;
   
   // TODO: If 82077AA or better (may need index into types), 
@@ -668,17 +653,17 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
     return FALSE;
   
   // wait for the head to settle
-  delay(FDC_SLT_AFTER_SEEK);
+  mdelay(FDC_SLT_AFTER_SEEK);
   
   // Read ID
   // We try to read from head 1.
   //  If this media is single sided, the controller will return 0x4x in the ST0 register (abnormal termination)
   buf[0] = FDC_MFM | FDC_CMD_READ_ID;
   buf[1] = (1 << 2) | fdd->drv;
-  fdc_command(fdd->cntrlr, buf, 2);
+  fdc_command(fdd->cntrlr, buf, 2, FALSE);
   // wait for the interrupt to happen 
   if (fdc_wait_int(FDC_TIMEOUT_INT)) {
-    if (fdc_return(fdd->cntrlr, 7, buf) > 0) {
+    if (fdc_result(fdd->cntrlr, 7, buf) > 0) {
       if (((buf[0] & ~ST0_RESV_MSK) == ((1 << 2) | fdd->drv)) && (buf[3] == 0) && (buf[4] == 1))
         heads = 2;
       else if (((buf[0] & 0xF0) == 0x40) && (buf[1] == 0x01))
@@ -697,7 +682,7 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
     buf[0] = FDC_CMD_SPECIFY;
     buf[1] = 0xDF;          // Step Rate of 0x0D, Head Unload Time of 0x0F
     buf[2] = (1 << 1) | 0;  // Head Load Time of 0x01, NonDMA if FALSE
-    if (!fdc_command(fdd->cntrlr, buf, 3))
+    if (!fdc_command(fdd->cntrlr, buf, 3, TRUE))
       return FALSE;
     
     // set the gap length for 160k or 180k media
@@ -708,7 +693,7 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
     fdc_command_int(fdd, buf, 2, NULL, &status, &cur_cyl);
     
     // wait for the head to settle
-    delay(FDC_SLT_AFTER_SEEK);
+    mdelay(FDC_SLT_AFTER_SEEK);
   }
   
   /* To find out how many sectors per track there are, we can read a number of sectors (8) and see if the
@@ -767,9 +752,9 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
     buf[6] = (bit8u) (start + 8 - 1); // (eot)
     buf[7] = gpl;   // Gap Length
     buf[8] = 0xFF;  // DTL
-    if (fdc_command(fdd->cntrlr, buf, 9)) {
+    if (fdc_command(fdd->cntrlr, buf, 9, FALSE)) {
       if (fdc_wait_int(FDC_TIMEOUT_INT)) {  // wait for the interrupt to happen
-        if (fdc_return(fdd->cntrlr, 7, buf) == 7) {
+        if (fdc_result(fdd->cntrlr, 7, buf) == 7) {
           // if ST0 == 000000xx and return cylinder now on cylinder 1, we did not cross a cylinder boundary
           if (((buf[0] & ~0x3) == 0) && (buf[3] == 1) && (buf[5] == 1))
             continue;
@@ -787,7 +772,7 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
   }
   
   // wait for the head to settle
-  delay(FDC_SLT_AFTER_SEEK);
+  mdelay(FDC_SLT_AFTER_SEEK);
 
   // Recalibrate (Make sure we are at Track Zero)
   buf[0] = FDC_CMD_RECAL;
@@ -808,9 +793,9 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
       buf[6] = (bit8u) (start + i); // (eot)
       buf[7] = gpl;   // Gap Length
       buf[8] = 0xFF;  // DTL
-      if (fdc_command(fdd->cntrlr, buf, 9)) {
+      if (fdc_command(fdd->cntrlr, buf, 9, FALSE)) {
         if (fdc_wait_int(FDC_TIMEOUT_INT)) {  // wait for the interrupt to happen
-          if (fdc_return(fdd->cntrlr, 7, buf) == 7) {
+          if (fdc_result(fdd->cntrlr, 7, buf) == 7) {
             // if ST0 == 000000xx and return cylinder is now on cylinder 1 (1/0/1), we didn't try to read the non-existant sector
             if (((buf[0] & ~0x3) == 0) && (buf[3] == 1) && (buf[5] == 1))
               continue;
@@ -858,7 +843,7 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
         break;
       
       // wait for the head to settle
-      delay(FDC_SLT_AFTER_SEEK);
+      mdelay(FDC_SLT_AFTER_SEEK);
     }
     
     dma_init_dma(DMA_CMD_READ, phy_address, 512); // Setup the DMA for transfering data
@@ -871,9 +856,9 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
     buf[6] = spt;  // (eot)
     buf[7] = gpl;  // Gap Length
     buf[8] = 0xFF; // DTL
-    if (fdc_command(fdd->cntrlr, buf, 9)) {
+    if (fdc_command(fdd->cntrlr, buf, 9, FALSE)) {
       if (fdc_wait_int(FDC_TIMEOUT_INT)) {  // wait for the interrupt to happen
-        if (fdc_return(fdd->cntrlr, 7, buf) == 7) {
+        if (fdc_result(fdd->cntrlr, 7, buf) == 7) {
           // if ST0 == 000000xx and return cylinder is still on 'start', then good read
           if (((buf[0] & ~0x3) == 0) && (buf[3] == (bit8u) start) && (buf[5] == 2))
             cyls = start + 1;
@@ -921,14 +906,14 @@ bool fdd_recalibrate(struct S_FLOPPY *fdd) {
 }
 
 bool fdc_configure(struct S_FLOPPY_CNTRLR *fdc, const bit8u flags, const bit8u fifo_size) {
+  bit8u buf[32];
+  
   // Try the configure command.
-  if (write_fdc(fdc, FDC_CMD_CONFIGURE) && fdc_want_more(fdc)) {
-    write_fdc(fdc, 0);
-    write_fdc(fdc, (flags & ~0x0F) | ((fifo_size - 1) & 0x0F));
-    write_fdc(fdc, 0); // pre-compensation from track 0 upwards
-    return TRUE;
-  }
-  return FALSE;
+  buf[0] = FDC_CMD_CONFIGURE;
+  buf[1] = 0;
+  buf[2] = (flags & ~0x0F) | ((fifo_size - 1) & 0x0F);
+  buf[3] = 0; // pre-compensation from track 0 upwards
+  return fdc_command(fdc, buf, 4, TRUE);
 }
 
 /*
@@ -951,7 +936,7 @@ bool fdc_detect_implied_seek(struct S_FLOPPY *fdd) {
   if (!fdd_seek_to_track(fdd, 0))
     return FALSE;
   
-  // Now read in a sector on a different cylinder, cylinder 20 (zero based)
+  // Now read in a sector on a different cylinder, cylinder TEST_CYL (zero based)
   //  to see if the controller seeked for us.
   if (!fdd_read_sectors(fdd, fdd->sect_trk * fdd->heads * TEST_CYL, 1, buffer))
     return FALSE;
@@ -970,17 +955,17 @@ bool fdd_init_controller(struct S_FLOPPY_CNTRLR *fdc) {
   
   // reset the controller
   outpb(fdc->base + FDC_DOR, 0x00);  // reset
-  delay(2);                          // hold for 2 milliseconds
+  mdelay(2);                         // hold for 2 milliseconds
   outpb(fdc->base + FDC_DOR, 0x0C);  // release
-  delay(2);                          // hold for 2 milliseconds
+  mdelay(2);                         // hold for 2 milliseconds
   
   // wait for the interrupt, then sense an interrupt on all four drives
   // Page 41 of the FDC 82077AA specs
   if (fdc_wait_int(FDC_TIMEOUT_INT)) {
     for (int i=0; i<4; i++) {
       buf[0] = FDC_CMD_SENSE_INT;
-      fdc_command(fdc, buf, 1);
-      bit8u count = fdc_return(fdc, 2, buf);
+      fdc_command(fdc, buf, 1, FALSE);
+      bit8u count = fdc_result(fdc, 2, buf);
       if ((count != 2) || ((buf[0] & 0x3) != i) || (buf[1] != 0x00))
         return FALSE;
     }
@@ -994,10 +979,10 @@ bool fdd_init_controller(struct S_FLOPPY_CNTRLR *fdc) {
   buf[0] = FDC_CMD_SPECIFY;
   buf[1] = 0xAF; // until we know what disk is in the drive, just use 0xAF
   buf[2] = (2 << 1) | 0;
-  fdc_command(fdc, buf, 3);
+  fdc_command(fdc, buf, 3, TRUE);
   
   // try to configure it
-  if (fdc->enhanced)
+  //if (fdc->enhanced)
     fdc_configure(fdc, FDC_IMPLIED_SEEK | FDC_DISABLE_POLL, 16);
   
   return TRUE;
@@ -1014,13 +999,12 @@ void fdc_motor_cntr(struct S_FLOPPY *fdd, const bool on, const bool wait) {
     if (was_off) {
       outpb(fdd->cntrlr->base + FDC_DOR, ((dor & 0xF0) | ((0x10 << fdd->drv) | 0x0C | fdd->drv)));
       if (wait)
-        delay(FDC_SPINUP);
+        mdelay(FDC_SPINUP);
     }
   } else
     outpb(fdd->cntrlr->base + FDC_DOR, 0x0C | (dor & ~(0x10 << fdd->drv)));
 }
 
-volatile bool fdc_drv_stats = FALSE;
 #define FLOPPY_IRQ_VECT  0x0E
 #define TIMER_IRQ_VECT   0x08
 
@@ -1094,7 +1078,7 @@ bool fdc_wait_int(int timeout) {
       fdc_drv_stats = FALSE;
       return TRUE;
     }
-    delay(1); // hold for 1 millisecond
+    mdelay(1); // hold for 1 millisecond
     timeout--;
   }
   return FALSE;
@@ -1107,7 +1091,7 @@ bool fdc_want_more(struct S_FLOPPY_CNTRLR *fdc) {
   while (timeout) {
     if ((inpb(fdc->base + FDC_MSR) & 0xC0) == 0x80)
       return TRUE;
-    delay(1); // hold for 1 millisecond
+    mdelay(1); // hold for 1 millisecond
     timeout--;
   }
   return FALSE;
@@ -1123,7 +1107,7 @@ bool write_fdc(struct S_FLOPPY_CNTRLR *fdc, const bit8u val) {
       outpb(fdc->base + FDC_CSR, val);      
       return TRUE;
     }
-    delay(1); // hold for 1 millisecond
+    mdelay(1); // hold for 1 millisecond
     timeout--;
   }
   return FALSE;
@@ -1132,11 +1116,11 @@ bool write_fdc(struct S_FLOPPY_CNTRLR *fdc, const bit8u val) {
 bool fdc_command_int(struct S_FLOPPY *fdd, const bit8u *buf, bit8u cnt, bit8u *ret_cnt, bit8u *status, bit8u *cur_cyl) {
   bit8u r, int_ret[16];
   
-  if (fdc_command(fdd->cntrlr, buf, cnt)) {
+  if (fdc_command(fdd->cntrlr, buf, cnt, TRUE)) {
     if (fdc_wait_int(FDC_TIMEOUT_INT)) {
       int_ret[0] = FDC_CMD_SENSE_INT;
-      if (fdc_command(fdd->cntrlr, int_ret, 1)) {
-        r = fdc_return(fdd->cntrlr, 2, int_ret);
+      if (fdc_command(fdd->cntrlr, int_ret, 1, FALSE)) {
+        r = fdc_result(fdd->cntrlr, 2, int_ret);
         if (ret_cnt) *ret_cnt = r;
         if (status) *status = int_ret[0];
         if (cur_cyl) *cur_cyl = int_ret[1];
@@ -1149,51 +1133,106 @@ bool fdc_command_int(struct S_FLOPPY *fdd, const bit8u *buf, bit8u cnt, bit8u *r
   return FALSE;
 }
 
-bool fdc_command(struct S_FLOPPY_CNTRLR *fdc, const bit8u *buf, bit8u cnt) {
+// this is a command
+// will return TRUE if command supported, FALSE if not (or other error)
+// noresult = 1 indicates that we are not expecting a result phase
+bool fdc_command(const struct S_FLOPPY_CNTRLR *fdc, const bit8u *buf, bit8u cnt, bool noresult) {
   
   // clear the interrupt flag
   fdc_drv_stats = FALSE;
   
-  bit8u  cur = 0;
+  bit8u cur = 0, msr, byte;
   int timeout = FDC_TIMEOUT_CNT;
+  bool ret = FALSE;
+  
+  // if we are already in a command, we can't send another
+  msr = inpb(fdc->base+FDC_MSR);
+  if (msr & FDC_MSR_CBZY) {
+    printf("FDC already in a command...\n");
+    //fdd_init_controller(fdc);
+    return FALSE;
+  }
+  
+  //printf("FDC_COMMAND: %02X", buf[0]);
   while (timeout) {
-    if (inpb(fdc->base + FDC_MSR) & 0x80) {       // if not busy
-      if (inpb(fdc->base + FDC_MSR) & 0x40) {     // direction?
-        inpb(fdc->base + FDC_CSR);
-        continue;
-      } else {
-        outpb(fdc->base + FDC_CSR, buf[cur]);
-        if (++cur == cnt)
-          return TRUE;
+    msr = inpb(fdc->base+FDC_MSR);
+    if ((msr & (FDC_MSR_RQM | FDC_MSR_DIO)) == FDC_MSR_RQM) {
+      outpb(fdc->base+FDC_CSR, buf[cur++]);
+      if (cur == cnt) {
+        ret = TRUE;
+        break;
       }
     }
-    delay(1); // hold for 1 millisecond
+    mdelay(1);
     timeout--;
   }
   
-  fdd_init_controller(fdc);
-  return FALSE;
-}
-
-bit8u fdc_return(struct S_FLOPPY_CNTRLR *fdc, const bit8u cnt, bit8u *buf) {
-  bit8u  cur = 0;
-  int timeout = FDC_TIMEOUT_CNT;
-  
-  while (1) {
-    while (((inpb(fdc->base + FDC_MSR) & 0xC0) != 0xC0) && timeout) {
-      delay(1); // hold for 1 millisecond
-      timeout--;
-    }
-    if (timeout == 0) {
-      fdd_init_controller(fdc);
-      break;
-    } else {
-      buf[cur++] = inpb(fdc->base + FDC_CSR);
-      if (cur == cnt) break;  // don't do more than requested
-      timeout = FDC_TIMEOUT_CNT;
+  // if we are not expecting a result phase and we only sent 1 command byte,
+  //  or we sent less than expected, check to see if the controller went to
+  //  the result phase to return 0x80.
+  // if we are expecting a result phase, we *can not* read in the byte here
+  //  or the result phase will be out of phase by one byte. If this command
+  //  is expecting a result phase, is invalid, and returns 0x80, we let the 
+  //  result phase code check for this.
+  if ((noresult && (cur == 1)) || (cur < cnt)) {
+    msr = inpb(fdc->base+FDC_MSR);
+    if ((msr & (FDC_MSR_RQM | FDC_MSR_DIO)) == (FDC_MSR_RQM | FDC_MSR_DIO)) {
+      byte = inpb(fdc->base+FDC_CSR);
+      ret = FALSE;
+      //printf("fdc_command: read = 0x%02X (illegal command?)\n", byte);
     }
   }
   
+  // if the command doesn't expect a result, then wait for the BZY bit to clear
+  if (!ret || noresult) {
+    timeout = FDC_TIMEOUT_CNT;
+    while ((inpb(fdc->base+FDC_MSR) & FDC_MSR_CBZY) && timeout--)
+      mdelay(1);
+    if (inpb(fdc->base+FDC_MSR) & FDC_MSR_CBZY) {
+      printf("Command: Still busy\n");
+      //fdd_init_controller(fdc);
+    }
+  }
+  
+  return ret;
+}
+
+// The CBZY bit will be set as long as there is a byte to read.
+//  The command is not completed until this bit is zero.
+// returns 0 if error (command not supported?)
+bit8u fdc_result(const struct S_FLOPPY_CNTRLR *fdc, const bit8u cnt, bit8u *buf) {
+  bit8u cur = 0, msr, byte;
+  int timeout = FDC_TIMEOUT_CNT;
+
+  while (timeout) {
+    // even if we read in the desired count of bytes, we continue to check
+    //  if there are more, so that the controller finishes the command.
+    msr = inpb(fdc->base+FDC_MSR);
+    // if there is data available as a read, read in the byte
+    if ((msr & FDC_MSR_CBZY) &&
+       ((msr & (FDC_MSR_RQM | FDC_MSR_DIO)) == (FDC_MSR_RQM | FDC_MSR_DIO))) {
+      byte = inpb(fdc->base+FDC_CSR);
+      // if this is the first byte and it is 0x80,
+      //  then there was an error (command not supported?).
+      if ((cur == 0) && (byte == 0x80))
+        break;
+      // don't read in more than the caller expects
+      if (cur < cnt)
+        buf[cur++] = byte;
+    } else {
+      mdelay(1);
+      timeout--;
+    }
+  }
+
+  // wait for the BZY bit to clear
+  timeout = FDC_TIMEOUT_CNT;
+  while ((inpb(fdc->base+FDC_MSR) & FDC_MSR_CBZY) && timeout--)
+    mdelay(1);
+  if (inpb(fdc->base+FDC_MSR) & FDC_MSR_CBZY)
+    printf("Result: Still busy\n");
+  
+  // return the count of result bytes (could be zero to return an error)
   return cur;
 }
 
@@ -1230,7 +1269,7 @@ bool fdd_seek_to_track(struct S_FLOPPY *fdd, int lba) {
   }
   
   // wait for the head to settle
-  delay(FDC_SLT_AFTER_SEEK);
+  mdelay(FDC_SLT_AFTER_SEEK);
   return TRUE;
 }
 
@@ -1277,9 +1316,9 @@ bool fdd_read_sectors(struct S_FLOPPY *fdd, int lba, bit32u cnt, bit8u *buf) {
       buf[6] = fdd->sect_trk;
       buf[7] = fdd->gaplen;
       buf[8] = 0xFF;
-      if (fdc_command(fdd->cntrlr, buf, 9)) {
+      if (fdc_command(fdd->cntrlr, buf, 9, FALSE)) {
         if (fdc_wait_int(FDC_TIMEOUT_INT)) {  // wait for the interrupt to happen
-          if (fdc_return(fdd->cntrlr, 7, buf) == 7) {
+          if (fdc_result(fdd->cntrlr, 7, buf) == 7) {
             ret = ((buf[0] & ~0x3) == 0);
             break;
           }
@@ -1324,14 +1363,14 @@ bool fdd_inserted(struct S_FLOPPY *fdd, struct S_BLOCK_STATUS *status) {
     fdc_command_int(fdd, buf, 3, NULL, NULL, NULL);
     
     // wait for the head to settle
-    delay(FDC_SLT_AFTER_SEEK);
+    mdelay(FDC_SLT_AFTER_SEEK);
     
     // seek to track 0
     buf[2] = 0;
     fdc_command_int(fdd, buf, 3, NULL, NULL, NULL);
     
     // wait for the head to settle
-    delay(FDC_SLT_AFTER_SEEK);
+    mdelay(FDC_SLT_AFTER_SEEK);
     
     status->inserted = ((inpb(fdd->cntrlr->base + FDC_DIR) & FDC_DIR_CHNG_LINE) == 0);
     status->changed = TRUE;
@@ -1369,8 +1408,8 @@ void fdd_get_status(struct S_FLOPPY *fdd, struct S_BLOCK_STATUS *status) {
   // fdc command 04h will return bit 6=write protected disk
   buf[0] = FDC_CMD_STATUS;
   buf[1] = (0 << 2) | fdd->drv;
-  fdc_command(fdd->cntrlr, buf, 2);
-  fdc_return(fdd->cntrlr, 1, buf);
+  fdc_command(fdd->cntrlr, buf, 2, FALSE);
+  fdc_result(fdd->cntrlr, 1, buf);
   status->write_prot = ((buf[0] & 0x40) == 0x40);
 }
 
@@ -1385,9 +1424,9 @@ bool fdc_get_cur_pos(struct S_FLOPPY *fdd, const bit8u hs, bit32u *cyl, bit32u *
   buf[0] = (fdd->densf ? FDC_MFM : 0) | FDC_CMD_READ_ID;
   buf[1] = (hs << 2) | fdd->drv;
   // we don't call fdc_command_int() here because we don't want to sense interrupt
-  if (fdc_command(fdd->cntrlr, buf, 2)) {
+  if (fdc_command(fdd->cntrlr, buf, 2, FALSE)) {
     if (fdc_wait_int(FDC_TIMEOUT_INT)) {  // wait for the interrupt to happen
-      if (fdc_return(fdd->cntrlr, 7, buf) == 7) {
+      if (fdc_result(fdd->cntrlr, 7, buf) == 7) {
         if ((buf[0] & 0x40) == 0) {
           if (cyl) *cyl = buf[3];
           if (head) *head = buf[4];
