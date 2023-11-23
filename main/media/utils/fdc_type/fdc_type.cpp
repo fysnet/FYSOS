@@ -60,6 +60,12 @@
  *  FDC_TYPE.EXE
  *   Will probe the Floppy Disk Controller and return the type found.
  *
+ *  ** Does not work in an emulated environment within VirtualBox. 
+ *     VirtualBox does not handle reads past end of track correctly.
+ *     It is noted within the VirtualBox source code as well. :-)
+ *     (To get around this, we could change the technique from reading
+ *      sectors to reading ID's...)
+ *
  *  Assumptions/prerequisites:
  *   - Must be ran via a TRUE DOS envirnment, either real hardware or emulated.
  *   - Must have a pre-installed 32-bit DPMI.
@@ -67,7 +73,7 @@
  *     than mentioned here.
  *   - Must have full access to said hardware.
  *
- *  Last updated: 20 Nov 2023
+ *  Last updated: 23 Nov 2023
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os fdc_type.cpp -o fdc_type.exe -s
@@ -188,7 +194,7 @@ int main(int argc, char *argv[]) {
     printf("Error setting up the timer...\n");
     return -2;
   }
-  
+
   // two controller ports
   for (j=0; j<2; j++) {
     if (fdc_detect(&s_fdc[j])) {
@@ -555,19 +561,21 @@ bool det_floppy_drive(struct S_FLOPPY *fdd) {
       
       // set data rate speed
       outpb(fdd->cntrlr->base + FDC_CCR, fdd->trans_speed);
-    }
-    
-    // Verify the drive can "automatically seek" before a read and write.
-    if (fdd->cntrlr->enhanced) {
-      eis_chk = fdc_detect_implied_seek(fdd);
-      if (eis_chk && !fdd->cntrlr->implied_seek)
-        printf("Implied Seek Check passed, but Configure(IES) failed...\n");
-      else if (!eis_chk && fdd->cntrlr->implied_seek)
-        printf("Implied Seek Check failed, but Configure(IES) passed...\n");
-      else if (eis_chk && fdd->cntrlr->implied_seek)
-        printf("Implied Seek confirmed available.\n");
-      else if (!eis_chk && !fdd->cntrlr->implied_seek)
-        printf("Implied Seek confirmed not available.\n");
+      
+      // Verify the drive can "automatically seek" before a read and write.
+      if (fdd->cntrlr->enhanced) {
+        eis_chk = fdc_detect_implied_seek(fdd);
+        if (eis_chk && !fdd->cntrlr->implied_seek)
+          printf("Implied Seek Check passed, but Configure(IES) failed...\n");
+        else if (!eis_chk && fdd->cntrlr->implied_seek)
+          printf("Implied Seek Check failed, but Configure(IES) passed...\n");
+        else if (eis_chk && fdd->cntrlr->implied_seek)
+          printf("Implied Seek confirmed available.\n");
+        else if (!eis_chk && !fdd->cntrlr->implied_seek)
+          printf("Implied Seek confirmed not available.\n");
+      }
+    } else {
+      printf(" *** Did not detect the media type\n");
     }
   }
   
@@ -633,7 +641,7 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
   
   // set the gap length for 1_44, 720, or 1_22 media
   gpl = 0x1B;
-
+  
   // Specify command
   buf[0] = FDC_CMD_SPECIFY;
   buf[1] = 0xAF;          // Step Rate of 0x0A, Head Unload Time of 0x0F
@@ -800,18 +808,19 @@ bool fdd_det_media_type(struct S_FLOPPY *fdd) {
             if (((buf[0] & ~0x3) == 0) && (buf[3] == 1) && (buf[5] == 1))
               continue;
             if ((buf[3] == 0) && (buf[5] == (bit8u) (start + i))) {
-              if (i == 0)
+              if (i == 0) {
                 // we didn't even read the first sector (start) succesfully
                 spt = 0;
-              else
+                printf("Found zero SPT...\n");
+              } else
                 // else, we tried to read the non-existant sector, so (start + i - 1) is last sector of cylinder.
                 spt = (start + i - 1);
               break;
-            } else
-              ; // an unknown result...
+            }
           }
         }
       }
+
       // error reading sectors, so free the memory we used
       __dpmi_free_dos_memory(sel);
       
