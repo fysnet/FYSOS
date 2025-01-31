@@ -252,8 +252,11 @@ void CISOBoot::SendToDialog(void) {
     m_val_key55.Format("0x%02X", validation->key55);
     m_val_keyaa.Format("0x%02X", validation->keyAA);
     m_val_reserved.Format("0x%04X", validation->resv0);
-    if (validation->platform <= 2)
+    if ((validation->platform <= 2) || (validation->platform == 0xEF)) {
+      if (validation->platform == 0xEF)
+        validation->platform = 3;
       m_val_platform.SetCurSel(validation->platform);
+    }
     
     struct S_ISO_BC_ENTRY_EXT *entry = (struct S_ISO_BC_ENTRY_EXT *) ((BYTE *) m_boot_cat + sizeof(struct S_ISO_BC_VALIDATION));
     m_di_count.Format("%i", entry->load_cnt);
@@ -294,6 +297,8 @@ void CISOBoot::ReceiveFromDialog(void) {
     validation->keyAA = convert8(m_val_keyaa);
     validation->resv0 = convert16(m_val_reserved);
     validation->platform = m_val_platform.GetCurSel();
+    if (validation->platform == 3)
+      validation->platform = 0xEF;
     
     struct S_ISO_BC_ENTRY_EXT *entry = (struct S_ISO_BC_ENTRY_EXT *) ((BYTE *) m_boot_cat + sizeof(struct S_ISO_BC_VALIDATION));
     entry->load_cnt = convert16(m_di_count);
