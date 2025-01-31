@@ -1025,11 +1025,12 @@
 #define ID_GET_DISK_IMAGE               32779
 #define ID_ERASE_IMAGE                  32780
 #define ID_TOOLS_ERASE_IMAGE            32781
-#define ID_APPEND_VHD                   32782
-#define ID_TOOLS_ADDHYBRIDCDROM         32783
-#define ID_TOOLS_VIEWVDIHEADER          32784
-#define ID_TOOLS_CREATE                 32785
-#define ID_TOOLS_CREATE_INFO            32786
+#define ID_TOOLS_INSERT_IMAGE           32782
+#define ID_APPEND_VHD                   32783
+#define ID_TOOLS_ADDHYBRIDCDROM         32784
+#define ID_TOOLS_VIEWVDIHEADER          32785
+#define ID_TOOLS_CREATE                 32786
+#define ID_TOOLS_CREATE_INFO            32787
 
 // Next default values for new objects
 // 

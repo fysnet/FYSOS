@@ -79,8 +79,26 @@ COurFind::COurFind(CWnd* pParent /*=NULL*/)
   : CDialog(COurFind::IDD, pParent) {
   //{{AFX_DATA_INIT(COurFind)
   m_match_case = FALSE;
+  m_show_case = TRUE;
   m_find_str = _T("");
+  m_title = _T("");
+  m_ok_button = _T("");
   //}}AFX_DATA_INIT
+}
+
+// This dialog is also used to get a value.
+// Therefore, we need to change/hide a few things
+BOOL COurFind::OnInitDialog() {
+  CDialog::OnInitDialog();
+
+  // if we define a title or OK button string, change them now
+  if (m_title.GetLength())
+    SetWindowText(m_title);
+  if (m_ok_button.GetLength())
+    GetDlgItem(IDOK)->SetWindowText(m_ok_button);
+  GetDlgItem(IDC_CASE)->ShowWindow(m_show_case);
+  
+  return TRUE;
 }
 
 void COurFind::DoDataExchange(CDataExchange* pDX) {

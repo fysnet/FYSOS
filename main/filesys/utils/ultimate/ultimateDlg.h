@@ -264,6 +264,7 @@ public:  // protected:
   afx_msg void OnToolsGetDisk();
   afx_msg void OnToolsAppendVHD();
   afx_msg void OnToolsErase();
+  afx_msg void OnToolsInsert();
   afx_msg void OnViewVDIHeader();
   afx_msg void OnToolsHybridCDROM();
   afx_msg void OnHelpHelp();

@@ -77,7 +77,10 @@ public:
   //{{AFX_DATA(COurFind)
   enum { IDD = IDD_FIND };
   BOOL  m_match_case;
+  BOOL  m_show_case;
   CString m_find_str;
+  CString m_title;
+  CString m_ok_button;
   //}}AFX_DATA
 
 
@@ -85,6 +88,7 @@ public:
   // ClassWizard generated virtual function overrides
   //{{AFX_VIRTUAL(COurFind)
   protected:
+  virtual BOOL OnInitDialog();
   virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
   //}}AFX_VIRTUAL
 

@@ -74,6 +74,7 @@
 
 #include "NewImage.h"
 #include "GetImage.h"
+#include "OurFind.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -182,6 +183,7 @@ BEGIN_MESSAGE_MAP(CUltimateDlg, CDialog)
   ON_COMMAND(ID_FILE_CLOSE, OnFileClose)
   ON_COMMAND(ID_TOOLS_RESIZE, OnToolsResize)
   ON_COMMAND(ID_TOOLS_ERASE_IMAGE, OnToolsErase)
+  ON_COMMAND(ID_TOOLS_INSERT_IMAGE, OnToolsInsert)
   ON_COMMAND(ID_GET_DISK_IMAGE, OnToolsGetDisk)
   ON_COMMAND(ID_APPEND_VHD, OnToolsAppendVHD)
   ON_COMMAND(ID_TOOLS_ADDHYBRIDCDROM, OnToolsHybridCDROM)
@@ -990,6 +992,51 @@ void CUltimateDlg::OnToolsErase() {
   }
 }
 
+void CUltimateDlg::OnToolsInsert() {
+  CFile cfile;
+  BYTE *buffer;
+  CString cStr;
+
+  CFileDialog dlg (
+    TRUE,             // Create an open file dialog
+    _T(".img"),       // Default file extension
+    NULL,             // Default Filename
+    OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_EXPLORER, // flags
+    _T(".img files (.img)|*.img|")    // Filter string
+    _T("All Files (*.*)|*.*|")        // Filter string
+    _T("|")
+  );
+  if (dlg.DoModal() != IDOK)
+    return;
+  
+  POSITION pos = dlg.GetStartPosition();
+  if (cfile.Open(dlg.GetNextPathName(pos), CFile::modeReadWrite | CFile::typeBinary | CFile::shareDenyWrite, NULL) == 0) {
+    AfxMessageBox("Error Opening Image File...");
+    return;
+  }
+  
+  COurFind cFind;
+  cFind.m_title = "Starting LBA";
+  cFind.m_ok_button = "Okay";
+  cFind.m_show_case = FALSE;
+  if (cFind.DoModal() == IDOK) {
+    DWORD64 base = _atoi64(cFind.m_find_str);
+    cStr.Format("This will replace all sectors from %I64i to %I64i. Continue?", base, (base + (cfile.GetLength() + (m_sect_size - 1)) / m_sect_size) - 1);
+    if (AfxMessageBox(cStr, MB_YESNO, 0) == IDYES) {
+      buffer = new BYTE[m_sect_size];
+      UINT cnt;
+      do {
+        if ((cnt = cfile.Read(buffer, m_sect_size)) == 0)
+          break;
+        WriteToFile(buffer, base++, 1);
+      } while (cnt == m_sect_size);
+      delete [] buffer;
+    }
+  }
+
+  cfile.Close();  
+}
+
 // View/Edit a VDI header
 void CUltimateDlg::OnViewVDIHeader() {
   CFile vdi_file;
@@ -1316,6 +1363,7 @@ void CUltimateDlg::OnInitMenuPopup(CMenu *pMenu, UINT nIndex, BOOL bSysMenu) {
   pMenu->EnableMenuItem(ID_FILE_RELOAD, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_TOOLS_RESIZE, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_TOOLS_ERASE_IMAGE, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
+  pMenu->EnableMenuItem(ID_TOOLS_INSERT_IMAGE, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_GET_DISK_IMAGE, !m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_APPEND_VHD, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_TOOLS_ADDHYBRIDCDROM, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
