@@ -2389,9 +2389,8 @@ void CFat::OnFatOptimize() {
 
     free(root);
 
-    AfxMessageBox("Done. Now will reload the image.", MB_OK, (UINT) -1);
-    CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-    dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
+    // refresh the "system"
+    Start(m_lba, m_size, m_color, m_index, m_fat_size, FALSE);
   }
 }
 
