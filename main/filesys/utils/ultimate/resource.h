@@ -832,6 +832,8 @@
 #define IDC_CASE                        1506
 #define ID_VIEW                         1506
 #define IDC_TYPE_160K                   1507
+#define ID_SEARCH2                      1507
+#define ID_OPTIMIZE                     1507
 #define IDC_TYPE_180K                   1508
 #define IDC_TYPE_320K                   1509
 #define IDC_TYPE_360K                   1510

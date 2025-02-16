@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2025
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -228,6 +228,7 @@ BEGIN_MESSAGE_MAP(CFat, CPropertyPage)
   ON_BN_CLICKED(IDC_FAT_BACKUP_SECT_RESTORE, OnFatBackupSectRestore)
   ON_BN_CLICKED(IDC_OLD_FAT, OnOldFat)
   ON_BN_CLICKED(ID_DELETE, OnFatDelete)
+  ON_BN_CLICKED(ID_OPTIMIZE, OnFatOptimize)
   ON_BN_CLICKED(IDC_EXPAND, OnExpand)
   ON_BN_CLICKED(IDC_COLAPSE, OnCollapse)
   ON_BN_CLICKED(IDC_SHOW_DEL, OnShowDeleted)
@@ -284,6 +285,9 @@ BOOL CFat::OnToolTipNotify(UINT id, NMHDR *pNMHDR, LRESULT *pResult) {
       break;
     case ID_DELETE:
       strTipText = "Delete Folder/File from Partition";
+      break;
+    case ID_OPTIMIZE:
+      strTipText = "Cleans and optimizes the current directory";
       break;
     case ID_SEARCH:
       strTipText = "Search for Folder/File in Partition";
@@ -382,6 +386,7 @@ void CFat::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
   GetDlgItem(ID_VIEW)->EnableWindow((hItem != NULL) && (items->Flags & ITEM_IS_FILE));
   GetDlgItem(ID_INSERT)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));
   GetDlgItem(ID_DELETE)->EnableWindow(hItem != NULL);
+  GetDlgItem(ID_OPTIMIZE)->EnableWindow((hItem != NULL) && (m_dir_tree.IsDir(hItem) != 0));
   
   *pResult = 0;
 }
@@ -826,6 +831,7 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   GetDlgItem(ID_VIEW)->EnableWindow(FALSE);
   GetDlgItem(ID_INSERT)->EnableWindow(FALSE);
   GetDlgItem(ID_DELETE)->EnableWindow(FALSE);
+  GetDlgItem(ID_OPTIMIZE)->EnableWindow(FALSE);
   GetDlgItem(ID_SEARCH)->EnableWindow(FALSE);
   
   // don't parse the folders if the sector size doesn't match
@@ -2319,6 +2325,74 @@ void CFat::OnFatDelete() {
 
   wait.Restore();
   //AfxMessageBox("File(s) deleted.");
+}
+
+// This will remove any deleted or bad entries in the given directory,
+//  then clear all remaining entries to the end.
+void CFat::OnFatOptimize() {
+  CString csPath, csName, name;
+  BOOL IsDir = FALSE, IsDot = FALSE, Exit = FALSE;
+  int i = 0, j = -1, cnt;
+  DWORD start, filesize = 0, ErrorCode;
+  BYTE attrb;
+
+  // get the path from the tree control
+  HTREEITEM hItem = m_dir_tree.GetFullPath(NULL, &IsDir, csName, csPath, TRUE);
+  if (!hItem)
+    return;
+  
+  struct S_FAT_ITEMS *items = (struct S_FAT_ITEMS *) m_dir_tree.GetDataStruct(hItem);
+  if (items == NULL)
+    return;
+  
+  HTREEITEM hParent = m_dir_tree.GetParentItem(hItem);
+  BOOL IsRoot = (hParent == NULL);
+  DWORD rootsize = (IsRoot) ? m_rootsize : 0;
+  struct S_FAT_ROOT *root = (struct S_FAT_ROOT *) ReadFile(items->Cluster, &rootsize, IsRoot);
+  int EntryCount = m_rootsize / sizeof(struct S_FAT_ROOT);
+  
+  if (root) {
+    while (i<EntryCount && !Exit) {
+      cnt = 1;
+      ErrorCode = CheckRootEntry(&root[i]);
+      
+      switch (ErrorCode) {
+        case FAT_NO_ERROR:
+          cnt = FatGetName(&root[i], name, &attrb, &start, &filesize, &IsDot);
+          
+          if ((j != -1) && (j < i)) {
+            memcpy(&root[j], &root[i], sizeof(struct S_FAT_ROOT) * cnt);
+            j += cnt;
+          }
+          break;
+          
+        // deleted entry?
+        case FAT_BAD_LFN_DEL:
+          cnt = FatGetName(&root[i], name, &attrb, &start, &filesize, NULL); // - 1; // -1 so we display the deleted SFN ????
+        default:
+          if (j == -1) j = i;
+      }
+      i += cnt;
+    }
+    
+    if ((j != -1) && (j < EntryCount)) {
+      for (j; j < EntryCount; j++) {
+        memset(&root[j], 0, sizeof(struct S_FAT_ROOT));
+      }
+    }
+    
+    // write the root back
+    struct S_FAT_ENTRIES ClusterList;
+    if (!IsRoot || (m_fat_size == FS_FAT32))
+      FatFillClusterList(&ClusterList, items->Cluster);
+    WriteFile(root, &ClusterList, rootsize, IsRoot);
+
+    free(root);
+
+    AfxMessageBox("Done. Now will reload the image.", MB_OK, (UINT) -1);
+    CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+    dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
+  }
 }
 
 void CFat::DeleteFolder(HTREEITEM hItem) {

@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2025
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -373,6 +373,7 @@ protected:
   afx_msg void OnShowDeleted();
   afx_msg void OnDelClear();
   afx_msg void OnFatDelete();
+  afx_msg void OnFatOptimize();
   afx_msg void OnExpand();
   afx_msg void OnCollapse();
   afx_msg void OnSearch();
