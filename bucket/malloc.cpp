@@ -1,6 +1,6 @@
 /*             Author: Benjamin David Lunt
  *                     Forever Young Software
- *                     Copyright (c) 1984-2022
+ *                     Copyright (c) 1984-2025
  *  
  *  This code is donated to the Freeware communitee.  You have the
  *   right to use it for learning purposes only.  You may not modify it
@@ -17,15 +17,13 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  4 May 2022 (May the 4th be with you!)
- *  (What is the core temperature of a Tauntaun?  --  Luke warm)
+ * Last update: 16 Feb 2025
  *
  */
 
 #include "fysos.h"
 
 #include "./ctype/ctype.h"
-
 #include "./stdio/stdio.h"
 #include "./stdlib/spinlock.h"
 #include "./string/string.h"
@@ -298,7 +296,7 @@ void malloc_dump(HANDLE bucket) {
 }
 #endif
 
-void *kmalloc(size_t size, bit64u alignment, bit32u flags, char *name) {
+void *kmalloc(size_t size, bit32u alignment, bit32u flags, char *name) {
   void *ret = NULL;
 
   // minimum amount of memory we allocate to the caller
