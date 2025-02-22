@@ -1,9 +1,5 @@
 ## A Bucket/Pebble Allocator replacement for malloc()
 
-> [!NOTE]
->  ## This code is behind the current specification. Please be patient while I update the code to match
-
-
 This is an attempt to make a simple and easy to use heap allocator.
 
 After searching for an easy to use, mostly drop-in code, heap allocator, most of them ranged from very easy to quite difficult to understand what was actually being done under the hood.  One was quite simple, but allocated a minimum of a 4096-byte page for every memory request.  Another was quite efficient for small allocation amounts, but was extremely difficult to understand exactly what was happening under the hood.
