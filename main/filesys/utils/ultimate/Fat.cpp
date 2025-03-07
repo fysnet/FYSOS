@@ -1113,9 +1113,9 @@ unsigned CFat::FatGetName(struct S_FAT_ROOT *root, CString &name, BYTE *attrb, D
   unsigned i = 0;
   CString ext;
   
-  if (root->attrb == FAT_ATTR_LONG_FILE)
+  if (root->attrb == FAT_ATTR_LONG_FILE) {
     i = FatGetLFN((struct S_FAT_LFN_ROOT *) root, name);
-  else {
+  } else {
     name.Format("%c%c%c%c%c%c%c%c", root->name[0], root->name[1], root->name[2], root->name[3],
       root->name[4], root->name[5], root->name[6], root->name[7]);
     name.TrimRight(0x20);
@@ -1146,6 +1146,9 @@ unsigned CFat::FatGetLFN(struct S_FAT_LFN_ROOT *lfn, CString &name) {
   char *t, str[1024];
   int i, j, cnt = lfn->sequ_flags & 0x3F;
 
+  if (lfn->sequ_flags == 0xE5)
+    return 1;
+  
   if (lfn->sequ_flags & 0x80)
     return cnt;
   
@@ -2335,7 +2338,7 @@ void CFat::OnFatOptimize() {
   int i = 0, j = -1, cnt;
   DWORD start, filesize = 0, ErrorCode;
   BYTE attrb;
-
+  
   // get the path from the tree control
   HTREEITEM hItem = m_dir_tree.GetFullPath(NULL, &IsDir, csName, csPath, TRUE);
   if (!hItem)
@@ -2350,7 +2353,7 @@ void CFat::OnFatOptimize() {
   DWORD rootsize = (IsRoot) ? m_rootsize : 0;
   struct S_FAT_ROOT *root = (struct S_FAT_ROOT *) ReadFile(items->Cluster, &rootsize, IsRoot);
   int EntryCount = m_rootsize / sizeof(struct S_FAT_ROOT);
-  
+
   if (root) {
     while (i<EntryCount && !Exit) {
       cnt = 1;
@@ -2359,16 +2362,16 @@ void CFat::OnFatOptimize() {
       switch (ErrorCode) {
         case FAT_NO_ERROR:
           cnt = FatGetName(&root[i], name, &attrb, &start, &filesize, &IsDot);
-          
-          if ((j != -1) && (j < i)) {
-            memcpy(&root[j], &root[i], sizeof(struct S_FAT_ROOT) * cnt);
-            j += cnt;
-          }
-          break;
+          if (root[i].name[0] != FAT_DELETED_CHAR) {
+            if ((j != -1) && (j < i)) {
+              memcpy(&root[j], &root[i], sizeof(struct S_FAT_ROOT) * cnt);
+              j += cnt;
+            }
+            break;
+          } // else fall through
           
         // deleted entry?
         case FAT_BAD_LFN_DEL:
-          cnt = FatGetName(&root[i], name, &attrb, &start, &filesize, NULL); // - 1; // -1 so we display the deleted SFN ????
         default:
           if (j == -1) j = i;
       }
