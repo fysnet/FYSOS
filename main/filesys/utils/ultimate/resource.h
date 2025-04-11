@@ -571,6 +571,8 @@
 #define IDC_HARD_LINK_COUNT             1310
 #define IDC_IDENT                       1311
 #define IDC_ATTRIBS_OFF                 1311
+#define IDC_IDENT2                      1312
+#define IDC_IDENT_ERROR                 1312
 #define IDC_IDENT_EXTRA                 1313
 #define IDC_IDENT_EXTRA_S               1314
 #define IDC_SECT_CLUSTER                1316
@@ -1038,7 +1040,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        206
+#define _APS_NEXT_RESOURCE_VALUE        207
 #define _APS_NEXT_COMMAND_VALUE         32787
 #define _APS_NEXT_CONTROL_VALUE         1649
 #define _APS_NEXT_SYMED_VALUE           101

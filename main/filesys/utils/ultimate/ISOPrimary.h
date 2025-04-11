@@ -211,6 +211,7 @@ struct S_ISO_ITEMS {
   BOOL  CanCopy;        // the entry is not a deleted/invalid/other that we can copy out to the host
   BYTE RootEntry[34 + 256];
   DWORD Flags;
+  DWORD ErrorCode;
   //struct S_ISO_ROOT root;
   //BYTE rest_of_ident[256];  
 };

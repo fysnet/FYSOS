@@ -86,6 +86,7 @@ public:
   CString	m_length;
   CString	m_sequ_num;
   CString	m_unit_size;
+  CString m_indent_error;
   int		m_day;
   int		m_gmt_off;
   int		m_hour;

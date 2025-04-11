@@ -255,7 +255,7 @@ void CISOPrimary::DoRoot(void) {
   struct S_ISO_ROOT *root;
   root = (struct S_ISO_ROOT *) ReadFile(pvd->root.extent_loc, pvd->root.data_len, pvd->root.flags, TRUE);
   if (root) {
-    SaveItemInfo(m_hRoot, &pvd->root, ITEM_IS_FOLDER, 0, FALSE);
+    SaveItemInfo(m_hRoot, &pvd->root, ITEM_IS_FOLDER, ISO_NO_ERROR, FALSE);
     CWaitCursor wait; // display a wait cursor
     m_parse_depth_limit = 0;  // start new
     ParseDir(root, pvd->root.data_len, m_hRoot, TRUE);
@@ -318,6 +318,7 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
   DWORD ErrorCode;
   unsigned ErrorCount = 0;
   unsigned ErrorMax = AfxGetApp()->GetProfileInt("Settings", "MaxErrorCount", 10);
+  unsigned sectlen = 0;
 
   // catch to make sure we don't simply repeatedly recurse on '.' and '..' entries
   if (++m_parse_depth_limit > MAX_DIR_PARSE_DEPTH) {
@@ -326,14 +327,11 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
   }
   
   while ((BYTE *) r < ((BYTE *) root + datalen)) {
-    if (r->len == 0)
-      break;
-
     ErrorCode = CheckRootEntry(r);
     if (ErrorCode != ISO_NO_ERROR) {
       hItem = m_dir_tree.Insert("Invalid Entry", ITEM_IS_FILE, IMAGE_DELETE, IMAGE_DELETE, parent);
       if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
-      SaveItemInfo(hItem, r, 0, 0, FALSE);
+      SaveItemInfo(hItem, r, 0, ErrorCode, FALSE);
       if (++ErrorCount >= ErrorMax)
         break;
     } else {
@@ -342,12 +340,12 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
         name = ".";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
         if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
-        SaveItemInfo(hItem, r, ITEM_IS_FOLDER, 0, FALSE);
+        SaveItemInfo(hItem, r, ITEM_IS_FOLDER, ISO_NO_ERROR, FALSE);
       } else if ((r->fi_len == 1) && (r->ident[0] == 1)) {
         name = "..";
         hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
         if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
-        SaveItemInfo(hItem, r, ITEM_IS_FOLDER, 0, FALSE);
+        SaveItemInfo(hItem, r, ITEM_IS_FOLDER, ISO_NO_ERROR, FALSE);
       } else {
         // stop at ';'
         bool b = FALSE;
@@ -366,7 +364,7 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
         if (r->flags & ISO_ROOT_FLAGS_DIR) {
           hItem = m_dir_tree.Insert(name, ITEM_IS_FOLDER, IMAGE_FOLDER, IMAGE_FOLDER, parent);
           if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
-          SaveItemInfo(hItem, r, ITEM_IS_FOLDER, 0, TRUE);
+          SaveItemInfo(hItem, r, ITEM_IS_FOLDER, ISO_NO_ERROR, TRUE);
           sub = (struct S_ISO_ROOT *) ReadFile(r->extent_loc, r->data_len, r->flags, FALSE);
           if (sub) {
             if (!ParseDir(sub, r->data_len, hItem, FALSE)) {
@@ -379,12 +377,23 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
         } else {
           hItem = m_dir_tree.Insert(name, ITEM_IS_FILE, IMAGE_FILE, IMAGE_FILE, parent);
           if (hItem == NULL) { m_parse_depth_limit--; return TRUE; }
-          SaveItemInfo(hItem, r, ITEM_IS_FILE, 0, TRUE);
+          SaveItemInfo(hItem, r, ITEM_IS_FILE, ISO_NO_ERROR, TRUE);
         }
       }
     }
-    
+
+    sectlen += r->len;
     r = (struct S_ISO_ROOT *) ((BYTE *) r + r->len);
+
+    // A directory entry should not cross a 2048-byte boundary.
+    // if the len is zero, move to the next sector boundary.
+    if (r->len == 0) {
+      r = (struct S_ISO_ROOT *) ((BYTE *) r + (2048 - sectlen));
+      sectlen = 0;
+    }
+    // still need to catch for bad directories.
+    if (r->len == 0)
+      break;
   }
   
   m_parse_depth_limit--;
@@ -412,6 +421,7 @@ void CISOPrimary::SaveItemInfo(HTREEITEM hItem, struct S_ISO_ROOT *root, DWORD f
   if (items) {
     items->CanCopy = CanCopy;
     items->Flags = flags;
+    items->ErrorCode = ErrorCode;
     memcpy(items->RootEntry, root, root->len);
   }
 }
@@ -595,6 +605,22 @@ void CISOPrimary::OnEntry() {
         memcpy(ISOEntry.m_ident.GetBuffer(root->fi_len + 1), root->ident, root->fi_len);
         ISOEntry.m_ident.ReleaseBuffer(root->fi_len);
         //ISOEntry.m_ident.SetAt(root->fi_len, 0);
+      }
+      switch (items->ErrorCode) {
+        case ISO_NO_ERROR:
+          ISOEntry.m_indent_error = "No Error";
+          break;
+        case ISO_BAD_ATTRIBUTE:
+          ISOEntry.m_indent_error = "bad attribute value";
+          break;
+        case ISO_BAD_ID_LEN:
+          ISOEntry.m_indent_error = "id len of zero or more than 30";
+          break;
+        case ISO_BAD_IDENT:
+          ISOEntry.m_indent_error = "bad identifier char found";
+          break;
+        default:
+          ISOEntry.m_indent_error = "Unknown";
       }
       
       ISOEntry.m_year = root->date.since_1900 + 1900;
