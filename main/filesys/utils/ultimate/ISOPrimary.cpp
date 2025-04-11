@@ -273,7 +273,7 @@ void CISOPrimary::DoRoot(void) {
 
 // ISO/IEC 646 characters ( https://en.wikipedia.org/wiki/ISO/IEC_646 )
 // we added the '~' char
-const char iso_valid_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!%&'()*+,-./:;<=>?_~\"";
+const char iso_valid_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!%&'()*+,-./:;<=>?_~\" ";
 
 DWORD CISOPrimary::CheckRootEntry(struct S_ISO_ROOT *r) {
   int i;

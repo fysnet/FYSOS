@@ -81,7 +81,7 @@ static char THIS_FILE[] = __FILE__;
 
 
 CISOEntry::CISOEntry(CWnd* pParent /*=NULL*/)
-  : CDialog(CISOEntry::IDD, pParent), m_indent_error(_T(""))
+  : CDialog(CISOEntry::IDD, pParent)
 {
   //{{AFX_DATA_INIT(CISOEntry)
   m_attribute = _T("");
@@ -94,6 +94,7 @@ CISOEntry::CISOEntry(CWnd* pParent /*=NULL*/)
   m_length = _T("");
   m_sequ_num = _T("");
   m_unit_size = _T("");
+  m_indent_error = _T("");
   m_day = 0;
   m_gmt_off = 0;
   m_hour = 0;
@@ -106,35 +107,35 @@ CISOEntry::CISOEntry(CWnd* pParent /*=NULL*/)
 }
 
 void CISOEntry::DoDataExchange(CDataExchange* pDX) {
-    CDialog::DoDataExchange(pDX);
-    //{{AFX_DATA_MAP(CISOEntry)
-    DDX_Text(pDX, IDC_ATTRIBUTE, m_attribute);
-    DDX_Text(pDX, IDC_DATA_LEN, m_data_len);
-    DDX_Text(pDX, IDC_EXTENT_LOC, m_extent_loc);
-    DDX_Text(pDX, IDC_FILENGTH, m_fi_len);
-    DDX_Text(pDX, IDC_FLAGS, m_flags);
-    DDX_Text(pDX, IDC_GAP_SIZE, m_gap_size);
-    DDX_Text(pDX, IDC_IDENT, m_ident);
-    DDX_Text(pDX, IDC_LENGTH, m_length);
-    DDX_Text(pDX, IDC_SEQU_NUM, m_sequ_num);
-    DDX_Text(pDX, IDC_UNIT_SIZE, m_unit_size);
-    DDX_Text(pDX, IDC_DAY, m_day);
-    DDV_MinMaxInt(pDX, m_day, 1, 31);
-    DDX_Text(pDX, IDC_GMT_OFF, m_gmt_off);
-    DDV_MinMaxInt(pDX, m_gmt_off, -22, 22);
-    DDX_Text(pDX, IDC_HOUR, m_hour);
-    DDV_MinMaxInt(pDX, m_hour, 0, 23);
-    DDX_Text(pDX, IDC_MINUTE, m_minute);
-    DDV_MinMaxInt(pDX, m_minute, 0, 59);
-    DDX_Text(pDX, IDC_MONTH, m_month);
-    DDV_MinMaxInt(pDX, m_month, 1, 12);
-    DDX_Text(pDX, IDC_SECOND, m_second);
-    DDV_MinMaxInt(pDX, m_second, 0, 59);
-    DDX_Text(pDX, IDC_YEAR, m_year);
-    DDV_MinMaxInt(pDX, m_year, 1900, 2500);
-    DDX_Text(pDX, IDC_IDENT_EXTRA, m_ident_extra);
-    //}}AFX_DATA_MAP
-    DDX_Text(pDX, IDC_IDENT_ERROR, m_indent_error);
+  CDialog::DoDataExchange(pDX);
+  //{{AFX_DATA_MAP(CISOEntry)
+  DDX_Text(pDX, IDC_ATTRIBUTE, m_attribute);
+  DDX_Text(pDX, IDC_DATA_LEN, m_data_len);
+  DDX_Text(pDX, IDC_EXTENT_LOC, m_extent_loc);
+  DDX_Text(pDX, IDC_FILENGTH, m_fi_len);
+  DDX_Text(pDX, IDC_FLAGS, m_flags);
+  DDX_Text(pDX, IDC_GAP_SIZE, m_gap_size);
+  DDX_Text(pDX, IDC_IDENT, m_ident);
+  DDX_Text(pDX, IDC_LENGTH, m_length);
+  DDX_Text(pDX, IDC_SEQU_NUM, m_sequ_num);
+  DDX_Text(pDX, IDC_UNIT_SIZE, m_unit_size);
+  DDX_Text(pDX, IDC_DAY, m_day);
+  DDV_MinMaxInt(pDX, m_day, 1, 31);
+  DDX_Text(pDX, IDC_GMT_OFF, m_gmt_off);
+  DDV_MinMaxInt(pDX, m_gmt_off, -22, 22);
+  DDX_Text(pDX, IDC_HOUR, m_hour);
+  DDV_MinMaxInt(pDX, m_hour, 0, 23);
+  DDX_Text(pDX, IDC_MINUTE, m_minute);
+  DDV_MinMaxInt(pDX, m_minute, 0, 59);
+  DDX_Text(pDX, IDC_MONTH, m_month);
+  DDV_MinMaxInt(pDX, m_month, 1, 12);
+  DDX_Text(pDX, IDC_SECOND, m_second);
+  DDV_MinMaxInt(pDX, m_second, 0, 59);
+  DDX_Text(pDX, IDC_YEAR, m_year);
+  DDV_MinMaxInt(pDX, m_year, 1900, 2500);
+  DDX_Text(pDX, IDC_IDENT_EXTRA, m_ident_extra);
+  //}}AFX_DATA_MAP
+  DDX_Text(pDX, IDC_IDENT_ERROR, m_indent_error);
 }
 
 BEGIN_MESSAGE_MAP(CISOEntry, CDialog)

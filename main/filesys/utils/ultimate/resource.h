@@ -571,7 +571,6 @@
 #define IDC_HARD_LINK_COUNT             1310
 #define IDC_IDENT                       1311
 #define IDC_ATTRIBS_OFF                 1311
-#define IDC_IDENT2                      1312
 #define IDC_IDENT_ERROR                 1312
 #define IDC_IDENT_EXTRA                 1313
 #define IDC_IDENT_EXTRA_S               1314
