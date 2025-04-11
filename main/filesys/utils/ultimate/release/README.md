@@ -3,7 +3,7 @@
 These are the Windows Executables for the [Ultimate](https://www.fysnet.net/ultimate/index.htm) utility.
 
 ## Last Update:
-Current version: **00.64.27** and is dated: **1 Feb 2025**<br />
+Current version: **00.64.30** and is dated: **10 Apr 2025**<br />
 \(64-bit version may require [Updated DLLs](https://support.microsoft.com/en-gb/help/2977003/the-latest-supported-visual-c-downloads)\)<br />
 [Revision History](https://www.fysnet.net/ultimate/todo.htm)
 
@@ -29,7 +29,7 @@ There you will see examples and help files for this utility.
 
 ## Description:
 - Ultimate64.exe is for a 64-bit Windows platform (Windows 10 preferred)
-- Ultimate.exe is for a 32-bit Windows platform (Windows XP preferred)
+- Ultimate.exe is for a 32-bit Windows platform (Windows XP preferred) (32-bit version may lag behind latest release)
 
 ## Latest:
 - This new version is [Lean 1.0.0-rc1 Specification](https://www.fysnet.net/leanfs/specification.php) compliant, with many improvements, updates, and fixes.
