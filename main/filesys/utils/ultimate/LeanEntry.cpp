@@ -491,13 +491,13 @@ void CLeanEntry::OnEas() {
   }
   // initialize the CString csName in the allocated memory above
   for (i=0; i<MAX_EA_STRUCT_ENTRIES; i++) {
-#ifdef _WIN64
+//#ifdef _WIN64
     CString::Construct(&ea_struct[i].csName);
-#else
+//#else
     // this assumes you have changed the 'Init' member from 'protected' to 'public'
     // (at the moment, I don't know any other way to initialize a CString that is allocated in memory)
-    ea_struct[i].csName.Init();
-#endif // _WIN64
+//    ea_struct[i].csName.Init();
+//#endif // _WIN64
   }
 
   int EntryCount = 0;
