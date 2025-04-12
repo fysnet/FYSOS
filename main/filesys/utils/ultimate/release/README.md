@@ -3,7 +3,7 @@
 These are the Windows Executables for the [Ultimate](https://www.fysnet.net/ultimate/index.htm) utility.
 
 ## Last Update:
-Current version: **00.64.30** and is dated: **10 Apr 2025**<br />
+Current version: **00.64.31** and is dated: **11 Apr 2025**<br />
 \(64-bit version may require [Updated DLLs](https://support.microsoft.com/en-gb/help/2977003/the-latest-supported-visual-c-downloads)\)<br />
 [Revision History](https://www.fysnet.net/ultimate/todo.htm)
 
@@ -28,10 +28,10 @@ The home page for this utility is at [https://www.fysnet.net/ultimate/index.htm]
 There you will see examples and help files for this utility.
 
 ## Description:
-- Ultimate64.exe is for a 64-bit Windows platform (Windows 10 preferred)
-- Ultimate.exe is for a 32-bit Windows platform (Windows XP preferred) (32-bit version may lag behind latest release)
+- Ultimate64.exe is for a 64-bit Windows platform (Windows 10 preferred) (Shared DLLs, see above)
+- Ultimate.exe is for a 32-bit Windows platform (Windows XP preferred) (Static DLLs, no other files needed)
 
 ## Latest:
-- This new version is [Lean 1.0.0-rc1 Specification](https://www.fysnet.net/leanfs/specification.php) compliant, with many improvements, updates, and fixes.
+- A recent version made it [Lean 1.0.0-rc1 Specification](https://www.fysnet.net/leanfs/specification.php) compliant, with many improvements, updates, and fixes.
 - However, since the new version of Lean is not close enough to being backward compatible, the app will no longer try to update your existing Lean Volumes to the new version.  You will have to create a new empty Lean 1.0.0 volume and add the files again.
 - I have tried to fix all function of the Lean part of this app. Please let me know if you find something that doesn't work correctly.
