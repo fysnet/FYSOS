@@ -79,9 +79,9 @@ FONT 8, "MS Sans Serif"
 BEGIN
     CONTROL         IDD_SFS,IDC_STATIC,"Static",SS_BITMAP,11,10,20,20
 #ifdef _WIN64
-    LTEXT           "Ultimate   00.64.30 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
+    LTEXT           "Ultimate   00.64.31 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
 #else
-    LTEXT           "Ultimate   00.64.30 (32-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
+    LTEXT           "Ultimate   00.64.31 (32-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
 #endif
     LTEXT           "Copyright (C)  Forever Young Software 1984-2025",IDC_STATIC,46,27,175,8
     DEFPUSHBUTTON   "OK",IDOK,178,7,50,14,WS_GROUP
