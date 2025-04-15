@@ -1021,12 +1021,10 @@
 #define IDC_SPIN1                       1645
 #define IDC_ENCODING                    1647
 #define IDC_COUNT_LIST                  1648
-#define IDC_EDIT1                       1649
 #define IDC_TOC_DUMP                    1649
 #define IDC_DRIVE_LETTER                1650
 #define IDC_FORMAT                      1651
 #define IDC_MSF                         1652
-#define IDC_EDIT2                       1653
 #define IDC_STARTING_TRACK              1653
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
