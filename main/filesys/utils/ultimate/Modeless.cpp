@@ -139,8 +139,11 @@ void CModeless::OnCopy() {
 
   size_t size = m_edit.GetLength();
   HGLOBAL hGlob = GlobalAlloc(GMEM_FIXED, size);
-  memcpy(hGlob, m_edit, size);
-  ::SetClipboardData(CF_TEXT, hGlob);
+  if (hGlob != NULL) {
+    memcpy(hGlob, m_edit, size);
+    ::SetClipboardData(CF_TEXT, hGlob);
+    GlobalFree(hGlob);
+  }
 
   CloseClipboard();
 }

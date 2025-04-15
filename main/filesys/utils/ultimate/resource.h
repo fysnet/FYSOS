@@ -5,6 +5,7 @@
 #define IDPREV                          3
 #define IDEAS                           3
 #define ID_NEXT                         3
+#define IDCOPY                          3
 #define IDNEXT                          4
 #define ID_PREV                         4
 #define IDINDIRECTS                     4
@@ -95,6 +96,7 @@
 #define IDD_FSZ                         198
 #define IDD_LEAN_INDIRECT               199
 #define IDD_LEAN_SYMBOLIC               200
+#define IDD_READ_TOC                    207
 #define IDC_IMAGE_BAR                   1002
 #define IDC_PAGES                       1005
 #define IDC_TABS                        1007
@@ -1019,6 +1021,13 @@
 #define IDC_SPIN1                       1645
 #define IDC_ENCODING                    1647
 #define IDC_COUNT_LIST                  1648
+#define IDC_EDIT1                       1649
+#define IDC_TOC_DUMP                    1649
+#define IDC_DRIVE_LETTER                1650
+#define IDC_FORMAT                      1651
+#define IDC_MSF                         1652
+#define IDC_EDIT2                       1653
+#define IDC_STARTING_TRACK              1653
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
@@ -1030,18 +1039,19 @@
 #define ID_TOOLS_ERASE_IMAGE            32781
 #define ID_TOOLS_INSERT_IMAGE           32782
 #define ID_APPEND_VHD                   32783
-#define ID_TOOLS_ADDHYBRIDCDROM         32784
-#define ID_TOOLS_VIEWVDIHEADER          32785
-#define ID_TOOLS_CREATE                 32786
-#define ID_TOOLS_CREATE_INFO            32787
+#define ID_READ_TOC                     32784
+#define ID_TOOLS_ADDHYBRIDCDROM         32785
+#define ID_TOOLS_VIEWVDIHEADER          32786
+#define ID_TOOLS_CREATE                 32787
+#define ID_TOOLS_CREATE_INFO            32788
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        207
+#define _APS_NEXT_RESOURCE_VALUE        210
 #define _APS_NEXT_COMMAND_VALUE         32787
-#define _APS_NEXT_CONTROL_VALUE         1649
+#define _APS_NEXT_CONTROL_VALUE         1654
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

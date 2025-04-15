@@ -79,9 +79,9 @@ FONT 8, "MS Sans Serif"
 BEGIN
     CONTROL         IDD_SFS,IDC_STATIC,"Static",SS_BITMAP,11,10,20,20
 #ifdef _WIN64
-    LTEXT           "Ultimate   00.64.31 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
+    LTEXT           "Ultimate   00.64.32 (64-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
 #else
-    LTEXT           "Ultimate   00.64.31 (32-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
+    LTEXT           "Ultimate   00.64.32 (32-bit)",IDC_STATIC,46,10,119,8,SS_NOPREFIX
 #endif
     LTEXT           "Copyright (C)  Forever Young Software 1984-2025",IDC_STATIC,46,27,175,8
     DEFPUSHBUTTON   "OK",IDOK,178,7,50,14,WS_GROUP
@@ -2434,6 +2434,25 @@ BEGIN
     RTEXT           "Symbolic Name:",IDC_STATIC,19,31,52,8
 END
 
+IDD_READ_TOC DIALOGEX 0, 0, 457, 233
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Read TOC of a CDROM"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    COMBOBOX        IDC_DRIVE_LETTER,70,7,55,90,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        IDC_FORMAT,70,21,55,96,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP
+    EDITTEXT        IDC_STARTING_TRACK,70,35,55,14,ES_AUTOHSCROLL | ES_NUMBER
+    CONTROL         "MSF",IDC_MSF,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,133,38,29,10
+    DEFPUSHBUTTON   "Get TOC",IDOK,400,7,50,14
+    PUSHBUTTON      "Exit",IDCANCEL,400,22,50,14
+    PUSHBUTTON      "Copy",IDCOPY,400,39,50,14
+    EDITTEXT        IDC_TOC_DUMP,7,59,443,167,ES_MULTILINE | ES_AUTOHSCROLL | ES_READONLY | WS_VSCROLL | NOT WS_TABSTOP,WS_EX_STATICEDGE
+    RTEXT           "Drive:",IDC_STATIC,14,9,51,12
+    RTEXT           "Format:",IDC_STATIC,14,23,51,12
+    RTEXT           "Starting Track:",IDC_STATIC,14,37,51,12
+    LTEXT           "(Currently hardcoded to D:)",IDC_STATIC,131,9,90,8
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -2966,6 +2985,14 @@ BEGIN
         TOPMARGIN, 7
         BOTTOMMARGIN, 59
     END
+
+    IDD_READ_TOC, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 450
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 226
+    END
 END
 #endif    // APSTUDIO_INVOKED
 
@@ -3002,6 +3029,7 @@ BEGIN
         MENUITEM "Add &Hybrid CDROM",           ID_TOOLS_ADDHYBRIDCDROM
         MENUITEM "&View VDI Header",            ID_TOOLS_VIEWVDIHEADER
         MENUITEM "&Create/Update .info file",   ID_TOOLS_CREATE_INFO
+        MENUITEM "Read &TOC from CDROM",        ID_READ_TOC
     END
     POPUP "Help"
     BEGIN
@@ -3079,6 +3107,23 @@ BEGIN
 0x2e32, 0x3838, 0x4d20, 0x6765, 0x4620, 0x6f6c, 0x7070, 0x0079, 
     IDC_DI_MEDIA, 0x403, 11, 0
 0x6148, 0x6472, 0x4420, 0x6972, 0x6576, "\000" 
+    0
+END
+
+IDD_READ_TOC DLGINIT
+BEGIN
+    IDC_FORMAT, 0x403, 2, 0
+0x0030, 
+    IDC_FORMAT, 0x403, 2, 0
+0x0031, 
+    IDC_FORMAT, 0x403, 2, 0
+0x0032, 
+    IDC_FORMAT, 0x403, 2, 0
+0x0033, 
+    IDC_FORMAT, 0x403, 2, 0
+0x0034, 
+    IDC_FORMAT, 0x403, 2, 0
+0x0035, 
     0
 END
 
@@ -3273,6 +3318,11 @@ BEGIN
     0
 END
 
+IDD_READ_TOC AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -3298,6 +3348,11 @@ BEGIN
     ID_TOOLS_ERASE_IMAGE    "Erase Image\nErase Image"
     ID_TOOLS_INSERT_IMAGE   "Insert Image\nInsert Image"
     ID_APPEND_VHD           "Append a VHD Footer to file"
+END
+
+STRINGTABLE
+BEGIN
+    ID_READ_TOC             "Read TOC from CDROM"
 END
 
 STRINGTABLE

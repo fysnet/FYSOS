@@ -263,6 +263,7 @@ public:  // protected:
   afx_msg void OnToolsResize();
   afx_msg void OnToolsGetDisk();
   afx_msg void OnToolsAppendVHD();
+  afx_msg void OnToolsReadTOC();
   afx_msg void OnToolsErase();
   afx_msg void OnToolsInsert();
   afx_msg void OnViewVDIHeader();

@@ -76,6 +76,8 @@
 #include "GetImage.h"
 #include "OurFind.h"
 
+#include "ReadTOC.h"
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #undef THIS_FILE
@@ -186,6 +188,7 @@ BEGIN_MESSAGE_MAP(CUltimateDlg, CDialog)
   ON_COMMAND(ID_TOOLS_INSERT_IMAGE, OnToolsInsert)
   ON_COMMAND(ID_GET_DISK_IMAGE, OnToolsGetDisk)
   ON_COMMAND(ID_APPEND_VHD, OnToolsAppendVHD)
+  ON_COMMAND(ID_READ_TOC, OnToolsReadTOC)
   ON_COMMAND(ID_TOOLS_ADDHYBRIDCDROM, OnToolsHybridCDROM)
   ON_COMMAND(ID_TOOLS_VIEWVDIHEADER, OnViewVDIHeader)
   ON_COMMAND(ID_FILE_RELOAD, OnFileReload)
@@ -971,6 +974,11 @@ void CUltimateDlg::OnToolsAppendVHD() {
   SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
 }
 
+void CUltimateDlg::OnToolsReadTOC() {
+  CReadTOC ReadTOC;
+  ReadTOC.DoModal();
+}
+
 void CUltimateDlg::OnToolsErase() {
   LARGE_INTEGER large_int;
   DWORD64 Size;
@@ -1366,6 +1374,7 @@ void CUltimateDlg::OnInitMenuPopup(CMenu *pMenu, UINT nIndex, BOOL bSysMenu) {
   pMenu->EnableMenuItem(ID_TOOLS_INSERT_IMAGE, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_GET_DISK_IMAGE, !m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_APPEND_VHD, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
+  pMenu->EnableMenuItem(ID_READ_TOC, !m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_TOOLS_ADDHYBRIDCDROM, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_TOOLS_VIEWVDIHEADER, !m_bIsOpen ? MF_ENABLED : MF_GRAYED);
   pMenu->EnableMenuItem(ID_TOOLS_CREATE_INFO, m_bIsOpen ? MF_ENABLED : MF_GRAYED);
