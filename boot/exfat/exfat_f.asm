@@ -131,9 +131,7 @@ not386str  db  13,10,'Processor is not a 386 compatible processor.',0
 ; We now can use 386+ code (still in real mode though)
 ;
 .386P   ; allow processor specific code for the 386
-@@:        popf                   ; restore the interrupt bit
-           
-           ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+@@:        ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; reset the disk services to be sure we are ready
            xor  ax,ax
            mov  dl,boot_data.drive
