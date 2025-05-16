@@ -110,6 +110,7 @@ start:     mov  ax,07C0h           ; 07C0:0000h = 0000:7C00h = 0x07C00
            popf                    ; the flags register then we have
            pushf                   ; a 386+
            pop  ax                 ;
+           popf                    ; restore the interrupt bit
            and  ax,7000h           ;
            cmp  ax,7000h           ;
            je   short @f           ; it's a 386+
@@ -1688,31 +1689,31 @@ cur_selected dw  0    ; current entry selected
 tot_entries  dw  0    ; total entries
 
 
-menu_start  db        'ีอออออออออออออออ  FYS OS (aka Konan) Multi-boot EMBR v0.94.10  อออออออออออออออธ'
-            db  13,10,'ณ                (C)opyright Forever Young Software 1984-2018                 ณ'
-            db  13,10,'ณ    ฺฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฟ ณ'
-            db  13,10,'ณ    ณ                                                                      ',24,' ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ฐ ณ'
-            db  13,10,'ณ    ณ                                                                      ',25,' ณ'
-            db  13,10,'ณ    ภฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤฤู ณ'
-            db  13,10,'ณ                                                                             ณ'
-            db  13,10,'ณ                                                                             ณ'
-            db  13,10,'ณ                                                                             ณ'
-            db  13,10,'ณ                                                                             ณ'
-            db  13,10,'ณ    Will boot entry   in    seconds.  Press any key to stop.                 ณ'
-            db  13,10,'ณ                                                                             ณ'
-            db  13,10,'ิอออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออออพ',0
+menu_start  db        'ร•รรรรรรรรรรรรรรร  FYS OS (aka Konan) Multi-boot EMBR v0.94.10  รรรรรรรรรรรรรรรยธ'
+            db  13,10,'ยณ                (C)opyright Forever Young Software 1984-2018                 ยณ'
+            db  13,10,'ยณ    รรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรยฟ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ',24,' ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ยฐ ยณ'
+            db  13,10,'ยณ    ยณ                                                                      ',25,' ยณ'
+            db  13,10,'ยณ    ร€รรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรร ยณ'
+            db  13,10,'ยณ                                                                             ยณ'
+            db  13,10,'ยณ                                                                             ยณ'
+            db  13,10,'ยณ                                                                             ยณ'
+            db  13,10,'ยณ                                                                             ยณ'
+            db  13,10,'ยณ    Will boot entry   in    seconds.  Press any key to stop.                 ยณ'
+            db  13,10,'ยณ                                                                             ยณ'
+            db  13,10,'ร”รรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรรยพ',0
 
 blank_line  dup 69,' '
             db  0
@@ -1722,12 +1723,12 @@ base_str    db  '    Base LBA: ',0
 size_str    db  ' Sectors: ',0
 
 
-legend      db        'ณ     ENTER = Boot current selected partition entry.                          ณ'
-            db  13,10,'ณ     (I)   = Info about entry.                                               ณ'
-            db  13,10,'ณ     (T)   = Change boot delay time.                                         ณ'
-            db  13,10,'ณ                                                                             ณ'
-            db  13,10,'ณ     (R)   = Reboot.                                                         ณ'
-            db  13,10,'ณ                                                                             ณ',0
+legend      db        'ยณ     ENTER = Boot current selected partition entry.                          ยณ'
+            db  13,10,'ยณ     (I)   = Info about entry.                                               ยณ'
+            db  13,10,'ยณ     (T)   = Change boot delay time.                                         ยณ'
+            db  13,10,'ยณ                                                                             ยณ'
+            db  13,10,'ยณ     (R)   = Reboot.                                                         ยณ'
+            db  13,10,'ยณ                                                                             ยณ',0
 
 
 ; the remaining is if we make a single image from this .bin file and run it to test it.
