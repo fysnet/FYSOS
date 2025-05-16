@@ -133,12 +133,11 @@ not386str  db  13,10,'Processor is not a 386 compatible processor.',0
 ; We now can use 386+ code (still in real mode though)
 ;
 .386P   ; allow processor specific code for the 386
-@@:        popf                   ; restore the interrupt bit
-
+        
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; We now check for the BIOS disk extentions.
 ; We assume we will not be on a floppy disk.
-           mov  ah,41h
+@@:        mov  ah,41h
            mov  bx,55AAh
            int  13h                     ; dl still = drive_num
            jc   short @f
