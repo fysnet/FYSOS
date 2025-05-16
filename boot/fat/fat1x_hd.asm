@@ -157,6 +157,7 @@ start:     cli                     ; don't allow interrupts
            popf                    ;  after pushing/poping to/from
            pushf                   ;  the flags register then we have
            pop  ax                 ;  a 386+
+           popf                    ; restore the interrupt bit
            and  ax,0F000h          ;
            jnz  short @f           ; it's a 386+
            mov  si,offset not386str
