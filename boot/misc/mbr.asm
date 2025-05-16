@@ -104,6 +104,7 @@ PART_ENTRY ends
            popf                    ;  after pushing/poping to/from
            pushf                   ;  the flags register then we have
            pop  ax                 ;  a 386+
+           popf                    ; restore the interrupt bit
            and  ax,0F000h          ;
            jnz  short @f           ; it's a 386+
            mov  si,offset not386str
@@ -115,12 +116,11 @@ not386str  db  13,10,'Processor is not a 386 compatible processor.'
 ; We now can use 386+ code (still in real mode though)
 ;          
 .386P   ; allow processor specific code for the 386
-@@:        popf                   ; restore the interrupt bit
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; BIOS sets dl to drive id when calling bootsector.
            ; also, reset the drive service
-           mov  physical_drive,dl       ; make sure we don't mess up DL above
+@@:        mov  physical_drive,dl       ; make sure we don't mess up DL above
            xor  ah,ah                   ;
            int  13h                     ; reset disk system
            
