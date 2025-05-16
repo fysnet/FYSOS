@@ -89,6 +89,7 @@ start:     cli                     ; don't allow interrupts
            popf                    ;  after pushing/poping to/from
            pushf                   ;  the flags register then we have
            pop  ax                 ;  a 386+
+           popf                    ; restore the interrupt bit
            and  ax,0F000h          ;
            jnz  short @f           ; it's a 386+
            mov  si,offset not386str
@@ -100,14 +101,13 @@ not386str  db  13,10,'Processor is not a 386 compatible processor.',0
 ; We now can use 386+ code (still in real mode though)
 ;
 .386P   ; allow processor specific code for the 386
-@@:        popf                   ; restore the interrupt bit
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ;  We need to call the BIOS to get the parameters of the current disk.
            
            ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
            ; reset the disk services to be sure we are ready
-           xor  ax,ax
+@@:        xor  ax,ax
            mov  dl,boot_data.drive
            int  13h
            
