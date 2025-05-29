@@ -145,6 +145,7 @@ protected:
   afx_msg BOOL OnHelpInfo(HELPINFO *pHelpInfo);
   afx_msg void OnMbrApply();
   afx_msg void OnExtractMbr();
+  afx_msg void OnInsertPart();
   afx_msg void OnUpdateMbr();
   afx_msg void OnUpdateMbrSig();
   afx_msg void OnIdSigUpdate();

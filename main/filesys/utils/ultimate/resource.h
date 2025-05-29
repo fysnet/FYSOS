@@ -147,6 +147,8 @@
 #define IDUPDATE_MBR2                   1037
 #define IDEXTRACT                       1037
 #define IDC_GPT_FIRST_LBA               1038
+#define IDUPDATE_MBR3                   1038
+#define IDCREATE_MBR                    1038
 #define IDC_GPT_LAST_LBA                1039
 #define IDC_GPT_GUID                    1040
 #define IDC_GPT_ENTRY_OFFSET            1041

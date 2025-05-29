@@ -113,6 +113,7 @@ BEGIN_MESSAGE_MAP(CMbr, CPropertyPage)
   //{{AFX_MSG_MAP(CMbr)
   ON_BN_CLICKED(ID_MBR_APPLY, OnMbrApply)
   ON_BN_CLICKED(IDEXTRACT, OnExtractMbr)
+  ON_BN_CLICKED(IDCREATE_MBR, OnInsertPart)
   ON_BN_CLICKED(IDUPDATE_MBR, OnUpdateMbr)
   ON_BN_CLICKED(IDUPDATE_MBR_SIG, OnUpdateMbrSig)
   ON_BN_CLICKED(IDC_ID_SIG_UPDATE, OnIdSigUpdate)
@@ -367,6 +368,37 @@ void CMbr::OnExtractMbr() {
     AfxMessageBox("MBR Code Extracted Successfully...");
   } else
     AfxMessageBox("Error Creating File...");
+}
+
+// Insert a partition table in this sector
+void CMbr::OnInsertPart() {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  struct MBR_PART_ENTRY *entry = (struct MBR_PART_ENTRY *) &m_buffer[512-2-(4*16)];
+
+  if (AfxMessageBox("Insert a Partition Table in this sector?\r\n"
+                    "(will overwrite any existing partition table area data)", MB_YESNO, 0) != IDYES)
+    return;
+
+  // read the sector
+  dlg->ReadFromFile(m_buffer, m_lba, 1);
+
+  // create four unused, but legal partition entries
+  // clear it out
+  memset(entry, 0, (4*16));
+
+  for (int i=0; i<4; i++) {
+    entry[i].boot_id = 0x00;
+    entry[i].sys_id = 12; // chose: W95 FAT32 (LBA) (just not 0x00)
+    entry[i].start_lba = 1;
+    entry[i].sectors = 1024;
+  }
+
+  // write the sector
+  dlg->WriteToFile(m_buffer, m_lba, 1);
+
+  // reload the image?
+  if (AfxMessageBox("Reload the image?", MB_YESNO, 0) == IDYES)
+    dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
 }
 
 // read in a file and update the current MBR buffer, overwriting partition table if needed

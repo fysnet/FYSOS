@@ -336,6 +336,15 @@ void CFat::OnFatCheck() {
     free(root);
   }
 
+  if (fcVolCount == 0)
+    fcInfo += "[Diag] Did not find a Volume Label entry.\r\n";
+  
+  // if we found more than one volume label entry, we are in error
+  if (fcVolCount > 1) {
+    fcInfo += "[Error] Found more than one Volume Label entry.\r\n";
+    fcErrorCount++;
+  }
+
   // show results
   cs.Format("Checked %u directory(s), %u file(s), %u deleted files, %u Volume Label(s).\r\n", fcDirCount, fcFileCount, fcDelFileCount, fcVolCount);
   fcInfo += cs;
@@ -402,12 +411,12 @@ void CFat::FatCheckRoot(CModeless &modeless, struct S_FAT_ROOT *root, const unsi
   if (csPath != "\\") {
     FatGetName(&root[0], name, &attrb, &start, &filesize, NULL);
     if (name != ".") {
-      fcInfo += "First entry is not DOT entry\r\n";
+      fcInfo += "[Error] First entry is not DOT entry\r\n";
       fcErrorCount++;
     }
     FatGetName(&root[1], name, &attrb, &start, &filesize, NULL);
     if (name != "..") {
-      fcInfo += "Second entry is not DOT DOT entry\r\n";
+      fcInfo += "[Error] Second entry is not DOT DOT entry\r\n";
       fcErrorCount++;
     }
   }
@@ -428,7 +437,7 @@ void CFat::FatCheckRoot(CModeless &modeless, struct S_FAT_ROOT *root, const unsi
     } else if (ErrorCode != FAT_NO_ERROR) {
       cnt = 1;
       fcErrorCount++;
-      cs.Format("Found Bad entry with error code %u* (index %i)\r\n", ErrorCode, i);
+      cs.Format("[Error] Found Bad entry with error code %u* (index %i)\r\n", ErrorCode, i);
       if (!fc_entry_error) {
         fcInfo += cs;
         cs = "* Error Codes:\r\n";
@@ -448,13 +457,13 @@ void CFat::FatCheckRoot(CModeless &modeless, struct S_FAT_ROOT *root, const unsi
             // check to see if we already parsed this cluster's directory
             if (CheckForRecursion(start)) {
               // found that we already did this directory....
-              cs.Format("Directory with Cluster %u already checked.\r\n"
-                        "Directory points to infinate loop...\r\n", start);
+              cs.Format("[Error] Directory with Cluster %u already checked.\r\n"
+                        "        Directory points to infinate loop...\r\n", start);
               fcErrorCount++;
             } else {
               // a sub directory's entry must have the filesize field of zero
               if (filesize != 0) {
-                cs.Format("'%s' filesize field != 0  (0x%08X)\r\n", name, filesize);
+                cs.Format("[Error] '%s' filesize field != 0  (0x%08X)\r\n", name, filesize);
                 fcInfo += cs;
                 fcErrorCount++;
                 cs.Empty(); // empty it so we don't add it again below
@@ -471,6 +480,18 @@ void CFat::FatCheckRoot(CModeless &modeless, struct S_FAT_ROOT *root, const unsi
         } else if (attrb & FAT_ATTR_VOLUME) {
           // TODO: Check that label has only allowed chars????
           cs.Format("Volume Label: %s\r\n", name);
+          if (root[i].filesize != 0) {
+            cs += "[Error] Label with a file size not equal to zero.\r\n";
+            fcErrorCount++;
+          }
+          if (root[i].strtclst != 0) {
+            cs += "[Error] Label with a starting cluster not equal to zero.\r\n";
+            fcErrorCount++;
+          }
+          if (csPath != "\\") {
+            cs += "[Error] Label found in subdirectory.\r\n";
+            fcErrorCount++;
+          }
           fcVolCount++;
         } else {
           // found regular file

@@ -1824,6 +1824,7 @@ void CUltimateDlg::OnAppSettings() {
       while (i--)
         m_rfl->Remove(0);
       m_rfl->WriteList();
+      AfxMessageBox("MRU list will be cleared on next restart.");
     }
     UpdateData(TRUE);   // get from dialog
     m_force_readonly = dlg.m_force_readonly;
