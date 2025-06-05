@@ -2322,6 +2322,7 @@ void CFat::OnFatDelete() {
     // select the parent item (can't do it if we call Start())
     m_dir_tree.Select((hParent != NULL) ? hParent : TVI_ROOT, TVGN_CARET);
     m_dir_tree.EnsureVisible(hParent);
+    GetDlgItem(IDC_DIR_TREE)->SetFocus();
   }
 
   // update the freespace display
