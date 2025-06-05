@@ -2301,7 +2301,7 @@ void CFat::OnFatDelete() {
       return;
   
   // get the parent of this file/dir so we can select it after the delete
-  HTREEITEM hParent = m_dir_tree.GetParentItem(hItem);
+  //HTREEITEM hParent = m_dir_tree.GetParentItem(hItem);
 
   CWaitCursor wait;
   if (IsDir)
@@ -2321,7 +2321,9 @@ void CFat::OnFatDelete() {
     m_dir_tree.DeleteItem(hItem);
 
   // select the parent item
-  m_dir_tree.Select((hParent != NULL) ? hParent : TVI_ROOT, TVGN_CARET);
+  // ** After the Start(), we can't guarentee hParent points to the same entry...
+  //m_dir_tree.Select((hParent != NULL) ? hParent : TVI_ROOT, TVGN_CARET);
+  //m_dir_tree.EnsureVisible(hParent);
 
   // update the freespace display
   DisplayFreeSpace();
