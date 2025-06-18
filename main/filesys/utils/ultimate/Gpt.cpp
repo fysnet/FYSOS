@@ -431,6 +431,7 @@ void CGpt::GetGPTEntries() {
 // get the dialog items and write the buffer back to the disk
 void CGpt::OnGptApply() {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  int gpt_entries_size;  // count of sectors used by entries
   
   // update the header items
   GetGPTHdr();
@@ -439,8 +440,27 @@ void CGpt::OnGptApply() {
   
   // update the entries
   GetGPTEntries();
-  //dlg->WriteToFile(m_entry_buffer, m_hdr.entry_offset, ((m_gpt_entries * m_hdr.entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
   dlg->WriteToFile(m_entry_buffer, m_hdr.entry_offset, ((m_hdr.entries * m_hdr.entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
+
+  if (AfxMessageBox("Update the Backup GPT and entries?", MB_YESNO, 0) != IDYES)
+    return;
+
+  // update the header items
+  memset(m_buffer, 0, dlg->m_sect_size);
+  memcpy(m_buffer, &m_hdr, sizeof(struct S_GPT_HDR));
+
+  // we must swap the MyLBA and AlternateLBA values for the Backup Header
+  struct S_GPT_HDR *hdr = (struct S_GPT_HDR *) m_buffer;
+  gpt_entries_size = ((hdr->entries * sizeof(struct S_GPT_ENTRY)) + (dlg->m_sect_size - 1)) / dlg->m_sect_size;
+  hdr->backup_lba = m_hdr.primary_lba;
+  hdr->primary_lba = m_hdr.backup_lba;
+  hdr->entry_offset = m_hdr.backup_lba - gpt_entries_size;
+  hdr->crc32 = 0;
+  hdr->crc32 = crc32(hdr, hdr->hdr_size); // calculate new CRC (since we swapped values)
+  dlg->WriteToFile(m_buffer, m_hdr.backup_lba, 1);
+  
+  // update the entries
+  dlg->WriteToFile(m_entry_buffer, hdr->entry_offset, gpt_entries_size);
 }
 
 void CGpt::OnCrcButton() {
