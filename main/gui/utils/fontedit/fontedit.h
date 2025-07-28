@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2025
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -54,10 +54,9 @@
  * 
  * For more information, please visit:
  *             https://www.fysnet.net/osdesign_book_series.htm
- */
-
-/*
- *  Last updated: 16 Apr 2022
+ *
+ *
+ *  Last updated: 27 July 2025
  */
 
 #define ENDIAN_16U(x)   ((((x) & 0xFF) <<  8) | (((x) & 0xFF00) >> 8))
@@ -66,9 +65,9 @@
 #pragma pack(push, 1)
 
 #ifdef _WIN64
-  #define VERSION_INFO "Font Edit\nVersion 1.60.00 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.61.00 (64-bit)\n\nForever Young Software\n(C)opyright 1984-2025\n\nhttps://www.fysnet.net"
 #else
-  #define VERSION_INFO "Font Edit\nVersion 1.60.00 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2022\n\nhttps://www.fysnet.net"
+  #define VERSION_INFO "Font Edit\nVersion 1.61.00 (32-bit)\n\nForever Young Software\n(C)opyright 1984-2025\n\nhttps://www.fysnet.net"
 #endif
 
 #define FTYPE_FONT   1
@@ -204,8 +203,8 @@ void SetTitleStr(const HWND);
 void DisableItems(HMENU);
 void EnableItems(HMENU, struct FONT *);
 void DrawTextBox(HDC, DWORD, const int, const int, const int, const int, const char *);
-int  LoadCurChar(HWND, struct FONT *, const int);
-void SaveCurChar(struct FONT *, const int);
+int  LoadCurChar(HWND hwnd, struct FONT *font, const int ch, const bool update);
+void SaveCurChar(struct FONT *font, const int ch, const int height);
 void DumpFont(HWND, struct FONT *);
 void FontMoveData(struct FONT *, int, int);
 
@@ -221,4 +220,3 @@ struct FONT *OpenPFF2File(HWND hwnd, FILE *fp);
 void CompressBitmap(bit8u *, bit8u *, const int, const int);
 bit8u GetBit(bit8u *p, const int i);
 void SetBit(bit8u *p, const int i, const bit8u value);
-

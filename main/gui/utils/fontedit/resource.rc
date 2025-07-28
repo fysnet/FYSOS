@@ -48,6 +48,8 @@ BEGIN
         MENUITEM "Mark as non-fixed",           IDC_CONV_CUR, GRAYED
         MENUITEM "Name...",                     IDC_NAME_CUR, GRAYED
         MENUITEM "Dump...",                     IDC_DUMP, GRAYED
+        MENUITEM "Increase Height",             IDC_INC_HEIGHT, GRAYED
+        MENUITEM "Decrease Height",             IDC_DEC_HEIGHT, GRAYED
     END
     POPUP "&Help"
     BEGIN

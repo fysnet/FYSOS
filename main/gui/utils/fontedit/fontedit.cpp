@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2025
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -74,7 +74,7 @@
  *   When using the Visual Studio IDE, do not edit the resource.rc file within
  *    the IDE's editor.  It will add items that will break this build.
  *
- *  Last updated: 16 Apr 2022
+ *  Last updated: 27 July 2025
  *
  *   This code was built with Visual Studio 6.0 (for 32-bit Windows XP)
  *    and Visual Studio 2019 (for 64-bit Windows 10)
@@ -511,7 +511,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           
         case ID_FILE_OPEN:
           if (drawgrid)
-            SaveCurChar(font, cur_char);
+            SaveCurChar(font, cur_char, font->height);
           
           if (isdirty)
             if (MessageBox(hwnd, "Save Current File?", "Warning!!!", MB_ICONEXCLAMATION | MB_YESNO) == IDYES) {
@@ -536,7 +536,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
               return 0;
             }
             cur_char = 0;
-            curw = LoadCurChar(hwnd, font, 0);
+            curw = LoadCurChar(hwnd, font, 0, TRUE);
             curh = font->height;
             drawgrid = TRUE;
             tfixed = (font->flags & FLAGS_FIXED_WIDTH) > 0;
@@ -554,12 +554,12 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           return 0;
           
         case ID_FILE_SAVE:
-          SaveCurChar(font, cur_char);
+          SaveCurChar(font, cur_char, font->height);
           SaveFile(hwnd, font);
           return 0;
           
         case ID_FILE_SAVEAS:
-          SaveCurChar(font, cur_char);
+          SaveCurChar(font, cur_char, font->height);
           result = SaveFileDialog(hwnd, szFileName, "Save the Font File.", 
             TEXT("All Files...\0*.*\0"
                  "FYSOS Font file (*.fnt)\0*.fnt\0"
@@ -606,7 +606,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           
         case ID_FILE_EXIT:
           if (drawgrid)
-            SaveCurChar(font, cur_char);
+            SaveCurChar(font, cur_char, font->height);
           
           if (isdirty) {
             ret = MessageBox(hwnd, "Save Current File?", "Warning!!!", MB_ICONEXCLAMATION | MB_YESNOCANCEL);
@@ -667,9 +667,9 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           
           index -= font->start;
           if ((index >= 0) && (index < font->count)) {
-            SaveCurChar(font, cur_char);
+            SaveCurChar(font, cur_char, font->height);
             cur_char = index;
-            curw = LoadCurChar(hwnd, font, cur_char);
+            curw = LoadCurChar(hwnd, font, cur_char, TRUE);
             
             // enable/disable Prev/Next depending on where we are in the font
             EnableWindow(hButtonPrev, cur_char > 0);
@@ -740,11 +740,61 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           strncpy(font->name, szFontName, MAX_NAME_LEN - 1);
           isdirty = TRUE;
           break;
-          
+
+        case IDC_INC_HEIGHT:
+          if (curh < MAXH) {
+            for (x=0; x<font->count; x++) {
+              curw = LoadCurChar(hwnd, font, x, FALSE);
+              // calculate the width in bytes before the increase
+              y = ((((curw * curh) + 7) & ~7) / 8);  // bytes for this char
+              // and again after the increase
+              y1 = ((((curw * (curh + 1)) + 7) & ~7) / 8); // bytes for this char after incrementing
+              if (y1 - y) {
+                FontMoveData(font, x + 1, (y1 - y));
+                // increment the index of each char after in the font
+                for (x1=x+1; x1<font->count; x1++)
+                  info[x1].index += (y1 - y);
+                SaveCurChar(font, x, font->height + 1);
+              }
+            }
+            font->height = ++curh;
+            curw = LoadCurChar(hwnd, font, cur_char, FALSE);
+            isdirty = TRUE;
+            InvalidateRect(hwnd, NULL, TRUE);
+            EnableWindow(hButtonRestore, FALSE);  // can't restore now that the size is different
+          } else
+            MessageBox(hwnd, "Already at max height for this app", NULL, MB_OK);
+          break;
+
+        case IDC_DEC_HEIGHT:
+          if (curh > MINH) {
+            for (x=0; x<font->count; x++) {
+              curw = LoadCurChar(hwnd, font, x, FALSE);
+              // calculate the width in bytes before the increase
+              y = ((((curw * curh) + 7) & ~7) / 8);  // bytes for this char
+              // and again after the decrease
+              y1 = ((((curw * (curh + 1)) + 7) & ~7) / 8); // bytes for this char after incrementing
+              if (y1 - y) {
+                FontMoveData(font, x + 1, (y1 - y));
+                // increment the index of each char after in the font
+                for (x1=x+1; x1<font->count; x1++)
+                  info[x1].index += (y1 - y);
+                SaveCurChar(font, x, font->height - 1);
+              }
+            }
+            font->height = --curh;
+            curw = LoadCurChar(hwnd, font, cur_char, FALSE);
+            isdirty = TRUE;
+            InvalidateRect(hwnd, NULL, TRUE);
+            EnableWindow(hButtonRestore, FALSE);  // can't restore now that the size is different
+          } else
+            MessageBox(hwnd, "Already at min height for this app", NULL, MB_OK);
+          break;
+
         case IDC_DUMP:
           // must save first to calculate some of the values to dump.
           // TODO: might want to warn the user first.
-          SaveCurChar(font, cur_char);
+          SaveCurChar(font, cur_char, font->height);
           if (strlen(szFileName))
             SaveFile(hwnd, font);
           else
@@ -761,24 +811,24 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             tcurw = curw;
             if (lParam == (LPARAM) hButtonPrev) {
               if (cur_char > 0) {
-                SaveCurChar(font, cur_char);
+                SaveCurChar(font, cur_char, font->height);
                 cur_char--;
-                curw = LoadCurChar(hwnd, font, cur_char);
+                curw = LoadCurChar(hwnd, font, cur_char, TRUE);
               }
             } else if (lParam == (LPARAM) hButtonNext) {
               if (cur_char < (font->count - 1)) {
-                SaveCurChar(font, cur_char);
+                SaveCurChar(font, cur_char, font->height);
                 cur_char++;
-                curw = LoadCurChar(hwnd, font, cur_char);
+                curw = LoadCurChar(hwnd, font, cur_char, TRUE);
               }
             } else if (lParam == (LPARAM) hButtonFirst) {
-              SaveCurChar(font, cur_char);
+              SaveCurChar(font, cur_char, font->height);
               cur_char = 0;
-              curw = LoadCurChar(hwnd, font, cur_char);
+              curw = LoadCurChar(hwnd, font, cur_char, TRUE);
             } else if (lParam == (LPARAM) hButtonLast) {
-              SaveCurChar(font, cur_char);
+              SaveCurChar(font, cur_char, font->height);
               cur_char = (font->count - 1);
-              curw = LoadCurChar(hwnd, font, cur_char);
+              curw = LoadCurChar(hwnd, font, cur_char, TRUE);
             } else if (lParam == (LPARAM) hButtonUp) {
               for (y=0; y<(curh - 1); y++)
                 for (x=0; x<curw; x++)
@@ -1046,6 +1096,8 @@ void DisableItems(HMENU menu) {
   EnableMenuItem(menu, IDC_CONV_CUR, MF_GRAYED);
   EnableMenuItem(menu, IDC_NAME_CUR, MF_GRAYED);
   EnableMenuItem(menu, IDC_DUMP, MF_GRAYED);
+  EnableMenuItem(menu, IDC_INC_HEIGHT, MF_GRAYED);
+  EnableMenuItem(menu, IDC_DEC_HEIGHT, MF_GRAYED);
   
   // hide buttons
   ShowWindow(hButtonPrev, SW_HIDE);
@@ -1078,6 +1130,8 @@ void EnableItems(HMENU menu, struct FONT *font) {
   EnableMenuItem(menu, IDC_CONV_CUR, (tfixed) ? MF_ENABLED : MF_GRAYED);
   EnableMenuItem(menu, IDC_NAME_CUR, MF_ENABLED);
   EnableMenuItem(menu, IDC_DUMP, MF_ENABLED);
+  EnableMenuItem(menu, IDC_INC_HEIGHT, MF_ENABLED);
+  EnableMenuItem(menu, IDC_DEC_HEIGHT, MF_ENABLED);
   
   // show buttons
   SetWindowPos(hButtonPrev, HWND_TOP, BUTTONSRT, 10 + TEXTBOXH + 10, 0, 0, SWP_NOSIZE | SWP_NOOWNERZORDER);
@@ -1741,7 +1795,7 @@ void SetBit(bit8u *p, const int i, const bit8u value) {
 }
 
 // convert font data to grid data
-int LoadCurChar(HWND hwnd, struct FONT *font, const int ch) {
+int LoadCurChar(HWND hwnd, struct FONT *font, const int ch, const bool update) {
   int x, y, i;
   bit8u *p;
   struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + font->info_start);
@@ -1753,29 +1807,33 @@ int LoadCurChar(HWND hwnd, struct FONT *font, const int ch) {
     for (x=0; x < info[ch].width; x++)
       back[y][x] =  // save the loaded grid to back[][] so we can restore it
         grid[y][x] = GetBit(p, i++);
-  EnableWindow(hButtonRestore, TRUE);
-  
+
   SendMessage(hSliderX, TBM_SETPOS, TRUE, info[ch].deltax);
   SendMessage(hSliderY, TBM_SETPOS, TRUE, info[ch].deltay);
   SendMessage(hSliderW, TBM_SETPOS, TRUE, info[ch].deltaw);
-  
-  // do we need to widen the window
-  int width = (info[ch].width >= 15) ? APP_WIDTH_WIDE : APP_WIDTH;
-  SetWindowPos(hwnd, NULL, 0, 0, width, APP_GET_HEIGHT, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOZORDER);
+
+  // don't update the "window" if we didn't change anything
+  if (update) {
+    EnableWindow(hButtonRestore, TRUE);
+    
+    // do we need to widen the window
+    int width = (info[ch].width >= 15) ? APP_WIDTH_WIDE : APP_WIDTH;
+    SetWindowPos(hwnd, NULL, 0, 0, width, APP_GET_HEIGHT, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOZORDER);
+  }
   
   return info[ch].width;
 }
 
 // convert grid data to font data
-void SaveCurChar(struct FONT *font, const int ch) {
-  bit32u x, y, i;
+void SaveCurChar(struct FONT *font, const int ch, const int height) {
+  int x, y, i;
   bit8u *p;
   struct FONT_INFO *info = (struct FONT_INFO *) ((bit8u *) font + font->info_start);
   bit8u *data = (bit8u *) ((bit8u *) info + (sizeof(struct FONT_INFO) * font->count));
 
   i = 0;
   p = (bit8u *) (data + info[ch].index);
-  for (y=0; y<font->height; y++)
+  for (y=0; y<height; y++)
     for (x=0; x < info[ch].width; x++)
       SetBit(p, i++, grid[y][x]);
   
