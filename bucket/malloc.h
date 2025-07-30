@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update: 22 Feb 2025
+ * Last update: 28 July 2025
  *
  */
 
@@ -120,8 +120,8 @@ struct S_MEMORY_BUCKET {
 
 #define malloc(s, f, n)      kmalloc((s), 1, (f) & ~MALLOC_FLAGS_CLEAR, n)
 #define calloc(s, f, n)      kmalloc((s), 1, (f) | MALLOC_FLAGS_CLEAR, n)
-#define amalloc(s, a, f, n)  kmalloc((s), (a), (f) & ~MALLOC_FLAGS_CLEAR, n)
-#define acalloc(s, a, f, n)  kmalloc((s), (a), (f) | MALLOC_FLAGS_CLEAR, n)
+#define amalloc(s, a, f, n)  kmalloc((s), (a), ((f) & ~MALLOC_FLAGS_CLEAR) | MALLOC_FLAGS_ALIGNED, n)
+#define acalloc(s, a, f, n)  kmalloc((s), (a), (f) | MALLOC_FLAGS_CLEAR | MALLOC_FLAGS_ALIGNED, n)
 
 
 // local functions

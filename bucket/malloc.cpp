@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update: 14 Jun 2025
+ * Last update: 27 July 2025
  *
  */
 
@@ -150,7 +150,7 @@ struct S_MEMORY_PEBBLE *place_pebble(struct S_MEMORY_BUCKET *bucket, struct S_ME
   size_t needed_size, best_size = -1;
 
   // calculate the size we need (maybe the ALIGNMENT flag was used)
-  needed_size = (pebble->lflags & MALLOC_FLAGS_ALIGNED) ? pebble->size + pebble->alignment + sizeof(struct S_MEMORY_PEBBLE) : pebble->size;
+  needed_size = (pebble->lflags & PEBBLE_FLAG_ALIGNED) ? pebble->size + pebble->alignment + sizeof(struct S_MEMORY_PEBBLE) : pebble->size;
   
   if (bucket->lflags & BUCKET_FLAG_BEST) {
     // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -421,7 +421,8 @@ void *kmalloc(size_t size, bit32u alignment, bit32u flags, const char *name) {
 
   struct S_MEMORY_PEBBLE pebble;
   pebble.magic = MALLOC_MAGIC_PEBBLE;
-  pebble.lflags =((flags & MALLOC_FLAGS_CLEAR) ? PEBBLE_FLAG_CLEARED : 0) | PEBBLE_FLAG_IN_USE;
+  pebble.lflags = ((flags & MALLOC_FLAGS_CLEAR) ? PEBBLE_FLAG_CLEARED : 0) |
+                  ((flags & MALLOC_FLAGS_ALIGNED) ? PEBBLE_FLAG_ALIGNED : 0) | PEBBLE_FLAG_IN_USE;
   pebble.alignment = alignment;
   if (flags & MALLOC_FLAGS_PHYSICAL)
     pebble.size = (size + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1);
@@ -533,7 +534,7 @@ void *realloc(void *ptr, size_t size) {
 
   if (size <= pebble->size) {
     spin_lock(&pebble->parent->spinlock);
-    ret = (void *) ((bit8u *) shrink_pebble(pebble, size) + sizeof(struct S_MEMORY_PEBBLE));
+    ret = shrink_pebble(pebble, size);
     spin_unlock(&pebble->parent->spinlock);
   } else {
     // the new requested size is larger than the current pebble, so allocate a new space
@@ -563,6 +564,7 @@ void mfree(void *ptr) {
 
   // mark it as free
   pebble->lflags = PEBBLE_FLAG_FREE;
+  pebble->alignment = 1;
 
   // see if we can absorb any of the neighbors
   pebble = melt_prev(pebble);
