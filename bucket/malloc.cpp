@@ -534,7 +534,7 @@ void *realloc(void *ptr, size_t size) {
 
   if (size <= pebble->size) {
     spin_lock(&pebble->parent->spinlock);
-    ret = shrink_pebble(pebble, size);
+    ret = (void *) ((bit8u *) shrink_pebble(pebble, size) + sizeof(struct S_MEMORY_PEBBLE));
     spin_unlock(&pebble->parent->spinlock);
   } else {
     // the new requested size is larger than the current pebble, so allocate a new space
