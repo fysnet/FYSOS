@@ -4,7 +4,7 @@ This is an attempt to make a simple and easy to use heap allocator.
 
 After searching for an easy to use, mostly drop-in code, heap allocator, most of them ranged from very easy to quite difficult to understand what was actually being done under the hood.  One was quite simple, but allocated a minimum of a 4096-byte page for every memory request.  Another was quite efficient for small allocation amounts, but was extremely difficult to understand exactly what was happening under the hood.
 
-Therefore, I created this one.  It is very simple, and more importantly, has documentation that isn't just source code comments.  The specification can be found at [https://github.com/fysnet/FYSOS/blob/master/bucket](https://www.fysnet.net/bucket/index.php). It explains exactly what is going on under the hood.
+Therefore, I created this one.  It is very simple, and more importantly, has documentation that isn't just source code comments.  The specification can be found at [https://www.fysnet.net/bucket/index.php](https://www.fysnet.net/bucket/index.php). It explains exactly what is going on under the hood.
 
 The two source files needed are malloc.cpp and malloc.h.  The bucket.cpp file contains the skeleton of the four "out-side" functions that are needed.
 
