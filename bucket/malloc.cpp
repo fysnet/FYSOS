@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update: 27 July 2025
+ * Last update: 6 Aug 2025
  *
  */
 
@@ -59,7 +59,7 @@ struct S_MEMORY_BUCKET *create_bucket(size_t size, const bit32u flags) {
     size = ALLOC_MIN;
 #endif
   
-  // size must be an multiple of a page
+  // size must be a multiple of a page
   size = (size + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1);
 
   // if the MALLOC_FLAGS_PHYSICAL flag is given, prepend a page to the size
@@ -97,9 +97,11 @@ struct S_MEMORY_BUCKET *create_bucket(size_t size, const bit32u flags) {
 }
 
 // insert a bucket at destination
+// 'bucket' is the new bucket to insert
+// 'destination' is the existing bucket insert before or after.
 void insert_bucket(struct S_MEMORY_BUCKET *bucket, void *destination) {
   struct S_MEMORY_BUCKET *dest = (struct S_MEMORY_BUCKET *) destination;
-
+  
   if (bucket && dest) {
     spin_lock(&dest->spinlock);
     UPDATE_NODE(bucket, dest);
