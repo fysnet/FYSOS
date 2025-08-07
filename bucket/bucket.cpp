@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update: 22 Feb 2025
+ * Last update: 6 Aug 2025
  *
  */
 
@@ -35,6 +35,7 @@
 #define MALLOC_FLAGS_LOW4GIG    (1 << 5)   // must be before the 4 Gig mark, inclusive
 #define MALLOC_FLAGS_ANYWHERE   (1 << 6)   // can be anywhere in the 32-bit or 64-bit memory range
 #define MALLOC_FLAGS_ALIGNED    (1 << 7)   // must be aligned.  The aligned parameter is now used, else it is ignored.
+#define MALLOC_FLAGS_PERSISTENT (1 << 8)   // don't free the bucket if it if it becomes empty.
 #define MALLOC_HARDWARE32       (MALLOC_FLAGS_LOW4GIG | MALLOC_FLAGS_PHYSICAL | MALLOC_FLAGS_CLEAR)
 #define MALLOC_HARDWARE64       (                       MALLOC_FLAGS_PHYSICAL | MALLOC_FLAGS_CLEAR)
 

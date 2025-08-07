@@ -43,7 +43,7 @@
 //  with a single Pebble in it.  The pebble will be free.
 HANDLE malloc_init(size_t size) {
 
-  struct S_MEMORY_BUCKET *bucket = create_bucket(size, MALLOC_FLAGS_VIRTUAL);
+  struct S_MEMORY_BUCKET *bucket = create_bucket(size, MALLOC_FLAGS_VIRTUAL | MALLOC_FLAGS_PERSISTENT);
 
   return bucket;
 }
@@ -98,7 +98,7 @@ struct S_MEMORY_BUCKET *create_bucket(size_t size, const bit32u flags) {
 
 // insert a bucket at destination
 // 'bucket' is the new bucket to insert
-// 'destination' is the existing bucket insert before or after.
+// 'destination' is the existing bucket
 void insert_bucket(struct S_MEMORY_BUCKET *bucket, void *destination) {
   struct S_MEMORY_BUCKET *dest = (struct S_MEMORY_BUCKET *) destination;
   
@@ -576,8 +576,10 @@ void mfree(void *ptr) {
 
   // if this empties the bucket, shall we remove the bucket?
   struct S_MEMORY_BUCKET *bucket = pebble->parent;
-  if (PEBBLE_IS_FREE(bucket->first) && (bucket->first->prev == NULL) && (bucket->first->next == NULL))
-    remove_bucket(bucket);
-  else
-    bucket_update_largest(bucket);
+  if (!((bucket->lflags >> 8) & MALLOC_FLAGS_PERSISTENT)) {
+    if (PEBBLE_IS_FREE(bucket->first) && (bucket->first->prev == NULL) && (bucket->first->next == NULL))
+      remove_bucket(bucket);
+    else
+      bucket_update_largest(bucket);
+  }
 }
