@@ -1,6 +1,6 @@
 /*             Author: Benjamin David Lunt
  *                     Forever Young Software
- *                     Copyright (c) 1984-2023
+ *                     Copyright (c) 1984-2025
  *  
  *  This code is donated to the Freeware community.  You have the
  *   right to use it for learning purposes only.  You may not modify it
@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update:  27 Jan 2023
+ * Last update:  29 Aug 2025
  *
  */
 
@@ -397,9 +397,6 @@ uint32_t *registry_add_cell(uint32_t *pos, const char *name, const size_t len) {
 
 // removes a Cell or a (number of) Hive(s) from the current position
 uint32_t *registry_remove_item(uint32_t *pos) {
-  
-  spin_lock(&reg_spinlock);
-
   struct S_REGISTRY_BASE *base = (struct S_REGISTRY_BASE *) kernel_reg;
   uint32_t *s = pos, *end = NULL;
   size_t count, clear;
@@ -425,8 +422,6 @@ uint32_t *registry_remove_item(uint32_t *pos) {
     while (clear--)
       *s++ = 0;
   }
-
-  spin_unlock(&reg_spinlock);
 
   return pos;
 }
@@ -653,6 +648,8 @@ int registry_remove(const char *path) {
   int i, count = 0, ret = 0;
   uint32_t *p, *pos = (uint32_t *) ((uint8_t *) base + sizeof(struct S_REGISTRY_BASE));
 
+  spin_lock(&reg_spinlock);
+
   // allocate and parse the path
   char **arr = (char **) registry_parse_path(path, &count);
 
@@ -692,6 +689,8 @@ int registry_remove(const char *path) {
       free(arr[i]);
     free(arr);
   }
+
+  spin_unlock(&reg_spinlock);
 
   return ret;
 }
