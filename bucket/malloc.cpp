@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update: 6 Aug 2025
+ * Last update: 17 Sept 2025
  *
  */
 
@@ -270,6 +270,8 @@ struct S_MEMORY_PEBBLE *split_pebble(struct S_MEMORY_PEBBLE *this_pebble, struct
       new_pebble->size = this_pebble->size - new_size - sizeof(struct S_MEMORY_PEBBLE);
       new_pebble->alignment = 1;
       new_pebble->prev = this_pebble;
+      if (this_pebble->next)
+        this_pebble->next->prev = new_pebble;
       this_pebble->size = new_size;
       this_pebble->next = new_pebble;
     }
