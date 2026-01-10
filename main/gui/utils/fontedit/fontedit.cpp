@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2025
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -660,6 +660,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
           
         case ID_EDIT_GOTO:
           index = font->start + cur_char;
+          tstart = font->start;
+          tending = font->count - 1;
           ret = DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_GOTO), hwnd, (DLGPROC) GotoDialogProc);
           SetFocus(hwnd); // make sure our main window has focus
           if (ret == IDCANCEL)
