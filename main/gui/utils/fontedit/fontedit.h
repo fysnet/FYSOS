@@ -56,7 +56,7 @@
  *             https://www.fysnet.net/osdesign_book_series.htm
  *
  *
- *  Last updated: 27 July 2025
+ *  Last updated: 9 Jan 2026
  */
 
 #define ENDIAN_16U(x)   ((((x) & 0xFF) <<  8) | (((x) & 0xFF00) >> 8))

@@ -74,10 +74,9 @@
  *   When using the Visual Studio IDE, do not edit the resource.rc file within
  *    the IDE's editor.  It will add items that will break this build.
  *
- *  Last updated: 27 July 2025
+ *  Last updated: 9 Jan 2026
  *
- *   This code was built with Visual Studio 6.0 (for 32-bit Windows XP)
- *    and Visual Studio 2019 (for 64-bit Windows 10)
+ *   This code was built Visual Studio 2019 (for 32- and 64-bit Windows 10)
  *
  */
 
