@@ -878,9 +878,9 @@ void obj_position(struct OBJECT *obj, int x, int y, int w, int h) {
   
   rect = *GUIRECT(obj);
   if (x != GUIDEF)
-    rect.left = x + gui_left(obj->parent);
+    rect.left = x + ((obj->parent) ? gui_left(obj->parent) : 0);
   if (y != GUIDEF)
-    rect.top = y + gui_top(obj->parent);
+    rect.top = y + ((obj->parent) ? gui_top(obj->parent) : 0);
   if (w == GUIDEF)
     w = gui_w(obj);
   if (h == GUIDEF)
@@ -2892,3 +2892,4 @@ void prefix_default_path(char *target, const char *filename) {
   strcpy(target, default_path);
   strcat(target, filename);  
 }
+
