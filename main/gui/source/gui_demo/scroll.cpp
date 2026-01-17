@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -59,7 +59,7 @@
 /*
  *  scroll.cpp
  *
- *  Last updated: 17 July 2020
+ *  Last updated: 16 Jan 2026
  */
 
 #include "gui.h"
@@ -138,22 +138,26 @@ void scroll_geometry(struct SCROLL *scroll, int left, int top, int w, int h) {
   
   if (scroll->h > scroll->vh) {
     scroll_vscroll(scroll);
-    scroll->vw -= gui_w(scroll->vscroll);
+    if (scroll->vscroll != NULL)
+      scroll->vw -= gui_w(scroll->vscroll);
     need_v = TRUE;
   }
   if (scroll->w > scroll->vw) {
     scroll_hscroll(scroll);
-    scroll->vh -= gui_h(scroll->hscroll);
+    if (scroll->hscroll != NULL)
+      scroll->vh -= gui_h(scroll->hscroll);
     need_h = TRUE;
   }
   if ((scroll->h > scroll->vh) && !need_v) {
     scroll_vscroll(scroll);
-    scroll->vw -= gui_w(scroll->vscroll);
+    if (scroll->vscroll != NULL)
+      scroll->vw -= gui_w(scroll->vscroll);
     need_v = TRUE;
   }
   if ((scroll->w > scroll->vw) && !need_h) {
     scroll_hscroll(scroll);
-    scroll->vh -= gui_h(scroll->hscroll);
+    if (scroll->hscroll != NULL)
+      scroll->vh -= gui_h(scroll->hscroll);
     need_h = TRUE;
   }
   
@@ -326,3 +330,4 @@ struct SCROLL *obj_scroll(struct SCROLL *scroll, bit32u size, struct OBJECT *par
   
   return scroll;
 }
+
