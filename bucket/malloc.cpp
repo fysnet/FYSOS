@@ -1,6 +1,6 @@
 /*             Author: Benjamin David Lunt
  *                     Forever Young Software
- *                     Copyright (c) 1984-2025
+ *                     Copyright (c) 1984-2026
  *  
  *  This code is donated to the Freeware communitee.  You have the
  *   right to use it for learning purposes only.  You may not modify it
@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update: 17 Sept 2025
+ * Last update: 24 Feb 2026
  *
  */
 
@@ -161,7 +161,7 @@ struct S_MEMORY_PEBBLE *place_pebble(struct S_MEMORY_BUCKET *bucket, struct S_ME
     //  large enough to insert our pebble, but the least sized free
     //  entry that satisfies our request.
     while (start != NULL) {
-      if ((PEBBLE_IS_FREE(start) && (start->size <= needed_size))) {
+      if ((PEBBLE_IS_FREE(start) && (start->size >= needed_size))) {
         if (start->size < best_size) {
           best = start;
           best_size = start->size;
@@ -184,8 +184,7 @@ struct S_MEMORY_PEBBLE *place_pebble(struct S_MEMORY_BUCKET *bucket, struct S_ME
     // scroll through the pebbles until we find a free one
     //  large enough to insert our pebble in.  First one found, we use.
     while (start != NULL) {
-      if (PEBBLE_IS_FREE(start) && 
-         (start->size >= needed_size)) {
+      if (PEBBLE_IS_FREE(start) && (start->size >= needed_size)) {
         // we found one to use.  Do we need to split it?
         start = split_pebble(start, pebble);
         start->lflags = pebble->lflags;
