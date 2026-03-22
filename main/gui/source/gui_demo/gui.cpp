@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -696,8 +696,9 @@ done:
  *   
  */
 void *emit(EVENT event, const void *data) {
-  if (GUIOBJ(eventstack.object)->parent)
-    return obj_event(GUIOBJ(eventstack.object)->parent, event, data);
+  if (eventstack.object)
+    if (GUIOBJ(eventstack.object)->parent)
+      return obj_event(GUIOBJ(eventstack.object)->parent, event, data);
   
   return NULL;
 }
@@ -710,8 +711,9 @@ void *emit(EVENT event, const void *data) {
  *   
  */
 void *inform(EVENT event, const void *data) {
-  if (GUIOBJ(eventstack.object)->win->parent)
-    return obj_event(GUIOBJ(GUIOBJ(eventstack.object)->win->parent), event, data);
+  if (eventstack.object)
+    if (GUIOBJ(eventstack.object)->win->parent)
+      return obj_event(GUIOBJ(GUIOBJ(eventstack.object)->win->parent), event, data);
   
   return NULL;
 }
