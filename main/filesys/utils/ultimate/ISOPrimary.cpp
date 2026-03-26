@@ -388,7 +388,7 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
     // A directory entry should not cross a 2048-byte boundary.
     // if the len is zero, move to the next sector boundary.
     if (r->len == 0) {
-      if ((2048 - sectlen) < 0)
+      if ((2048 - sectlen) <= 0)
         break;
       r = (struct S_ISO_ROOT *) ((BYTE *) r + (2048 - sectlen));
       sectlen = 0;
