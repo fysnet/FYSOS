@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -251,6 +251,32 @@ void CISOSupple::OnApplyB() {
   
 }
 
+/* Checks to see if the system is a Joliet volume
+ * (Assumes the buffer is filled with the Supplimentary Volume Descriptor)
+ * Returns 0 if not Joliet, else 1 = level 1, etc.
+ */
+int CISOSupple::IsJoliet(void *buffer) {
+  struct S_ISO_SVD *svd = (struct S_ISO_SVD *) buffer;
+
+  // the volume flags field, bit 0 must be zero
+  if (svd->flags & 1)
+    return 0;
+  
+  // the SVD has an Escape Sequence field.
+  // if this field starts with:
+  //   '%\@' (\x25\x2F\x40), level 1
+  if (memcmp(svd->escape_sequ, "\x25\x2F\x40", 3) == 0)
+    return 1;
+  //   '%\C' (\x25\x2F\x43), level 2
+  if (memcmp(svd->escape_sequ, "\x25\x2F\x43", 3) == 0)
+    return 2;
+  //   '%\E' (\x25\x2F\x45), level 3
+  if (memcmp(svd->escape_sequ, "\x25\x2F\x45", 3) == 0)
+    return 3;
+
+  return 0;
+}
+
 void CISOSupple::DoRoot(void) {
   struct S_ISO_SVD *pvd = (struct S_ISO_SVD *) m_descriptor;
   
@@ -262,6 +288,9 @@ void CISOSupple::DoRoot(void) {
   m_dir_tree.SetItemState(m_hRoot, TVIS_BOLD, TVIS_BOLD);
   
   UpdateWindow();
+
+  // we need to see if we are Joliet
+  int level = IsJoliet(m_descriptor);
   
   // fill the tree with the directory
   struct S_ISO_ROOT *root;
@@ -269,7 +298,7 @@ void CISOSupple::DoRoot(void) {
   if (root) {
     SaveItemInfo(m_hRoot, &pvd->root, ITEM_IS_FOLDER, 0);
     CWaitCursor wait; // display a wait cursor
-    ParseDir(root, pvd->root.data_len, m_hRoot, TRUE);
+    ParseDir(root, pvd->root.data_len, m_hRoot, TRUE, level);
     m_dir_tree.Expand(m_hRoot, TVE_EXPAND);
     free(root);
     wait.Restore();
@@ -279,7 +308,7 @@ void CISOSupple::DoRoot(void) {
   }
 }
 
-void CISOSupple::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM parent, BOOL IsRoot) {
+void CISOSupple::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM parent, BOOL IsRoot, int level) {
   struct S_ISO_ROOT *r = root, *sub;
   HTREEITEM hItem;
   char szName[256+1];
@@ -312,18 +341,31 @@ void CISOSupple::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM pare
         if (hItem == NULL) return;
         SaveItemInfo(hItem, r, ITEM_IS_FOLDER, 0);
       } else {
-        // stop at ';' as well as Little-endia it
-        memset(szName, 0, 256+1);
-        WORD *w = (WORD *) r->ident;
-        int i;
-        for (i=0; i<r->fi_len/2; i++) {
-          if (w[i] == 0x002E)  // serpartor char
-            break;
-          if (w[i] == 0x3B00)  // serpartor char
-            break;
-          wzName[i] = ((w[i] >> 8) | (w[i] << 8));
+        if (level == 0) {
+          // stop at ';'
+          bool b = FALSE;
+          for (int i=0; i<r->fi_len; i++) {
+            b = (!b && (r->ident[i] == 0x3B));
+            if (b)
+              r->ident[i] = 0x00;
+          }
+        
+          memcpy(szName, r->ident, r->fi_len);
+          szName[r->fi_len] = '\0';
+        } else {
+          // stop at ';' as well as Little-endian it
+          memset(szName, 0, 256+1);
+          WORD *w = (WORD *) r->ident;
+          int i;
+          for (i=0; i<r->fi_len/2; i++) {
+            if (w[i] == 0x002E)  // serpartor char
+              break;
+            if (w[i] == 0x3B00)  // serpartor char
+              break;
+            wzName[i] = ((w[i] >> 8) | (w[i] << 8));
+          }
+          WideCharToMultiByte(CP_ACP, 0, (LPCWSTR) wzName, i, &szName[0], 256, NULL, NULL);
         }
-        WideCharToMultiByte(CP_ACP, 0, (LPCWSTR) wzName, i, &szName[0], 256, NULL, NULL);
         name = szName;
         if (r->flags & ISO_ROOT_FLAGS_EXISTS)
           name += " (hidden)";
@@ -334,7 +376,7 @@ void CISOSupple::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM pare
           SaveItemInfo(hItem, r, ITEM_IS_FOLDER, 0);
           sub = (struct S_ISO_ROOT *) ReadFile(r->extent_loc, r->data_len, r->flags, FALSE);
           if (sub) {
-            ParseDir(sub, r->data_len, hItem, FALSE);
+            ParseDir(sub, r->data_len, hItem, FALSE, level);
             free(sub);
           }
         } else {

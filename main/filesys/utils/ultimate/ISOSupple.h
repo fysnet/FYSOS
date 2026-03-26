@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -158,9 +158,10 @@ public:
   //}}AFX_DATA
 
   void Start(const DWORD64 lba, DWORD color, BOOL IsNewTab);
+  int IsJoliet(void *buffer);
   void DoRoot(void);
   void *ReadFile(DWORD extent, DWORD size, BYTE Flags, BOOL IsRoot);
-  void ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM parent, BOOL IsRoot);
+  void ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM parent, BOOL IsRoot, int level);
   void SaveItemInfo(HTREEITEM hItem, struct S_ISO_ROOT *root, DWORD flags, DWORD ErrorCode);
   
   void SendToDialog(const BOOL update);

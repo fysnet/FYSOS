@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -318,7 +318,7 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
   DWORD ErrorCode;
   unsigned ErrorCount = 0;
   unsigned ErrorMax = AfxGetApp()->GetProfileInt("Settings", "MaxErrorCount", 10);
-  unsigned sectlen = 0;
+  int sectlen = 0;
 
   // catch to make sure we don't simply repeatedly recurse on '.' and '..' entries
   if (++m_parse_depth_limit > MAX_DIR_PARSE_DEPTH) {
@@ -388,6 +388,8 @@ bool CISOPrimary::ParseDir(struct S_ISO_ROOT *root, DWORD datalen, HTREEITEM par
     // A directory entry should not cross a 2048-byte boundary.
     // if the len is zero, move to the next sector boundary.
     if (r->len == 0) {
+      if ((2048 - sectlen) < 0)
+        break;
       r = (struct S_ISO_ROOT *) ((BYTE *) r + (2048 - sectlen));
       sectlen = 0;
     }
