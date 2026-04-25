@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -69,6 +69,7 @@
 #include "Mbr.h"
 #include "VHD.h"
 
+#include "adfs.h"
 #include "Fat.h"
 #include "Lean.h"
 #include "Ext2.h"
@@ -166,7 +167,9 @@ void CImageBar::ImageParse(CFile *file) {
   dlg->SetDlgItemText(IDC_MID_DISP, cs);
 
   // check to see if a MBR exists
-  CheckForMBRRecusive(0, TotalBlocks);
+  // (only check if sector size is 512 or greater)
+  if (dlg->m_sect_size >= 512)
+    CheckForMBRRecusive(0, TotalBlocks);
 
   // if there was not a valid MBR, there won't be a valid GPT  
   if (dlg->Mbr[0].m_exists) {
@@ -189,7 +192,7 @@ void CImageBar::ImageParse(CFile *file) {
   //  it crashes on the first time we add a page)
   if (dlg->m_MBRCount == 0)
     dlg->m_TabControl.AddPage(&dlg->Mbr[0]);
-
+  
   // if the MBR is a PMBR, change the tab's title
   CPropertyPage *p = dlg->m_TabControl.GetPage(dlg->m_TabControl.GetPageIndex(&dlg->Mbr[0]));
   if (dlg->Gpt.m_exists && dlg->Mbr[0].IsPMBR())
@@ -197,6 +200,14 @@ void CImageBar::ImageParse(CFile *file) {
   else
     p->m_psp.pszTitle = "MBR";
   
+  // move the Tabs to the correct position
+  dlg->m_TabControl.Create(dlg, WS_VISIBLE | WS_CHILD | WS_DLGFRAME);
+  dlg->m_TabControl.ModifyStyleEx(0, WS_EX_CONTROLPARENT);
+  CRect rect;
+  dlg->m_StaticTabs.GetWindowRect(&rect);
+  dlg->ScreenToClient(&rect);
+  dlg->m_TabControl.MoveWindow(&rect);
+
   // If we have an ISO image as well, parse it
   if (dlg->m_isISOImage) {
     if (dlg->ISO.Start()) {
@@ -212,15 +223,7 @@ void CImageBar::ImageParse(CFile *file) {
         dlg->ISO.m_NSR.m_draw_index = DrawBox(dlg->ISO.m_NSR.m_lba, dlg->ISO.m_NSR.m_lba + dlg->ISO.m_NSR.m_size - 1, TotalBlocks, dlg->ISO.m_NSR.m_color, TRUE, "ISO", &dlg->ISO.m_NSR);
     }
   }
-  
-  // move the Tabs to the correct position
-  dlg->m_TabControl.Create(dlg, WS_VISIBLE | WS_CHILD | WS_DLGFRAME);
-  dlg->m_TabControl.ModifyStyleEx(0, WS_EX_CONTROLPARENT);
-  CRect rect;
-  dlg->m_StaticTabs.GetWindowRect(&rect);
-  dlg->ScreenToClient(&rect);
-  dlg->m_TabControl.MoveWindow(&rect);
-  
+
   // update the items
   for (i=0; i<dlg->m_MBRCount; i++) {
     if (dlg->Mbr[i].m_exists) {
@@ -258,8 +261,10 @@ void CImageBar::ImageParse(CFile *file) {
         ImageParseVolume(type, lba, size, TotalBlocks);
       }
     }
-  } else
-    dlg->Mbr[0].GetDlgItem(IDC_MBR_LEGACY_GPT)->EnableWindow(FALSE);
+  } else {
+    if (dlg->m_MBRCount > 0)
+      dlg->Mbr[0].GetDlgItem(IDC_MBR_LEGACY_GPT)->EnableWindow(FALSE);
+  }
     
   if (dlg->Embr.m_exists) {
     DrawBox(1, dlg->Embr.m_total_sectors - 1, TotalBlocks, dlg->Embr.m_color, FALSE, "eMBR", &dlg->Embr);
@@ -313,6 +318,10 @@ void CImageBar::ImageParse(CFile *file) {
       dlg->m_hasVHD = TRUE;
     }
   }
+
+  // if we have sectors less than 512 bytes, we can't have a MBR
+  if (dlg->m_sect_size < 512)
+    dlg->m_TabControl.RemovePage(&dlg->Mbr[0]);
   
   dlg->m_TabControl.Invalidate(FALSE);
 }
@@ -332,6 +341,17 @@ void CImageBar::ImageParseVolume(const BYTE type, const DWORD64 lba, const DWORD
   // detect file system...
   fs_type = DetectFileSystem(lba, size);
   switch (fs_type) {
+    case FS_ADFS:
+      if (dlg->m_AdfsCount >= MAX_SUB_VOLUMES) {
+        AfxMessageBox("Too many ADFS Volumes...");
+        return;
+      }
+      color = dlg->Adfs[dlg->m_AdfsCount].GetNewColor(dlg->m_AdfsCount);
+      dlg->Adfs[dlg->m_AdfsCount].m_draw_index = DrawBox(lba, lba+size-1, TotalBlocks, color, TRUE, "Adfs", &dlg->Adfs[dlg->m_AdfsCount]);
+      dlg->Adfs[dlg->m_AdfsCount].Start(lba, size, color, dlg->m_AdfsCount, TRUE);
+      dlg->m_AdfsCount++;
+      break;
+
     case FS_FAT12:
     case FS_FAT16:
     case FS_FAT32:
@@ -561,6 +581,13 @@ int CImageBar::DetectFileSystem(const DWORD64 lba, const DWORD64 size) {
   buffer = malloc(65 * MAX_SECT_SIZE);
   dlg->ReadFromFile(buffer, lba, 65);
   
+  // detect a ADFS file system
+  fs_type = DetectAdfs((BYTE *) buffer, dlg->m_sect_size);
+  if (fs_type > -1) {
+    free(buffer);
+    return fs_type;
+  }
+  
   // detect a FAT file system
   fs_type = DetectFat((struct S_FAT1216_BPB *) buffer, dlg->m_sect_size);
   if (fs_type > -1) {
@@ -619,6 +646,75 @@ int CImageBar::DetectFileSystem(const DWORD64 lba, const DWORD64 size) {
   
   // No (Known) File System detected
   free(buffer);
+  return -1;
+}
+
+// (we have sectors 0 through 64 here)
+// The following does a few small checks. It could be enhanced greatly.
+//  We only support:
+//     Type L:  SPT = 16, BytePerSector = 256, Heads = 2, 80 Tracks = 640KB (Map = old, Dir's = old) (root at 0x200)
+int CImageBar::DetectAdfs(BYTE *buffer, const unsigned sect_size) {
+  int count = 0; // currently a count of 5 checks are made
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  unsigned crc = 0;
+  int i;
+
+  // Type L ADFS file systems use only 256-byte sectors.
+  // If we haven't specified this size, don't try
+  if (sect_size == 256)
+    count++;
+
+  ////// sector 0
+  // is byte 255 the bit8u(sum + carry) of byte 254->0
+  // (don't add the carry on the last one)
+  for (i=254; i>=0; i--) {
+    crc += buffer[i];
+    if (crc > 0xFF) {
+      crc &= 0xFF;
+      if (i > 0)
+        crc++;
+    }
+  }
+  if (crc == buffer[255])
+    count++;
+
+  // 0x0F6 = zero
+  if (buffer[0xF6] == 0)
+    count++;
+
+  ////// sector 1
+  buffer += 256; // move to sector 1
+  
+  // is byte 255 the bit8u(sum + carry) of byte 254->0
+  // (don't carry the carry on the last one)
+  crc = 0;
+  for (i=254; i>=0; i--) {
+    crc += buffer[i];
+    if (crc > 0xFF) {
+      crc &= 0xFF;
+      if (i > 0)
+        crc++;
+    }
+  }
+  if (crc == buffer[255])
+    count++;
+
+  ////// sector 2 (Root directory)
+  buffer += 256; // move to sector 2
+
+  // At this point, if the first two sectors are all cleared to zero,
+  //  we have (mistakenly) detected an ADFS file system, so we must
+  //  do a few more checks...
+
+  // Bytes 1->4 will always be "Hugo"
+  if (* (DWORD *) &buffer[1] == 0x6F677548)
+    count++;
+
+  if (count == 5)
+    return FS_ADFS;
+
+  m_det_counts.AdfsC = count; // save for "unknown partition"
+  m_det_counts.AdfsT = 5;
   return -1;
 }
 

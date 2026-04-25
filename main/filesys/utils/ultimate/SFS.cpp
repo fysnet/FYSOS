@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -499,7 +499,6 @@ void CSFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   m_size = size;
   m_index = index;
   m_color = color;
-  m_isvalid = TRUE;
   
   dlg->ReadFromFile(buffer, lba, 1);
   memcpy(&m_super, buffer + SFS_SUPER_LOC, sizeof(struct S_SFS_SUPER));

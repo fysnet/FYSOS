@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -77,6 +77,7 @@
 #include "Embr.h"
 #include "VHD.h"
 
+#include "adfs.h"
 #include "Fat.h"
 #include "Lean.h"
 #include "SFS.h"
@@ -153,6 +154,10 @@ public:
   
   BOOL  m_isISOImage;
   CISOImage ISO;
+  
+  CADFS Adfs[MAX_SUB_VOLUMES];
+  CString m_AdfsNames[MAX_SUB_VOLUMES];
+  int  m_AdfsCount;
   
   CFat Fat[MAX_SUB_VOLUMES];
   CString m_FatNames[MAX_SUB_VOLUMES];

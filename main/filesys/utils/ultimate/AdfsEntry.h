@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -56,63 +56,64 @@
  *             http://www.fysnet.net/osdesign_book_series.htm
  */
 
-#if !defined(AFX_MYTREECTRL_H__D10F989D_088D_449D_8E72_E3E414D0E5BA__INCLUDED_)
-#define AFX_MYTREECTRL_H__D10F989D_088D_449D_8E72_E3E414D0E5BA__INCLUDED_
+#if !defined(AFX_ADFSENTRY_H__9482900B_99E4_4361_A22B_9570EE97B59F__INCLUDED_)
+#define AFX_ADFSENTRY_H__9482900B_99E4_4361_A22B_9570EE97B59F__INCLUDED_
 
 #if _MSC_VER > 1000
 #pragma once
 #endif // _MSC_VER > 1000
-// MyImageList.h : header file
+// ADFSEntry.h : header file
 //
 
-// list of items we "append" to each tree item
-//#define MAX_ITEMS_ALLOWED  4096
-#define MAX_ITEM_SIZE      (4096-16)
-struct S_ITEMS {
-  int  IsDir;   // 0 = file, 1 = dir, -1 = root dir
-  BYTE reserved[15];
-  BYTE fs_item[MAX_ITEM_SIZE];
-};
+/////////////////////////////////////////////////////////////////////////////
+// CADFSEntry dialog
 
-class CMyTreeCtrl : public CTreeCtrl {
-  DECLARE_DYNCREATE(CMyTreeCtrl)
-
+class CADFSEntry : public CDialog
+{
 // Construction
 public:
-  CMyTreeCtrl();
-  ~CMyTreeCtrl();
+  CADFSEntry(CWnd* pParent = NULL);   // standard constructor
+
+// Dialog Data
+  //{{AFX_DATA(CADFSEntry)
+  enum { IDD = IDD_ADFS_ENTRY };
+  BOOL m_canberead;
+  BOOL m_canbewritten;
+  BOOL m_locked;
+  BOOL m_isdir;
+  BOOL m_execute_only;
+  int m_entry_num;
+  int m_entry_tot;
+  BYTE m_attribute;
+  CString	m_name;
+  CString	m_load_addr;
+  CString	m_exec_addr;
+  DWORD	m_filelen;
+  DWORD	m_start;
+  BYTE	m_cycle_num;
+  //}}AFX_DATA
   
-  HTREEITEM Insert(LPCTSTR lpszItem, DWORD Flags, int nImage, int nSelectedImage, HTREEITEM hParent);
-  void *GetDataStruct(HTREEITEM hItem);
-  HTREEITEM GetFullPath(HTREEITEM hItem, int *IsDir, CString &csName, CString &csPath, BOOL Visible);
-  int IsDir(HTREEITEM hItem);
-  int GetCountOfChildren(HTREEITEM hParent);
-  HTREEITEM FindFirst(HTREEITEM hParent, LPCTSTR text);
-  
-  struct S_ITEMS *m_items;
-  int m_item_count;
-  int m_item_alloc; // count of item blocks allocated for use
-  
-  // our search parameters
-  HTREEITEM m_hStart;
-  CString m_csSearchStr;
-  BOOL m_bCase;
-  HTREEITEM SearchTree(HTREEITEM hStart, CString csSearchStr, const BOOL bCase);
-  HTREEITEM Search(void);
+  struct S_ADFS_DIR m_entry;
   
 // Overrides
-  // ClassWizard generate virtual function overrides
-  //{{AFX_VIRTUAL(CMyTreeCtrl)
-  afx_msg BOOL DeleteAllItems(void);
+  // ClassWizard generated virtual function overrides
+  //{{AFX_VIRTUAL(CADFSEntry)
   protected:
+  virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
   //}}AFX_VIRTUAL
 
 // Implementation
 protected:
 
+  // Generated message map functions
+  //{{AFX_MSG(CADFSEntry)
+  virtual BOOL OnInitDialog();
+  virtual void OnOK();
+  //}}AFX_MSG
+  DECLARE_MESSAGE_MAP()
 };
 
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.
 
-#endif // !defined(AFX_MYTREECTRL_H__D10F989D_088D_449D_8E72_E3E414D0E5BA__INCLUDED_)
+#endif // !defined(AFX_ADFSENTRY_H__9482900B_99E4_4361_A22B_9570EE97B59F__INCLUDED_)

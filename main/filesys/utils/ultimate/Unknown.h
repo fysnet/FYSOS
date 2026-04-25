@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -84,6 +84,7 @@ public:
   //}}AFX_DATA
   
   void Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, BOOL IsNewTab);
+  void FormatAdfs(void);
   void FormatLean(void);
   void FormatFat(int Type);
   void FormatExFat(void);

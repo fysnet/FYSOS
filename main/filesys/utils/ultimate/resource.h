@@ -97,6 +97,8 @@
 #define IDD_LEAN_INDIRECT               199
 #define IDD_LEAN_SYMBOLIC               200
 #define IDD_READ_TOC                    207
+#define IDD_ADFS                        208
+#define IDD_ADFS_ENTRY                  209
 #define IDC_IMAGE_BAR                   1002
 #define IDC_PAGES                       1005
 #define IDC_TABS                        1007
@@ -931,6 +933,7 @@
 #define IDC_IGNORE_MT_GPT_ENTRIES       1563
 #define IDC_SHOW_DEL3                   1563
 #define IDC_SHOW_BYTES                  1564
+#define IDC_SECT_SIZE_256               1565
 #define IDC_SECT_SIZE_512               1566
 #define IDC_SECT_SIZE_1024              1567
 #define IDC_SECT_SIZE_2048              1568
@@ -1028,6 +1031,28 @@
 #define IDC_FORMAT                      1651
 #define IDC_MSF                         1652
 #define IDC_STARTING_TRACK              1653
+#define IDC_ADFS_BLOCK_COUNT            1654
+#define IDC_ADFS_CRC0                   1655
+#define IDC_ADFS_CRC0_UPDATE            1656
+#define IDC_ADFS_CRC1                   1657
+#define IDC_ADFS_CRC1_UPDATE            1658
+#define IDC_ADFS_DISK_ID                1659
+#define IDC_ADFS_MAP_END                1661
+#define IDC_ENTRY_LOAD_ADDR             1662
+#define IDC_ADFS_BLOCK_COUNT2           1662
+#define IDC_ADFS_DISK_NAME              1662
+#define IDC_ENTRY_EXEC_ADDR             1663
+#define IDC_ENTRY_CYCLE                 1664
+#define IDC_ENTRY_LOAD_ADDR2            1665
+#define IDC_ENTRY_NUM                   1666
+#define IDC_ENTRY_TOT                   1667
+#define IDC_ADFS_CANREAD                1668
+#define IDC_ADFS_CANWRITE               1669
+#define IDC_LIST1                       1670
+#define IDC_FREE_LIST                   1671
+#define IDC_ADFS_LOCKED                 1672
+#define IDC_ADFS_DIR                    1673
+#define IDC_ADFS_EXECUTE                1674
 #define ID_FILE_EXIT                    32771
 #define ID_FILE_RECENTFILES_NORECENTFILES 32773
 #define ID_SETTINGS                     32775
@@ -1051,7 +1076,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        210
 #define _APS_NEXT_COMMAND_VALUE         32787
-#define _APS_NEXT_CONTROL_VALUE         1654
+#define _APS_NEXT_CONTROL_VALUE         1675
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

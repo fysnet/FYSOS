@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -82,6 +82,7 @@
 #define FS_EXT2     2
 #define FS_SFS      3
 #define FS_NTFS     4
+#define FS_ADFS     5
 #define FS_EXFAT   11
 #define FS_FAT12   12
 #define FS_FAT16   16
@@ -91,6 +92,7 @@
 
 // detection counts
 struct S_DET_COUNTS {
+  int AdfsC, AdfsT;
   int FatC, FatT;
   int Ext2C, Ext2T;
   int ExFatC, ExFatT;

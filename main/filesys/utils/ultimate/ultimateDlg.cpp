@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -54,6 +54,17 @@
  * 
  * For more information, please visit:
  *             http://www.fysnet.net/osdesign_book_series.htm
+ */
+
+/*  TODO:
+ *  1. Currenly all of the partition "objects" are "static", declared in "class CUltimateDlg"
+ *      with limits to how many partitions of that type. I would like to change this to
+ *      allocate the "objects" instead.
+ *  2. Many of the file systems use the (almost) exact same code for things like "Copy", "Insert",
+ *      "Delete", etc. I would like to make these "virtual" and have a single routine called from
+ *      each class.
+ *  3. Many of the "objects" need completeness, some more than others.
+ * 
  */
 
 // ultimateDlg.cpp : implementation file
@@ -137,7 +148,7 @@ CUltimateDlg::CUltimateDlg(CWnd* pParent /*=NULL*/)
   m_ignore_empty_gpt_entries = TRUE;
   m_force_readonly = TRUE;
   m_sect_size = 512;
-  m_sect_size_option = 0; // default to 512-byte sectors
+  m_sect_size_option = 1; // default to 512-byte sectors
   m_force_no_mbr_presence = FALSE;
   //}}AFX_DATA_INIT
   // Note that LoadIcon does not require a subsequent DestroyIcon in Win32
@@ -147,6 +158,7 @@ CUltimateDlg::CUltimateDlg(CWnd* pParent /*=NULL*/)
   m_isISOImage = FALSE;
   m_hasVHD = FALSE;
   m_MBRCount = 0;
+  m_AdfsCount = 0;
   m_FatCount = 0;
   m_Ext2Count = 0;
   m_ExFatCount = 0;
@@ -172,7 +184,7 @@ void CUltimateDlg::DoDataExchange(CDataExchange* pDX) {
   DDX_Check(pDX, IDC_FORCE_GPT_ENUM, m_force_gpt_enum);
   DDX_Check(pDX, IDC_IGNORE_MT_GPT_ENTRIES, m_ignore_empty_gpt_entries);
   DDX_Check(pDX, IDC_FORCE_READONLY, m_force_readonly);
-  DDX_Radio(pDX, IDC_SECT_SIZE_512, m_sect_size_option);
+  DDX_Radio(pDX, IDC_SECT_SIZE_256, m_sect_size_option);
   //}}AFX_DATA_MAP
 }
 
@@ -196,6 +208,7 @@ BEGIN_MESSAGE_MAP(CUltimateDlg, CDialog)
   ON_COMMAND(ID_HELP_INDEX, OnHelpHelp)
   ON_COMMAND(ID_HELP_ABOUT, OnHelpAbout)
   ON_COMMAND(ID_TOOLS_CREATE_INFO, OnCreateInfoFile)
+  ON_BN_CLICKED(IDC_SECT_SIZE_256, OnChangeSectSize)
   ON_BN_CLICKED(IDC_SECT_SIZE_512, OnChangeSectSize)
   ON_BN_CLICKED(IDC_SECT_SIZE_1024, OnChangeSectSize)
   ON_BN_CLICKED(IDC_SECT_SIZE_2048, OnChangeSectSize)
@@ -214,7 +227,7 @@ END_MESSAGE_MAP()
 #define MRL_MAX  16  // this can't be more than ID_FILE_MRU_FILE16/ID_FILE_MRU_LAST
 
 // our sector sizes.  Index starts at 0.  If we add any more, must remain in accending order
-unsigned int g_sector_sizes[4] = { 512, 1024, 2048, 4096 };
+unsigned int g_sector_sizes[5] = { 256, 512, 1024, 2048, 4096 };
 
 /////////////////////////////////////////////////////////////////////////////
 // CUltimateDlg message handlers
@@ -430,16 +443,16 @@ int CUltimateDlg::vdi_open_file(struct VDI_HEADER *vdi_header) {
   // change to the sector size given
   if (vdi_header->sector_size == 1024) {
     m_sect_size = m_dflt_sect_size = 1024;
-    CheckRadioButton(IDC_SECT_SIZE_512, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_1024); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
+    CheckRadioButton(IDC_SECT_SIZE_256, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_1024); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
   } else if (vdi_header->sector_size == 2048) {
     m_sect_size = m_dflt_sect_size = 2048;
-    CheckRadioButton(IDC_SECT_SIZE_512, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_2048); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
+    CheckRadioButton(IDC_SECT_SIZE_256, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_2048); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
   } else if (vdi_header->sector_size == 4096) {
     m_sect_size = m_dflt_sect_size = 4096;
-    CheckRadioButton(IDC_SECT_SIZE_512, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_4096); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
+    CheckRadioButton(IDC_SECT_SIZE_256, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_4096); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
   } else {
     m_sect_size = m_dflt_sect_size = 512;
-    CheckRadioButton(IDC_SECT_SIZE_512, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_512); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
+    CheckRadioButton(IDC_SECT_SIZE_256, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_512); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
   }
 
   // we need to set a few items
@@ -528,6 +541,7 @@ void CUltimateDlg::FileOpen(CString csPath) {
   m_isISOImage = FALSE;
   m_hasVHD = FALSE;
   m_MBRCount = 0;
+  m_AdfsCount = 0;
   m_FatCount = 0;
   m_LeanCount = 0;
   m_NTFSCount = 0;
@@ -567,6 +581,7 @@ void CUltimateDlg::FileOpen(CString csPath) {
 
   // check to see if it is an ISO image
   m_sect_size = m_dflt_sect_size;
+
   // Need to use the ReadFromFile() so we can read from physical device (eventually!)
   ReadFromFile(buffer, 16, 1);
   if ((memcmp(buffer + 1, "CD001", 5) == 0) ||
@@ -589,6 +604,7 @@ void CUltimateDlg::FileOpen(CString csPath) {
   GetDlgItem(IDC_FORCE_NO_MBR)->EnableWindow(FALSE);
   GetDlgItem(IDC_FORCE_GPT)->EnableWindow(FALSE);
   GetDlgItem(IDC_FORCE_GPT_ENUM)->EnableWindow(FALSE);
+  GetDlgItem(IDC_SECT_SIZE_256)->EnableWindow(FALSE);
   GetDlgItem(IDC_SECT_SIZE_512)->EnableWindow(FALSE);
   GetDlgItem(IDC_SECT_SIZE_1024)->EnableWindow(FALSE);
   GetDlgItem(IDC_SECT_SIZE_2048)->EnableWindow(FALSE);
@@ -686,14 +702,16 @@ BOOL CUltimateDlg::FileOpenInfo(CString csPath) {
     if (str == "sector-size") {
       len = GetString(pos, str);
       i = -1;
-      if (str == "512")
+      if (str == "256")
         i = 0;
-      else if (str == "1024")
+      else if (str == "512")
         i = 1;
-      else if (str == "2048")
+      else if (str == "1024")
         i = 2;
-      else if (str == "4096")
+      else if (str == "2048")
         i = 3;
+      else if (str == "4096")
+        i = 4;
       else {
         cs.Format("Found illegal value for 'sector-size=' parameter in .info file: %s", str);
         AfxMessageBox(cs);
@@ -702,7 +720,7 @@ BOOL CUltimateDlg::FileOpenInfo(CString csPath) {
       if (i > -1) {
         m_sect_size_option = i;
         m_sect_size = m_dflt_sect_size = g_sector_sizes[m_sect_size_option];
-        CheckRadioButton(IDC_SECT_SIZE_512, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_512 + m_sect_size_option); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
+        CheckRadioButton(IDC_SECT_SIZE_256, IDC_SECT_SIZE_4096, IDC_SECT_SIZE_256 + m_sect_size_option); // can't call UpdateData() because it will call the ON_BN_CLICKED handler...
       }
     }
     // read-only= field
@@ -744,7 +762,7 @@ void CUltimateDlg::OnCreateInfoFile() {
   csText += "\r\n\n";
 
   csText += "# First parameter we will specify is the sector size parameter.\r\n";
-  cs.Format("sector-size = %i  # may use 512, 1024, 2048, or 4096 only\r\n", m_sect_size);
+  cs.Format("sector-size = %i  # may use 256, 512, 1024, 2048, or 4096 only\r\n", m_sect_size);
   csText += cs;
   csText += "\r\n";
   
@@ -802,6 +820,7 @@ void CUltimateDlg::OnFileClose() {
     GetDlgItem(IDC_FORCE_NO_MBR)->EnableWindow(TRUE);
     GetDlgItem(IDC_FORCE_GPT)->EnableWindow(TRUE);
     GetDlgItem(IDC_FORCE_GPT_ENUM)->EnableWindow(TRUE);
+    GetDlgItem(IDC_SECT_SIZE_256)->EnableWindow(TRUE);
     GetDlgItem(IDC_SECT_SIZE_512)->EnableWindow(TRUE);
     GetDlgItem(IDC_SECT_SIZE_1024)->EnableWindow(TRUE);
     GetDlgItem(IDC_SECT_SIZE_2048)->EnableWindow(TRUE);
@@ -810,6 +829,7 @@ void CUltimateDlg::OnFileClose() {
     m_isISOImage = FALSE;
     m_hasVHD = FALSE;
     m_MBRCount = 0;
+    m_AdfsCount = 0;
     m_FatCount = 0;
     m_LeanCount = 0;
     m_NTFSCount = 0;

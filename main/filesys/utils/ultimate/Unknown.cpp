@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -70,6 +70,7 @@
 
 #include "Attribute.h"
 
+#include "Adfs.h"
 #include "Lean.h"
 #include "Fat.h"
 #include "FatFormat.h"
@@ -134,6 +135,7 @@ BOOL CUnknown::OnInitDialog() {
   
   cs.Format("Detection Counts...\r\n"
             " (Filesystem: matched 'n' of 'n' tests)\r\n"
+            "   ADFS: %i of %i\r\n"
             "    Fat: %i of %i\r\n"
             "   Ext2: %i of %i\r\n"
             "  ExFat: %i of %i\r\n"
@@ -142,6 +144,7 @@ BOOL CUnknown::OnInitDialog() {
             "    SFS: %i of %i\r\n"
             "  FYSFS: %i of %i\r\n"
             "    FSZ: %i of %i",
+    m_det_counts.AdfsC, m_det_counts.AdfsT,    // ADFS
     m_det_counts.FatC, m_det_counts.FatT,      // FAT
     m_det_counts.Ext2C, m_det_counts.Ext2T,    // Ext2
     m_det_counts.ExFatC, m_det_counts.ExFatT,  // ExFat
@@ -202,6 +205,7 @@ void CUnknown::OnClean() {
 
 struct S_ATTRIBUTES format_attrbs[] = {
                 //            |                               | <- max (col 67)
+  { FS_ADFS,    FS_ADFS,   0, "Advanced Disk FS"               , {-1, } },
   { FS_LEAN,    FS_LEAN,   0, "Lean FS"                        , {-1, } },
   { FS_EXT2,    FS_EXT2,   1, "Linux Ext 2"                    , {-1, } },
   { FS_SFS,     FS_SFS,    2, "Simple FS"                      , {-1, } },
@@ -224,6 +228,9 @@ void CUnknown::OnFormat() {
   adlg.m_single = TRUE;
   if (adlg.DoModal() == IDOK) {
     switch (adlg.m_attrib) {
+      case FS_ADFS:
+        FormatAdfs();
+        break;
       case FS_LEAN:
         FormatLean();
         break;
@@ -253,6 +260,21 @@ void CUnknown::OnFormat() {
     DumpIt(m_dump, buffer, 0, dlg->m_sect_size, FALSE);
     UpdateData(FALSE); // send to dialog
   }
+}
+
+void CUnknown::FormatAdfs(void) {
+  CADFS adfs;
+  
+  // build a "bogus" Lean partition
+  adfs.m_lba = m_lba;
+  adfs.m_size = m_size;
+  adfs.m_hard_format = TRUE;
+  
+  // format it
+  if (adfs.Format())
+    AfxMessageBox("Minimal format complete.  Close image file and re-open to parse correctly.");
+  else
+    AfxMessageBox("Format aborted.");
 }
 
 void CUnknown::FormatLean(void) {

@@ -213,6 +213,21 @@ int CMyTreeCtrl::IsDir(HTREEITEM hItem) {
   return 0;
 }
 
+// (You would think there would be a CTreeCtrl call for this...)
+int CMyTreeCtrl::GetCountOfChildren(HTREEITEM hParent) {
+  int count = 0;
+  
+  if (hParent) {
+    HTREEITEM hItem = GetChildItem(hParent);
+    while (hItem) {
+      count++;
+      hItem = GetNextSiblingItem(hItem);
+    }
+  }
+  
+  return count;
+}
+
 HTREEITEM CMyTreeCtrl::FindFirst(HTREEITEM hParent, LPCTSTR text) {
   if (ItemHasChildren(hParent)) {
     HTREEITEM hItem = GetChildItem(hParent);

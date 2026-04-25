@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -99,7 +99,7 @@ CNewImage::CNewImage(CWnd* pParent /*=NULL*/)
   : CDialog(CNewImage::IDD, pParent) {
   //{{AFX_DATA_INIT(CNewImage)
   m_cur_parts = 1;
-  m_sect_size = 0;  // default to 512
+  m_sect_size = 1;  // default to 512
   m_type = 0;
   m_options = 0;
   m_new_name = _T("");
@@ -117,7 +117,7 @@ void CNewImage::DoDataExchange(CDataExchange* pDX) {
   DDX_Control(pDX, IDC_COUNT_SPIN, m_count_spin);
   DDX_Control(pDX, IDC_PARTITIONS, m_partitions);
   DDX_Text(pDX, IDC_PART_COUNT, m_cur_parts);
-  DDX_Radio(pDX, IDC_SECT_SIZE_512, m_sect_size);
+  DDX_Radio(pDX, IDC_SECT_SIZE_256, m_sect_size);
   DDX_Radio(pDX, IDC_TYPE_PLAIN, m_type);
   DDX_Radio(pDX, IDC_RAW_FLAT, m_options);
   DDX_Text(pDX, IDC_NEW_NAME, m_new_name);
@@ -137,6 +137,7 @@ BEGIN_MESSAGE_MAP(CNewImage, CDialog)
   ON_BN_CLICKED(IDC_TYPE_EMBR, OnTypeChange)
   ON_BN_CLICKED(IDC_TYPE_ISO9660, OnTypeChange)
   ON_BN_CLICKED(IDC_TYPE_ISO_UDF, OnTypeChange)
+  ON_BN_CLICKED(IDC_SECT_SIZE_256, OnSectSizeChange)
   ON_BN_CLICKED(IDC_SECT_SIZE_512, OnSectSizeChange)
   ON_BN_CLICKED(IDC_SECT_SIZE_1024, OnSectSizeChange)
   ON_BN_CLICKED(IDC_SECT_SIZE_2048, OnSectSizeChange)
@@ -152,18 +153,21 @@ BOOL CNewImage::OnInitDialog() {
   
   m_sector_size = dlg->m_sect_size;
   switch (m_sector_size) {
-    case 1024:
-      m_sect_size = 1;
+    case 256:
+      m_sect_size = 0;
       break;
-    case 2048:
+    case 1024:
       m_sect_size = 2;
       break;
-    case 4096:
+    case 2048:
       m_sect_size = 3;
+      break;
+    case 4096:
+      m_sect_size = 4;
       break;
     case 512:
     default:
-      m_sect_size = 0;
+      m_sect_size = 1;
       break;
   }
 
@@ -355,7 +359,7 @@ void CNewImage::OnTypeChange() {
     case 5:  // ISO UDF
       m_max_parts = 1;
       isharddrive = FALSE;
-      m_sect_size = 2;  // set to 2048
+      m_sect_size = 3;  // set to 2048
       m_sector_size = 2048;
       SetDlgItemText(IDC_STATIC_NOTES, 
         "ISO 9660/UDF with no partitioning scheme used.\n"
@@ -370,8 +374,8 @@ void CNewImage::OnTypeChange() {
       break;
   }
   
-  if (isharddrive && (m_sect_size == 2)) {
-    m_sect_size = 0;  // set to 512
+  if (isharddrive && (m_sect_size == 3)) {
+    m_sect_size = 1;  // set to 512
     m_sector_size = 512;
   }
   
@@ -381,6 +385,7 @@ void CNewImage::OnTypeChange() {
   GetDlgItem(IDC_VDI_FLAT)->EnableWindow(isharddrive);
   GetDlgItem(IDC_PART_COUNT)->EnableWindow(isharddrive);
   GetDlgItem(IDC_BOUNDARY)->EnableWindow(isharddrive);
+  GetDlgItem(IDC_SECT_SIZE_256)->EnableWindow(isharddrive);
   GetDlgItem(IDC_SECT_SIZE_512)->EnableWindow(isharddrive);
   GetDlgItem(IDC_SECT_SIZE_1024)->EnableWindow(isharddrive);
   //GetDlgItem(IDC_SECT_SIZE_2048)->EnableWindow(!isharddrive);  // always available
@@ -430,16 +435,18 @@ void CNewImage::OnSectSizeChange() {
   UpdateData(TRUE);  // bring from Dialog
 
   switch (m_sect_size) {
-    case 1:
-      m_sector_size = 1024;
+    case 0:
+      m_sector_size = 256;
       break;
     case 2:
-      m_sector_size = 2048;
+      m_sector_size = 1024;
       break;
     case 3:
+      m_sector_size = 2048;
+      break;
+    case 4:
       m_sector_size = 4096;
       break;
-    case 0:
     default:
       m_sector_size = 512;
       break;
