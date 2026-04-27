@@ -280,7 +280,6 @@ void CADFS::OnSelchangedDirTree(NMHDR* pNMHDR, LRESULT* pResult) {
 }
 
 void CADFS::OnAdfsApply() {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   ReceiveFromDialog(&m_fs_map); // Get From Dialog
   
   // if the CRCs need updated, ask to do so
@@ -292,7 +291,7 @@ void CADFS::OnAdfsApply() {
       OnCrc1Update();
 
   ReceiveFromDialog(&m_fs_map); // Get From Dialog
-  dlg->WriteToFile(&m_fs_map, m_lba, 2);
+  WriteSectors(&m_fs_map, 0, 2);
 }
 
 void CADFS::OnAdfsFormat() {
@@ -312,12 +311,12 @@ void CADFS::OnAdfsCheck() {
 // returns TRUE if successful
 bool CADFS::Format(void) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
-  DWORD64 l;
+  DWORD l;
   BYTE cycle = 0x27; // TODO
   
-  // m_size must be 2560 256-byte sectors
-  if ((m_size != 2560) || (dlg->m_sect_size != 256)) {
-    AfxMessageBox("Partition must be 2,560 256-byte sectors");
+  // we must be at least 2560 256-byte sectors
+  if ((m_size * dlg->m_sect_size) < (2560 * 256)) {
+    AfxMessageBox("Partition must be at least 2,560 256-byte sectors");
     return FALSE;
   }
   
@@ -332,7 +331,7 @@ bool CADFS::Format(void) {
   m_fs_map.map_end = sizeof(struct S_ADFS_TRIPLET);
   m_fs_map.crc0 = CalcCRC((BYTE *) m_fs_map.sector0);
   m_fs_map.crc1 = CalcCRC((BYTE *) m_fs_map.sector1);
-  dlg->WriteToFile(&m_fs_map, m_lba, 2);
+  WriteSectors(&m_fs_map, 0, 2);
   
   // create the root directory
   // (it is empty)
@@ -348,16 +347,20 @@ bool CADFS::Format(void) {
     buffer[0x4D9] = '$'; // root directory
     buffer[0x4FA] = cycle; // cycle number (repeat)
     * (DWORD *) &buffer[0x4FB] = ADFS_SIG_HUGO;
-    dlg->WriteToFile(buffer, m_lba + 2, 5);
+    WriteSectors(buffer, 2, 5);
     
     // clear out the remaining sectors
     for (l=7; l<m_size; l++)
-      dlg->WriteToFile(buffer, m_lba + l, 1);
+      WriteSectors(buffer, l, 1);
     
     if (!m_hard_format)
       SendToDialog(&m_fs_map); // Send back to Dialog
     
     free(buffer);
+    
+    // If using a MBR, to make Ultimate find the partition, the partition entry's ID must be non-zero.
+    AfxMessageBox("If using a MBR, remember to mark\r\nthe ID to something other than zero.");
+
     return TRUE;
   }
   
@@ -383,7 +386,7 @@ void CADFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
   m_index = index;
   m_color = color;
   
-  dlg->ReadFromFile(buffer, lba, 2);
+  ReadSectors(buffer, 0, 2);
   memcpy(&m_fs_map, buffer, sizeof(struct S_ADFS_FS_MAP));
   
   // DetectAdfs() detected us, so we should be good
@@ -412,7 +415,7 @@ void CADFS::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, cons
   if (m_isvalid) {
     m_dir_size = 5; // root is 5 sectors
     m_dir_buffer = (BYTE *) realloc(m_dir_buffer, m_dir_size * ADFS_SECT_SIZE);
-    dlg->ReadFromFile(m_dir_buffer, m_lba + 2, m_dir_size);
+    ReadSectors(m_dir_buffer, 2, m_dir_size);
     
     m_free_blocks = CalcFreeBlocks();
     GetDlgItem(IDC_DIR_TREE)->EnableWindow(TRUE);
@@ -522,7 +525,6 @@ void CADFS::ParseDir(const BYTE *buffer, DWORD parent, const int sectors, HTREEI
  *   Which is Type L of the ADFS specs.
  */
 void *CADFS::ReadFile(DWORD start, DWORD size) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   DWORD lba, offset = 0; // side 0
   
   // is it the second half of the sectors?
@@ -537,7 +539,7 @@ void *CADFS::ReadFile(DWORD start, DWORD size) {
     BYTE *ptr = (BYTE *) buffer;
     while (size--) {
       lba = ((start >> 4) * 32) + offset + (start & 0x0F);
-      dlg->ReadFromFile(ptr, m_lba + lba, 1);
+      ReadSectors(ptr, lba, 1);
       ptr += ADFS_SECT_SIZE;
       start++;
     }
@@ -546,8 +548,54 @@ void *CADFS::ReadFile(DWORD start, DWORD size) {
   return buffer;
 }
 
-void CADFS::WriteFile(void *buffer, DWORD start, DWORD size) {
+// the physical sector size might not be 256, so we need to
+//  account for this.
+void CADFS::WriteSectors(void *buffer, DWORD start, DWORD count) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE *p, *buf;
+
+  if (dlg->m_sect_size == ADFS_SECT_SIZE)
+    dlg->WriteToFile(buffer, m_lba + start, count);
+  else {
+    buf = (BYTE *) malloc(dlg->m_sect_size);
+    p = (BYTE *) buffer;
+    while (count--) {
+      DWORD lba = start / (dlg->m_sect_size / ADFS_SECT_SIZE);
+      DWORD offset = start % (dlg->m_sect_size / ADFS_SECT_SIZE);
+      dlg->ReadFromFile(buf, m_lba + lba, 1);
+      memcpy(buf + (offset * ADFS_SECT_SIZE), p, ADFS_SECT_SIZE);
+      dlg->WriteToFile(buf, m_lba + lba, 1);
+      p += ADFS_SECT_SIZE;
+      start++;
+    }
+    free(buf);
+  }
+}
+
+// the physical sector size might not be 256, so we need to
+//  account for this.
+void CADFS::ReadSectors(void *buffer, DWORD start, DWORD count) {
+  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
+  BYTE *p, *buf;
+
+  if (dlg->m_sect_size == ADFS_SECT_SIZE)
+    dlg->ReadFromFile(buffer, m_lba + start, count);
+  else {
+    buf = (BYTE *) malloc(dlg->m_sect_size);
+    p = (BYTE *) buffer;
+    while (count--) {
+      DWORD lba = start / (dlg->m_sect_size / ADFS_SECT_SIZE);
+      DWORD offset = start % (dlg->m_sect_size / ADFS_SECT_SIZE);
+      dlg->ReadFromFile(buf, m_lba + lba, 1);
+      memcpy(p, buf + (offset * ADFS_SECT_SIZE), ADFS_SECT_SIZE);
+      p += ADFS_SECT_SIZE;
+      start++;
+    }
+    free(buf);
+  }
+}
+
+void CADFS::WriteFile(void *buffer, DWORD start, DWORD size) {
   DWORD lba, offset = 0; // side 0
   
   // is it the second half of the sectors?
@@ -560,7 +608,7 @@ void CADFS::WriteFile(void *buffer, DWORD start, DWORD size) {
   BYTE *ptr = (BYTE *) buffer;
   while (size--) {
     lba = ((start >> 4) * 32) + offset + (start & 0x0F);
-    dlg->WriteToFile(ptr, m_lba + lba, 1);
+    WriteSectors(ptr, lba, 1);
     ptr += ADFS_SECT_SIZE;
     start++;
   }
@@ -887,7 +935,6 @@ void CADFS::OnAdfsInsert() {
 // csName = name of file to insert
 // csPath = path on host of file to insert
 void CADFS::InsertFile(DWORD Parent, CString csFPath, CString csName, CString csPath) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   void *buffer;
   CFile file;
   DWORD size;
@@ -969,7 +1016,6 @@ void CADFS::InsertFolder(DWORD Parent, CString csFPath, CString csName, CString 
 //  returns starting sector if successful, else -1
 //  ** free's the buffer passed **
 DWORD CADFS::CreateEntry(void *buffer, DWORD size, CString csName, DWORD Parent, DWORD attrib) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   struct S_ADFS_FS_MAP map_copy;
 
   // since we have to check a few things before we can safely insert a file,
@@ -1007,7 +1053,7 @@ DWORD CADFS::CreateEntry(void *buffer, DWORD size, CString csName, DWORD Parent,
           memcpy(&m_fs_map, &map_copy, sizeof(struct S_ADFS_FS_MAP));
           OnCrc0Update();
           OnCrc1Update();
-          dlg->WriteToFile(&m_fs_map, m_lba, 2);
+          WriteSectors(&m_fs_map, 0, 2);
           return start;
         }
       }
@@ -1042,7 +1088,6 @@ void CADFS::OnDelClear() {
 }
 
 void CADFS::OnAdfsDelete() {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   CString csPath, csName;
   BOOL IsDir = FALSE;
   
@@ -1085,7 +1130,7 @@ void CADFS::OnAdfsDelete() {
   SendToDialog(&m_fs_map);
   OnCrc0Update();
   OnCrc1Update();
-  dlg->WriteToFile(&m_fs_map, m_lba, 2);
+  WriteSectors(&m_fs_map, 0, 2);
 
   wait.Restore();
   //AfxMessageBox("File(s) deleted.");
@@ -1256,7 +1301,6 @@ void CADFS::OptimizeFreeList(struct S_ADFS_FS_MAP *map) {
 
 // sorts the directory listing
 void CADFS::SortDirListing(BYTE *buffer, DWORD lba) {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   struct S_ADFS_DIR *dir = (struct S_ADFS_DIR *) &buffer[5];
   struct S_ADFS_DIR temp;
   int i, j;
@@ -1274,8 +1318,8 @@ void CADFS::SortDirListing(BYTE *buffer, DWORD lba) {
     attribute0 = GetName(name0, &start, NULL, &dir[i]);
     if ((attribute0 < 0xFF) && (attribute0 & ADFS_ENTRY_D)) {
       BYTE *sub = (BYTE *) malloc(0x500);
-      dlg->ReadFromFile(sub, m_lba + start, 5);
-      SortDirListing(sub, m_lba + start);
+      ReadSectors(sub, start, 5);
+      SortDirListing(sub, start);
       free(sub);
     }
   }
@@ -1296,14 +1340,13 @@ void CADFS::SortDirListing(BYTE *buffer, DWORD lba) {
   }
   
   // now write it back
-  dlg->WriteToFile(buffer, m_lba + lba, 5);
+  WriteSectors(buffer, lba, 5);
 
   // refresh the "system"
   Start(m_lba, m_size, m_color, m_index, FALSE);
 }
 
 void CADFS::OnAdfsOptimize() {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   
   // TODO: clear any freespace entries past end pointer
   // TODO: in SortDirListing(), clear any entries at end...
@@ -1315,7 +1358,7 @@ void CADFS::OnAdfsOptimize() {
 
   // sort all the directory listings
   BYTE *buffer = (BYTE *) malloc(0x500);
-  dlg->ReadFromFile(buffer, m_lba + 2, 5);
+  ReadSectors(buffer, 2, 5);
   SortDirListing(buffer, 2);
   free(buffer);
 
@@ -1326,7 +1369,7 @@ void CADFS::OnAdfsOptimize() {
   SendToDialog(&m_fs_map);
   OnCrc0Update();
   OnCrc1Update();
-  dlg->WriteToFile(&m_fs_map, m_lba, 2);
+  WriteSectors(&m_fs_map, 0, 2);
 }
 
 void CADFS::OnSearch() {
@@ -1334,7 +1377,6 @@ void CADFS::OnSearch() {
 }
 
 void CADFS::OnAdfsEntry() {
-  CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   HTREEITEM hItem = m_dir_tree.GetSelectedItem();
   CADFSEntry ADFSEntry;
 
@@ -1350,9 +1392,9 @@ void CADFS::OnAdfsEntry() {
       if (ADFSEntry.DoModal() == IDOK) { // apply button pressed?
         BYTE *buffer = (BYTE *) malloc(0x500);
         struct S_ADFS_DIR *dir = (struct S_ADFS_DIR *) &buffer[5];
-        dlg->ReadFromFile(buffer, m_lba + items->Parent, 5);
+        ReadSectors(buffer, items->Parent, 5);
         memcpy(&dir[items->EntryNum], &ADFSEntry.m_entry, sizeof(struct S_ADFS_DIR));
-        dlg->WriteToFile(buffer, m_lba + items->Parent, 5);
+        WriteSectors(buffer, items->Parent, 5);
         free(buffer);
         
         // refresh the "system"
@@ -1377,8 +1419,8 @@ void CADFS::OnErase() {
   if (AfxMessageBox("This will erase the whole partition!  Continue?", MB_YESNO, 0) == IDYES) {
     memset(buffer, 0, MAX_SECT_SIZE);
     CWaitCursor wait; // display a wait cursor
-    for (DWORD64 lba=0; lba<m_size; lba++)
-      dlg->WriteToFile(buffer, m_lba + lba, 1);
+    for (DWORD lba=0; lba<m_size; lba++)
+      WriteSectors(buffer, lba, 1);
     wait.Restore(); // unnecassary since the 'destroy' code will restore it, but just to make sure.
     dlg->SendMessage(WM_COMMAND, ID_FILE_RELOAD, 0);
   }

@@ -654,15 +654,10 @@ int CImageBar::DetectFileSystem(const DWORD64 lba, const DWORD64 size) {
 //  We only support:
 //     Type L:  SPT = 16, BytePerSector = 256, Heads = 2, 80 Tracks = 640KB (Map = old, Dir's = old) (root at 0x200)
 int CImageBar::DetectAdfs(BYTE *buffer, const unsigned sect_size) {
-  int count = 0; // currently a count of 5 checks are made
+  int count = 0; // currently a count of 4 checks are made
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   unsigned crc = 0;
   int i;
-
-  // Type L ADFS file systems use only 256-byte sectors.
-  // If we haven't specified this size, don't try
-  if (sect_size == 256)
-    count++;
 
   ////// sector 0
   // is byte 255 the bit8u(sum + carry) of byte 254->0
@@ -710,11 +705,11 @@ int CImageBar::DetectAdfs(BYTE *buffer, const unsigned sect_size) {
   if (* (DWORD *) &buffer[1] == 0x6F677548)
     count++;
 
-  if (count == 5)
+  if (count == 4)
     return FS_ADFS;
 
   m_det_counts.AdfsC = count; // save for "unknown partition"
-  m_det_counts.AdfsT = 5;
+  m_det_counts.AdfsT = 4;
   return -1;
 }
 

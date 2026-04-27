@@ -158,6 +158,8 @@ public:
   static BYTE GetName(CString &name, DWORD *start, DWORD *size, struct S_ADFS_DIR *dir);
   void SaveItemInfo(HTREEITEM hItem, int entry_num, struct S_ADFS_DIR *entry, DWORD start, DWORD Parent, DWORD size, BYTE attribute, DWORD flags);
 
+  void WriteSectors(void *buffer, DWORD start, DWORD count);
+  void ReadSectors(void *buffer, DWORD start, DWORD count);
   void WriteFile(void *buffer, DWORD start, DWORD size);
   void DisplayFreeSpace(void);
   DWORD CalcFreeBlocks(void);
