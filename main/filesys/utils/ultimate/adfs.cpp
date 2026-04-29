@@ -1317,8 +1317,7 @@ void CADFS::SortDirListing(BYTE *buffer, DWORD lba) {
   for (i=0; i<47; i++) {
     attribute0 = GetName(name0, &start, NULL, &dir[i]);
     if ((attribute0 < 0xFF) && (attribute0 & ADFS_ENTRY_D)) {
-      BYTE *sub = (BYTE *) malloc(0x500);
-      ReadSectors(sub, start, 5);
+      BYTE *sub = (BYTE *) ReadFile(start, 0x500);
       SortDirListing(sub, start);
       free(sub);
     }
@@ -1340,7 +1339,7 @@ void CADFS::SortDirListing(BYTE *buffer, DWORD lba) {
   }
   
   // now write it back
-  WriteSectors(buffer, lba, 5);
+  WriteFile(buffer, lba, 0x500);
 
   // refresh the "system"
   Start(m_lba, m_size, m_color, m_index, FALSE);
@@ -1390,11 +1389,10 @@ void CADFS::OnAdfsEntry() {
       ADFSEntry.m_entry_tot = count;
       memcpy(&ADFSEntry.m_entry, &items->Entry, sizeof(struct S_ADFS_DIR));
       if (ADFSEntry.DoModal() == IDOK) { // apply button pressed?
-        BYTE *buffer = (BYTE *) malloc(0x500);
+        BYTE *buffer = (BYTE *) ReadFile(items->Parent, 0x500);
         struct S_ADFS_DIR *dir = (struct S_ADFS_DIR *) &buffer[5];
-        ReadSectors(buffer, items->Parent, 5);
         memcpy(&dir[items->EntryNum], &ADFSEntry.m_entry, sizeof(struct S_ADFS_DIR));
-        WriteSectors(buffer, items->Parent, 5);
+        WriteFile(buffer, items->Parent, 0x500);
         free(buffer);
         
         // refresh the "system"
