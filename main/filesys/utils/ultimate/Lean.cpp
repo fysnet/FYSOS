@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -573,6 +573,7 @@ bool CLean::Format(const BOOL AskForBoot) {
     bitmap[u] = 0xFF;
   bitmap[u] = (0xFF >> (8 - ((super->root_start + (super->pre_alloc_count + 1)) % 8)));
   bitmap[((band_size - 1) / 8)] = (BYTE) ((DWORD) 0xFF << (8 - (1 + ((format.m_journal) ? (1 + JOURNAL_SIZE) : 0))));  // mark one for the backup, 1 for the inode, and JOURNAL_SIZE bits for the Journal
+  super->bitmap_checksum = computeChecksumPartial(0, bitmap, bitmap_size * m_block_size);
 
   // create a root directory
   // (for an empty directory, we need at most two blocks.  However, we write (super->pre_alloc_count + 1) blocks to the disk)
@@ -674,6 +675,7 @@ bool CLean::Format(const BOOL AskForBoot) {
       bitmap_size = (unsigned) (m_tot_blocks - (band_size * u));
     // write the bitmap to current band location
     dlg->WriteBlocks(bitmap, m_lba, lba, m_block_size, bitmap_size);
+    super->bitmap_checksum = computeChecksumPartial(super->bitmap_checksum, bitmap, bitmap_size * m_block_size);
   }
 
   // before we leave, set/clear EAs_in_Inode per format.m_eas_after_inode
@@ -681,7 +683,6 @@ bool CLean::Format(const BOOL AskForBoot) {
   CheckDlgButton(IDC_EAS_IN_INODE, format.m_eas_after_inode ? BST_CHECKED : BST_UNCHECKED);
 
   // update the bitmap's checksum and write the superblock to the disk
-  super->bitmap_checksum = 0;
   super->checksum = computeChecksum(super, m_block_size, TRUE);
   dlg->WriteBlocks(super, m_lba, super->primary_super, m_block_size, 1);
   dlg->WriteBlocks(super, m_lba, super->backup_super, m_block_size, 1);
