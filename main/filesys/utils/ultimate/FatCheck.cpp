@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -480,11 +480,11 @@ void CFat::FatCheckRoot(CModeless &modeless, struct S_FAT_ROOT *root, const unsi
         } else if (attrb & FAT_ATTR_VOLUME) {
           // TODO: Check that label has only allowed chars????
           cs.Format("Volume Label: %s\r\n", name);
-          if (root[i].filesize != 0) {
+          if (filesize != 0) {
             cs += "[Error] Label with a file size not equal to zero.\r\n";
             fcErrorCount++;
           }
-          if (root[i].strtclst != 0) {
+          if (start != 0) {
             cs += "[Error] Label with a starting cluster not equal to zero.\r\n";
             fcErrorCount++;
           }
