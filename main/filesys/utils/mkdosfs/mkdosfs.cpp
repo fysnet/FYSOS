@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -75,7 +75,7 @@
  *   - Since the FAT FS won't allow file sizes larger than 32-bit, no
  *     need to use the 64-bit forms of FSEEK() and FTELL()
  *
- *  Last updated: 7 Feb 2022
+ *  Last updated: 14 June 2026
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *  gcc -Os mkdosfs.cpp -o mkdosfs.exe -s
@@ -450,7 +450,7 @@ int main(int argc, char *argv[]) {
    *  ** Please note that Windows will automatically remove the quotes from
    *     the parameter if found.  I don't know what Unix boxes do.
    */
-  create_root_entry(root, label, 0, &root_pos, NULL, NULL, 0x08, FAT_TYPE, 0, TRUE);
+  create_root_entry(root, label, 0, &root_pos, NULL, NULL, 0x08, FAT_TYPE, 0);
   
   // Now insert the specified files
   for (i=0; i<resources->file_cnt; i++) {
@@ -464,7 +464,7 @@ int main(int argc, char *argv[]) {
     rewind(src);
     
     // create the root entry(s)
-    create_root_entry(root, resources->files[i].filename, file_size, &root_pos, fat_buf, &cur_clust, 0x20, FAT_TYPE, SPCLUST, resources->files[i].param);
+    create_root_entry(root, resources->files[i].filename, file_size, &root_pos, fat_buf, &cur_clust, 0x20, FAT_TYPE, SPCLUST);
     printf(" % 2i: Writing %s to LBA %i\n", i, resources->files[i].filename, ftell(targ) / SECT_SIZE);
     do {
       // by clearing the buffer first, we make sure that the "padding" bytes are all zeros
@@ -651,16 +651,9 @@ void format_name(const bit8u *lname, bit8u *name, bit8u *ext) {
     memset(ext, ' ', 3);
 }
 
-/* Creates a new LFN (& SFN) root entry.
- *  Since the SFN preceded with a LFN is patented by Microsoft, we store a non valid SFN after
- *   the LFN slots.  This keeps the FAT FS valid, but does not violate the patent.  A SFN of 11
- *   spaces would be sufficient, but this will crash a WinXP machine if it finds two of these
- *   entries in the same directory.  We currently use the byte values explained at 
- *   http://lkml.org/lkml/2009/6/26/313 as created by Andrew Tridgell <tridge@samba.org>
- */
+// Creates a new LFN (& SFN) root entry.
 void create_root_entry(struct S_FAT_ROOT *root, char *filename, const bit32u file_size, bit32u *root_pos, 
-                       bit8u *fat_buf, bit32u *cur_clust, const bit8u attribute, const int type, 
-                       const int spc, const bit32u do_sfn) {
+                       bit8u *fat_buf, bit32u *cur_clust, const bit8u attribute, const int type, const int spc) {
 
   int slots, i, j, k, l, len, index;
   unsigned sfn_name_len = 0, sfn_ext_len = 0;
@@ -677,20 +670,7 @@ void create_root_entry(struct S_FAT_ROOT *root, char *filename, const bit32u fil
   tmptr = localtime(&lt);
   
   // generate short filename
-  if (do_sfn)
-    format_name((const bit8u *) filename, (bit8u *) sfn_name, (bit8u *) sfn_ext);
-  else {
-    bit32u rand_num = rand();  // we ignore the two top most bits
-    sfn_name[0] = ' ';
-    sfn_name[1] = 0;
-    for (i=2; i<8; i++) {
-      sfn_name[i] = (bit8u) (rand_num & 0x1F);
-      rand_num >>= 5;  // 5 bits each times 6 bytes = 30 bits
-    }
-    sfn_ext[0] = '/';
-    sfn_ext[1] = 0;
-    sfn_ext[2] = 0;    
-  }
+  format_name((const bit8u *) filename, (bit8u *) sfn_name, (bit8u *) sfn_ext);
   
   // calculate crc
   s = (bit8u *) sfn_name;

@@ -1,5 +1,5 @@
 # Resource file used with MKDOSFS for the FILESYS book by Benjamin David Lunt
-#  Copyright 1984-2020  All Rights Reserved
+#  Copyright 1984-2026  All Rights Reserved
 #
 #  mbrfile=filename   - This is the path/filename of the mbr file to use (should be 1 sector in length)
 #  bootfile=filename  - This is the path/filename of the boot code file to use (should be 1+ sectors in length)
@@ -18,7 +18,7 @@
 #  by the parameters below.
 # If you do give the /E parameter, the mbrfile and bootfile parameters are
 #  ignored, and the first sector written is the BPB.
-imgfile=  D:\fysos\main\filesys\images\fat12.img
+imgfile=  C:\projects\books\fysos\main\filesys\images\fat12.img
 
 # When /E is used:
 #   Base_lba is the LBA with in the existing image to write the BPB to.
@@ -39,12 +39,10 @@ spt= 63             # sectors per track
 #  write to the root directory of the image.  First parameter is the
 #  full path name of the file to copy, second parameter is the name of the
 #  file to use in the image's root directory.
-# The third parameter is to indicate whether this utility should create
-#  a valid Short File Name entry or obey the patent and create a dummy one
-#  1 = valid SFN entry, 0 = dummy
+# The third parameter is required, but ignored by this utility
 # You may have as many or as few as you wish.  Please note that this app
 #  does not check for out of bounds due to too many root directory entries
 #  specified below.
-fat12.txt, fat12.txt, 1
+fat12.txt, fat12.txt, 0
 fat16.txt, fat16.txt, 0
-fat32.txt, fat32.txt, 1
+fat32.txt, fat32.txt, 0

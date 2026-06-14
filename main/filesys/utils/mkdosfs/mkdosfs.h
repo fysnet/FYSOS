@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -57,13 +57,13 @@
  */
 
 /*
- *  Last updated: 7 Feb 2022
+ *  Last updated: 14 June 2026
  */
 
 // set it to 1 (align on byte)
 #pragma pack (push, 1)
 
-char strtstr[] = "\nMake DOS Image  v02.00.11    Forever Young Software 1984-2022\n\n";
+char strtstr[] = "Make DOS Image  v02.10.00    Forever Young Software 1984-2026\n\n";
 
 #define SECT_SIZE  512
 
@@ -174,14 +174,14 @@ struct S_FAT_LFN_ROOT {
   bit16u name2[2];
 };
 
+#pragma pack (pop)
+
 void parse_command(int, char *[], char *, bool *, bool *, char *);
 bit8u media_descriptor(const bool, const int, const int, const int);
 void create_root_entry(struct S_FAT_ROOT *, char *, const bit32u, bit32u *, bit8u *, bit32u *, const bit8u, 
-                       const int, const int, const bit32u);
+                       const int, const int);
 void create_label_entry(char *, const char *);
 bit8u ror_byte(bit8u);
 bit32u fat_build_serial_num();
 bit16u fat_time_word(struct tm *);
 bit16u fat_date_word(struct tm *);
-
-#pragma pack (pop)
