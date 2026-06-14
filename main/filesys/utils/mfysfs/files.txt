@@ -22,7 +22,7 @@
 #   code, specified by the parameters below.
 # If you do give the /E parameter, the mbrfile and bootfile parameters
 #  are ignored, and the first sector written is the SuperBlock.
-imgfile=  D:\fysos\main\books\fysos\main\filesys\images\fysfs.img
+imgfile=  D:\fysos\main\filesys\images\fysfs.img
 
 # When /E is used:
 #   Base_lba is the LBA with in the existing image to write the 
