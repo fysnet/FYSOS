@@ -18,7 +18,7 @@
 #  by the parameters below.
 # If you do give the /E parameter, the mbrfile and bootfile parameters are
 #  ignored, and the first sector written is the BPB.
-imgfile=  C:\projects\books\fysos\main\filesys\images\fat16.img
+imgfile=  D:\fysos\main\fysos\main\filesys\images\fat16.img
 
 # When /E is used:
 #   Base_lba is the LBA with in the existing image to write the BPB to.
