@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -57,7 +57,7 @@
  */
 
 /*
- *  Last updated: 5 Feb 2022
+ *  Last updated: 14 June 2026
  */
 
 // set it to 1 (align on byte)
@@ -73,7 +73,7 @@
 #define FYSFS_ATTR_READ_ONLY 0x00000020
 #define FYSFS_ATTR_ALL       0x0000003F
 
-char strtstr[] = "\nMFYSFS  v2.00.10    Forever Young Software 1984-2022";
+char strtstr[] = "\nMFYSFS  v2.00.10    Forever Young Software 1984-2026";
 
 #define FIRST_BITMAP_LSN  17
 
