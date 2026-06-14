@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -57,7 +57,7 @@
  */
 
 /*
- *  Last updated: 15 July 2020
+ *  Last updated: 14 June 2026
  */
 
 
@@ -66,7 +66,7 @@
 
 #define VERSION_STR  "02.00.00"
 
-char strtstr[] = "\nMake Bootable CDROM Image  v" VERSION_STR "  Forever Young Software 1984-2022\n";
+char strtstr[] = "Make Bootable CDROM Image  v" VERSION_STR "  Forever Young Software 1984-2026\n";
 
 #define DESC_TYPE_BOOT    0
 #define DESC_TYPE_PVD     1
@@ -228,10 +228,10 @@ struct SECT_ENTRY_X {
    bit8u vendor[30];
 };
 
+#pragma pack (pop)
+
 void fill_date(struct DIR_DATE *);
 void fill_e_date(struct VOL_DATE *);
 void ascii2utf16(void *, char *, int);
 void fill_utf16(void *, bit16u, int);
 void parse_command(int, char *[], char *);
-
-#pragma pack (pop)

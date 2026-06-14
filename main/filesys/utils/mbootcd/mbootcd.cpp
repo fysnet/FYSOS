@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -66,7 +66,7 @@
  *  Assumptions/prerequisites:
  *   - none.
  *
- *  Last updated: 15 July 2020
+ *  Last updated: 14 June 2026
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *    gcc -Os mbootcd.cpp -o mbootcd.exe -s
