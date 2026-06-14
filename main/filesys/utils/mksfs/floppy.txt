@@ -1,6 +1,6 @@
 # Resource file used with MKSFS for the FILESYS book 
 #            by Benjamin David Lunt
-#  Copyright 1984-2020  All Rights Reserved
+#  Copyright 1984-2026  All Rights Reserved
 #
 #  mbrfile=filename   - This is the path/filename of the mbr file to use (should be 1 sector in length)
 #  bootfile=filename  - This is the path/filename of the boot code 
@@ -21,7 +21,7 @@
 imgfile=  D:\fysos\main\filesys\images\sfs_f.img
 
 # Boot file.  Should be a multiple of 512 bytes
-bootfile= D:\Path\to\your\boot\source\code\sfs_f.bin
+#bootfile= D:\Path\to\your\boot\source\code\sfs_f.bin
 
 # You may use decimal or hexadecimal numbers
 base_lba= 0         # LBA = 0
@@ -41,21 +41,21 @@ spt= 18             # sectors per track
 # You may have as many or as few as you wish.  Please note 
 #  that this app does not check for out of bounds due to too 
 #  many "root directory" entries specified below.
-D:\Path\goes\here\kernel.sys, kernel.sys, 0
-D:\Path\goes\here\loader.sys, loader.sys, 0
-D:\Path\goes\here\system.sys, system.sys, 0
+C:\qemu\fysos\files\kernel64.sys, kernel64.sys, 0
+C:\qemu\fysos\files\loader.sys, loader.sys, 0
+C:\qemu\fysos\files\system.sys, system.sys, 0
 
  * , system, 1            # make the system folder (note, must put something in path field. '*' works just fine)
  * , system/fonts, 1      # make the fonts folder inside the system folder
-D:\Path\goes\here\arial.fnt, system/fonts/arial.fnt, 0
-D:\Path\goes\here\couriernew.fnt, system/fonts/couriernew.fnt, 0
-D:\Path\goes\here\lucidac.fnt, system/fonts/lucidac.fnt, 0
-D:\Path\goes\here\sansserf.fnt, system/fonts/sansserf.fnt, 0
-D:\Path\goes\here\simple.fnt, system/fonts/simple.fnt, 0
-D:\Path\goes\here\System128.fnt, system/fonts/System128.fnt, 0
-D:\Path\goes\here\System256.fnt, system/fonts/System256.fnt, 0
+C:\qemu\fysos\files\system\fonts\arial.fnt, system/fonts/arial.fnt, 0
+C:\qemu\fysos\files\system\fonts\couriernew.fnt, system/fonts/couriernew.fnt, 0
+C:\qemu\fysos\files\system\fonts\lucidac.fnt, system/fonts/lucidac.fnt, 0
+C:\qemu\fysos\files\system\fonts\sansserf.fnt, system/fonts/sansserf.fnt, 0
+C:\qemu\fysos\files\system\fonts\simple.fnt, system/fonts/simple.fnt, 0
+C:\qemu\fysos\files\system\fonts\System128.fnt, system/fonts/System128.fnt, 0
+C:\qemu\fysos\files\system\fonts\System256.fnt, system/fonts/System256.fnt, 0
 
 * , system/grfx, 1
-D:\Path\goes\here\hallway.gif, system/grfx/hallway.gif, 0
-D:\Path\goes\here\snow.bmp, system/grfx/snow.bmp, 0
-D:\Path\goes\here\images.sys, system/grfx/images.sys, 0
+C:\qemu\fysos\files\system\grfx\hallway.gif, system/grfx/hallway.gif, 0
+#C:\qemu\fysos\files\system\grfx\snow.bmp, system/grfx/snow.bmp, 0
+C:\qemu\fysos\files\system\grfx\images.sys, system/grfx/images.sys, 0

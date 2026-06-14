@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -72,7 +72,7 @@
  *     I wrote it to simply make a SFS image for use with this book.
  *     Please consider this if you add or modify to this utility.
  *
- *  Last updated: 5 Feb 2022
+ *  Last updated: 14 June 2026
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os gd_ehci.c -o gd_ehci.exe -s

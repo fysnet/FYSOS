@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -57,13 +57,13 @@
  */
 
 /*
- *  Last updated: 15 July 2020
+ *  Last updated: 14 June 2026
  */
 
 // set it to 1 (align on byte)
 #pragma pack (push, 1)
 
-char strtstr[] = "\nMKSFS  v2.00.10    Forever Young Software 1984-2022";
+char strtstr[] = "\nMKSFS  v2.00.10    Forever Young Software 1984-2026";
 
 // at offset 0x18E in first part of partition (first sector on floppy, etc)
 struct S_SFS_SUPER {
@@ -160,9 +160,8 @@ struct S_SFS_FILE_DEL {
   bit8u  name[FILE_NAME_LEN]; // UTF-8 null terminated (unless need continuation slot)
 };
 
+#pragma pack (pop)
 
 void parse_command(int, char *[], char *, char *);
 bit64s get_64kseconds();
 bit8u calc_crc(void *ptr, int cnt);
-
-#pragma pack (pop)
