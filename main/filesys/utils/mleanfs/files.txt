@@ -1,5 +1,5 @@
 # Resource file used with MLEANFS for the FILESYS book by Benjamin David Lunt
-#  Copyright 1984-2022  All Rights Reserved
+#  Copyright 1984-2026  All Rights Reserved
 #
 #  mbrfile=filename   - This is the path/filename of the mbr file to use (should be 1 sector in length)
 #  bootfile=filename  - This is the path/filename of the boot code file to use (should be no more than 32 sectors in length)
@@ -26,11 +26,12 @@ imgfile=  D:\fysos\main\filesys\images\leanfs.img
 #   tot_sects does not include MBR or 16 sector boot
 # When /E is not used:
 #   Base_lba should be 63, but is not required.
-#   tot_sects includes MBR, 16 sector boot, and all remaining blocks
+#   tot_sects includes MBR, 16 sector boot, and all remaining sectors
 # You may use decimal or hexadecimal numbers
 base_lba= 63        # Base LBA of partition (LBA of 1st sector of boot code)
 tot_sects= 10080    # Total number of blocks in partition
 param0= 12          # (1<<12) blocks per band
+param1= 9           # (1<<9) bytes per block
 heads= 16           # heads per cylinder
 spt= 63             # sectors per track
 
@@ -43,6 +44,6 @@ spt= 63             # sectors per track
 #  does not check for out of bounds due to too many root directory entries
 #  specified below.
 files.txt, first/second/files.txt, 0
-temp1.txt, a_file_name.txt, 0
-temp1.txt, first/second/temp1.txt, 0
-temp1.txt, first/a_file_name_that_has_a_long_file_name_to_use_multiple_records.txt, 0
+files.txt, a_file_name.txt, 0
+files.txt, first/second/temp1.txt, 0
+files.txt, first/a_file_name_that_has_a_long_file_name_to_use_multiple_records.txt, 0

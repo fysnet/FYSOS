@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -77,7 +77,7 @@
  *  Assumptions/prerequisites:
  *   - requires 64-bit integers
  *
- *  Last updated: 28 Dec 2022
+ *  Last updated: 14 June 2026
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os mleanfs.c -o mleanfs.exe -s

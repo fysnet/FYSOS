@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -57,7 +57,7 @@
  */
 
 /*
- *  Last updated: 28 Dec 2022
+ *  Last updated: 14 June 2026
  */
 
 // set it to 1 (align on byte)
@@ -74,7 +74,7 @@
 
 #define LOG2(x) (int) (log((double) (x)) / log(2.0))  // log2(x) = log(x) / log(2.0)
 
-char strtstr[] = "\nMLEANFS  v2.20.00    Forever Young Software 1984-2022\n\n";
+char strtstr[] = "\nMLEANFS  v2.20.00    Forever Young Software 1984-2026\n\n";
 
 // default superblock location (will sector pad to this location if boot_size is less than)
 //  if boot code is larger, will move super location to just past boot code
