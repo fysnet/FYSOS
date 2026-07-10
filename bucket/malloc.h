@@ -43,10 +43,11 @@
 #define BUCKET_FLAG_TYPE    (0xFF << 8)  // MASK: Request Type used when allocating this bucket
 
 // local flags for a pebble
-#define PEBBLE_FLAG_FREE    (0 <<  0)  // if set, is in use, if clear, free for use
-#define PEBBLE_FLAG_IN_USE  (1 <<  0)  //  ...
-#define PEBBLE_FLAG_ALIGNED (1 <<  1)  // if set, the aligment field is valid
-#define PEBBLE_FLAG_CLEARED (1 <<  2)  // if set, this pebble's memory has been cleared
+#define PEBBLE_FLAG_FREE        (0 <<  0)  // if set, is in use, if clear, free for use
+#define PEBBLE_FLAG_IN_USE      (1 <<  0)  //  ...
+#define PEBBLE_FLAG_ALIGNED     (1 <<  1)  // if set, the aligment field is valid
+#define PEBBLE_FLAG_CLEARED     (1 <<  2)  // if set, this pebble's memory has been cleared
+#define PEBBLE_FLAG_INOPERATIVE (1 << 15)  // if set, don't use, free, split or merge this pebble
 
 #define PEBBLE_MIN_ALIGN 64  // minimum power of 2 to align the next pebble (1 or a power of 2)
 #define PEBBLE_MIN_SIZE  64  // a pebble must be at least this size (must be a power of 2)

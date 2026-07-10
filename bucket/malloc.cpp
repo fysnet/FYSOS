@@ -211,6 +211,10 @@ struct S_MEMORY_PEBBLE *split_pebble(struct S_MEMORY_PEBBLE *this_pebble, struct
   bool is_aligned = FALSE;
   void *pos;
 
+  // if this is an Inoperative pebble, do not split
+  if (this_pebble->lflags & PEBBLE_FLAG_INOPERATIVE)
+    return this_pebble;
+
   // if the current pebble is already aligned to the requested alignment,
   //  mark it as aligned and skip the alignment tri-pebble below
   if ((src->lflags & PEBBLE_FLAG_ALIGNED) && 
@@ -534,6 +538,10 @@ void *realloc(void *ptr, size_t size) {
   pebble = (struct S_MEMORY_PEBBLE *) ((bit8u *) ptr - sizeof(struct S_MEMORY_PEBBLE));
   if (pebble->magic != MALLOC_MAGIC_PEBBLE)
     return NULL;
+  
+  // if this is an Inoperative pebble, do not realloc
+  if (pebble->lflags & PEBBLE_FLAG_INOPERATIVE)
+    return pebble;
 
   if (size <= pebble->size) {
     spin_lock(&pebble->parent->spinlock);
@@ -561,6 +569,10 @@ void mfree(void *ptr) {
 
   // check that it actually is a pebble
   if (pebble->magic != MALLOC_MAGIC_PEBBLE)
+    return;
+  
+  // if this is an Inoperative pebble, do not free
+  if (pebble->lflags & PEBBLE_FLAG_INOPERATIVE)
     return;
 
   spin_lock(&pebble->parent->spinlock);
