@@ -178,6 +178,8 @@
 #define IDC_GPTE_LAST_LBA               1058
 #define IDC_GPT_TOTAL_CHECK             1058
 #define IDC_GPTE_ATTRIB                 1059
+#define IDC_ECRC_BUTTON2                1059
+#define IDC_CLEAR_ENTRYS                1059
 #define IDC_GPTE_NAME                   1060
 #define IDC_FAT_JMP0                    1060
 #define IDC_FAT_JMP1                    1061

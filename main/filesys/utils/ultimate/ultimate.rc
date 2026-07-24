@@ -78,7 +78,7 @@ CAPTION "About ultimate"
 FONT 8, "MS Sans Serif"
 BEGIN
     CONTROL         IDD_SFS,IDC_STATIC,"Static",SS_BITMAP,11,10,20,20
-    LTEXT           "Ultimate   00.65.05",IDC_STATIC,46,10,119,8,SS_NOPREFIX
+    LTEXT           "Ultimate   00.65.10",IDC_STATIC,46,10,119,8,SS_NOPREFIX
     LTEXT           "Copyright (C)  Forever Young Software 1984-2026",IDC_STATIC,46,27,175,8
     DEFPUSHBUTTON   "OK",IDOK,178,7,50,14,WS_GROUP
     LTEXT           "http://www.fysnet.net",IDC_STATIC,46,38,175,8
@@ -170,6 +170,7 @@ BEGIN
     PUSHBUTTON      "Check GPT Image",IDC_GPT_TOTAL_CHECK,209,32,75,12
     PUSHBUTTON      "Restore from Backup",IDC_GPT_FROM_BACKUP,209,46,75,12
     PUSHBUTTON      "Save to Backup",IDC_GPT_BACKUP,209,60,75,12
+    CTEXT           "vv  Reserved  vv",IDC_STATIC,200,195,63,9
     PUSHBUTTON      "Apply",ID_GPT_APPLY,415,232,58,14
     LTEXT           "",IDC_GPT_PAGES,292,13,181,210,SS_SUNKEN
     RTEXT           "Signature:",IDC_STATIC,13,12,76,11
@@ -187,7 +188,6 @@ BEGIN
     RTEXT           "Entry Size:",IDC_STATIC,13,181,76,11
     RTEXT           "Entry CRC 32:",IDC_STATIC,13,194,76,11
     EDITTEXT        IDC_GPT_DUMP,2,206,285,43,ES_MULTILINE | ES_READONLY | WS_VSCROLL | WS_HSCROLL
-    CTEXT           "vv  Reserved  vv",IDC_STATIC,200,195,63,9
     CTEXT           "",IDC_SIG_CHARS,188,11,53,12,SS_SUNKEN
     CTEXT           "",IDC_GPT_VERSION_NUM,143,25,21,12,SS_SUNKEN
     CTEXT           "",IDC_BASE_SIZE_STR,296,239,115,11,SS_SUNKEN

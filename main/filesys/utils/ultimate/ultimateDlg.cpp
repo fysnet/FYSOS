@@ -552,7 +552,7 @@ void CUltimateDlg::FileOpen(CString csPath) {
   m_UCount = 0;
   
   if (m_file.Open(csPath, CFile::modeReadWrite | CFile::typeBinary | CFile::shareDenyWrite, NULL) == 0) {
-    if (AfxMessageBox("Error Opening Image File...\r\nDo you want to remove it from the MRU list?", MB_YESNO, 0) == IDYES)
+    if (AfxMessageBox("Error Opening Image File...\r\nFile might be marked as read-only.\r\nDo you want to remove it from the MRU list?", MB_YESNO, 0) == IDYES)
       RemoveFromMRUList(csPath);
     return;
   }
@@ -787,6 +787,7 @@ void CUltimateDlg::OnFileOpen() {
     NULL,             // Default Filename
     OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_EXPLORER, // flags
     _T(".img files (.img)|*.img|")    // Filter string
+    _T(".hdd files (.hdd)|*.hdd|")    // Filter string
     _T(".bin files (.bin)|*.bin|")    // Filter string
     _T(".vdi files (.vdi)|*.vdi|")    // Filter string
     _T(".vhd files (.vhd)|*.vhd|")    // Filter string

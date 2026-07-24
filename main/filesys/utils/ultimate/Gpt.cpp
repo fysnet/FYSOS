@@ -858,76 +858,82 @@ void CGpt::OnGPTTotalCheck() {
   // to check the backup GPT, simply check that it equals this one
   //  with exception of the MyLBA, and AlternateLBA, CRC, and Entry Start Loc
   struct S_GPT_HDR *back = (struct S_GPT_HDR *) malloc(dlg->m_sect_size);
-  dlg->ReadFromFile(back, hdr->backup_lba, 1);
-  // save and check the crc of the backup GPT
-  org_crc = back->crc32;
-  back->crc32 = 0;
-  cur_crc = crc32(back, back->hdr_size);  // crc before we swap the LBA's
-  // set the 4 backup items to the primary items so they aren't flagged as different
-  // (only the MyLBA, AlternateLBA, CRC, and Partition Offset fields should be different)
-  back->primary_lba = hdr->primary_lba;
-  back->backup_lba = hdr->backup_lba;
-  back->crc32 = hdr->crc32;
-  back->entry_offset = hdr->entry_offset;
-  if (memcmp(back, hdr, dlg->m_sect_size) != 0) {
-    csInfo += "*Backup GPT doesn't match Primary GPT.\r\n";
-    BYTE *s0 = (BYTE *) hdr;
-    BYTE *s1 = (BYTE *) back;
-    for (dword=0; dword<dlg->m_sect_size; dword++) {
-      if (s0[dword] != s1[dword]) {
-        cs.Format(" 0x%04X:  0x%02X 0x%02X\r\n", dword, s0[dword], s1[dword]);
-        csInfo += cs;
-      }
-    }
-    error_cnt++;
-  } else if (org_crc != cur_crc) {
-    csInfo += "*Backup GPT matches Primary GPT except for a bad CRC.\r\n";
-    error_cnt++;
-  } else
-    csInfo += "Backup GPT matches Primary GPT\r\n";
-  modeless.SetDlgItemText(IDC_EDIT, csInfo);
-  modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
-  
-  // restore the backup hdr
-  dlg->ReadFromFile(back, hdr->backup_lba, 1);
-
-  // to check the backup entries, simply read in each sector and compare
-  //  with the sector of the primary entries.
-  dword1 = (hdr->entries < back->entries) ? hdr->entries : back->entries;
-  cs.Format("Comparing %i Primary and Backup Partition Entries.\r\n", dword1);
-  csInfo += cs;
-  modeless.SetDlgItemText(IDC_EDIT, csInfo);
-  modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
-  
-  void *back_entries = malloc((dword1 * entry_size) + dlg->m_sect_size);
-  dlg->ReadFromFile(back_entries, back->entry_offset, ((dword1 * entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
-  BYTE *b = (BYTE *) back_entries;
-  BYTE *p = (BYTE *) m_entry_buffer;
-  j = 0;
-  for (dword=0; dword<dword1; dword++) {
-    if (memcmp(b, p, entry_size) != 0) {
-      cs.Format("*Backup Entry #%i doesn't match Primary Entry.\r\n", dword);
-      csInfo += cs;
-      /*
+  if (dlg->ReadFromFile(back, hdr->backup_lba, 1) > 0) {
+    // save and check the crc of the backup GPT
+    org_crc = back->crc32;
+    back->crc32 = 0;
+    cur_crc = crc32(back, back->hdr_size);  // crc before we swap the LBA's
+    // set the 4 backup items to the primary items so they aren't flagged as different
+    // (only the MyLBA, AlternateLBA, CRC, and Partition Offset fields should be different)
+    back->primary_lba = hdr->primary_lba;
+    back->backup_lba = hdr->backup_lba;
+    back->crc32 = hdr->crc32;
+    back->entry_offset = hdr->entry_offset;
+    if (memcmp(back, hdr, dlg->m_sect_size) != 0) {
+      csInfo += "*Backup GPT doesn't match Primary GPT.\r\n";
       BYTE *s0 = (BYTE *) hdr;
       BYTE *s1 = (BYTE *) back;
-      for (i=0; i<dlg->m_sect_size; i++) {
-        if (s0[i] != s1[i]) {
-          cs.Format(" 0x%04X:  0x%02X 0x%02X\r\n", i, s0[i], s1[i]);
+      for (dword=0; dword<dlg->m_sect_size; dword++) {
+        if (s0[dword] != s1[dword]) {
+          cs.Format(" 0x%04X:  0x%02X 0x%02X\r\n", dword, s0[dword], s1[dword]);
           csInfo += cs;
         }
-      }*/
-      j++;
+      }
       error_cnt++;
-    }
-    b += entry_size;
-    p += entry_size;
-  }
-  free(back_entries);
-  free(back);
-  if (j == 0)
-    csInfo += "Backup Entries match Primary Entries\r\n";
+    } else if (org_crc != cur_crc) {
+      csInfo += "*Backup GPT matches Primary GPT except for a bad CRC.\r\n";
+      error_cnt++;
+    } else
+      csInfo += "Backup GPT matches Primary GPT\r\n";
+    modeless.SetDlgItemText(IDC_EDIT, csInfo);
+    modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
+    
+    // restore the backup hdr
+    dlg->ReadFromFile(back, hdr->backup_lba, 1);
 
+    // to check the backup entries, simply read in each sector and compare
+    //  with the sector of the primary entries.
+    dword1 = (hdr->entries < back->entries) ? hdr->entries : back->entries;
+    cs.Format("Comparing %i Primary and Backup Partition Entries.\r\n", dword1);
+    csInfo += cs;
+    modeless.SetDlgItemText(IDC_EDIT, csInfo);
+    modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
+  
+    void *back_entries = malloc((dword1 * entry_size) + dlg->m_sect_size);
+    dlg->ReadFromFile(back_entries, back->entry_offset, ((dword1 * entry_size) + (dlg->m_sect_size - 1)) / dlg->m_sect_size);
+    BYTE *b = (BYTE *) back_entries;
+    BYTE *p = (BYTE *) m_entry_buffer;
+    j = 0;
+    for (dword=0; dword<dword1; dword++) {
+      if (memcmp(b, p, entry_size) != 0) {
+        cs.Format("*Backup Entry #%i doesn't match Primary Entry.\r\n", dword);
+        csInfo += cs;
+        /*
+        BYTE *s0 = (BYTE *) hdr;
+        BYTE *s1 = (BYTE *) back;
+        for (i=0; i<dlg->m_sect_size; i++) {
+          if (s0[i] != s1[i]) {
+            cs.Format(" 0x%04X:  0x%02X 0x%02X\r\n", i, s0[i], s1[i]);
+            csInfo += cs;
+          }
+        }*/
+        j++;
+        error_cnt++;
+      }
+      b += entry_size;
+      p += entry_size;
+    }
+    free(back_entries);
+    free(back);
+    if (j == 0)
+      csInfo += "Backup Entries match Primary Entries\r\n";
+  } else {
+    error_cnt++;
+    csInfo += "** Could not read Backup GPT!!\r\n";
+    modeless.SetDlgItemText(IDC_EDIT, csInfo);
+    modeless.GetDlgItem(IDC_EDIT)->UpdateWindow();
+  }
+  
   // check the PMBR to see if it only has one (the first) entry as 0xEE
   //  and that it encompasses all sectors correctly, etc.
   BYTE *pmbr = (BYTE *) malloc(dlg->m_sect_size);
