@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -61,7 +61,7 @@
  *  
  *  This is used to create, find, load, and draw fonts
  *
- *  Last updated: 17 July 2020
+ *  Last updated: 25 July 2026
  */
 
 #include <dirent.h>
@@ -328,6 +328,8 @@ void font_bitchar(struct BITMAP *bitmap, const struct RECT *charrect, const stru
   for (r = drawrect->top; r <= drawrect->bottom; r++) {
     PIXEL *iter = bitmap_iter(bitmap, drawrect->left, r);
     const PIXEL *end = bitmap_iter(bitmap, drawrect->right, r);
+    if ((iter == NULL) || (end == NULL))
+      break;
     
     // Move the data over to correct for the clipping on the left
     bpix += xoff;
