@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2020
+ ;                             Copyright (c) 1984-2026
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -55,7 +55,7 @@
  ; For more information, please visit:
  ;             http://www.fysnet.net/osdesign_book_series.htm
  
- ;  Last updated: 19 July 2020
+ ;  Last updated: 4 July 2026
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; set_timer(count)

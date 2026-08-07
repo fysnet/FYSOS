@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2020
+ ;                             Copyright (c) 1984-2026
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -55,7 +55,7 @@
  ; For more information, please visit:
  ;             http://www.fysnet.net/osdesign_book_series.htm
  
- ;  Last updated: 19 July 2020
+ ;  Last updated: 4 July 2026
 
  ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
  ; This is the memory allocation/initialization code
@@ -146,14 +146,14 @@ malloc     proc near
            
 malloc_loop:
            or   esi,esi
-           jz   malloc_none
+           jz   short malloc_none
            
            cmp  byte [esi+S_MCB->available],FALSE
-           je   malloc_not_avail
+           je   short malloc_not_avail
            cmp  ecx,[esi+S_MCB->tot_size]
-           ja   malloc_not_avail
+           ja   short malloc_not_avail
            cmp  dword [esi+S_MCB->magic],MEM_MAGIC_FREE
-           jne  malloc_not_avail
+           jne  short malloc_not_avail
                       
            ; found available block
            ; if size requested is some-what smaller than this blocks size,

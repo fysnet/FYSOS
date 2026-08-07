@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2020
+ ;                             Copyright (c) 1984-2026
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -69,10 +69,10 @@
  ;  Also note that if you use this convention, you can not use the 'uses' keyword
  ;   on the proc near line unless you update the EBP register too.
  ;
- ;  Last updated: 19 July 2020
+ ;  Last updated: 7 Aug 2026
  ;
- ;  Assembled using (NBASM v00.26.74) (http://www.fysnet/newbasic.htm)
- ;   nbasm usbboot
+ ;  Assembled using (NBASM v00.27.16) (http://www.fysnet/newbasic.htm)
+ ;   nbasm kernel
  ;
 
 .model tiny
@@ -245,8 +245,6 @@ k_main:
            ; Now would be the time to start enumerating devices and
            ;  loading drivers for them.
            ; 
-           ; See Chapter 11 for more information on what to do now.
-           ; 
            ; For now, I will print a string to the screen and then
            ;  leave the rest to you.
            ;
@@ -255,7 +253,7 @@ k_main:
            mov  eax,1
            mov  edx,offset this_string
            int  80h
-           
+
 done:      jmp  short done
          
 this_string db  13,10,10,'   We are here.....',0

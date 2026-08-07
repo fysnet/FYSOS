@@ -1,5 +1,5 @@
  ;
- ;                             Copyright (c) 1984-2020
+ ;                             Copyright (c) 1984-2026
  ;                              Benjamin David Lunt
  ;                             Forever Young Software
  ;                            fys [at] fysnet [dot] net
@@ -55,7 +55,7 @@
  ; For more information, please visit:
  ;             http://www.fysnet.net/osdesign_book_series.htm
  
- ;  Last updated: 19 July 2020
+ ;  Last updated: 7 Aug 2026
 
 EFLAGS_CARRY                equ  00000001h
 EFLAGS_PARITY               equ  00000004h
@@ -146,7 +146,7 @@ irq_handlers  dup  (16 * sizeof(dword)),0
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; set the starting IRQ handlers to all point
-;  to illega_irq
+;  to idt_handlerMT
 irq_initialize proc near
            
            push ebp
@@ -154,7 +154,7 @@ irq_initialize proc near
            
            push edi
            
-           mov  eax,offset idt_handlerXX
+           mov  eax,offset idt_handlerMT
            mov  ecx,16
            mov  edi,offset irq_handlers
            cld
@@ -248,14 +248,14 @@ irq_set    proc near
            push ebp
            mov  ebp,esp
            
-           ; the 'ja' instruction is unsiged.
+           ; the 'ja' instruction is unsigned.
            ; therefore, it will jump if eax
            ;  is < 0 or > 15.
            mov  eax,PARAM0
            cmp  eax,15
            ja   short irq_set_err
            
-           ; this routine does not error checking.
+           ; this routine does not error check.
            ; it would be a good thing to see if this
            ; irq is already assigned and return FALSE
            ; if so.
@@ -1598,7 +1598,7 @@ idt_handler21 proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(01h * 4))
+           mov  eax,[(irq_handlers+(01h * 4))]
            call eax
            
            ; interrupt done
@@ -1628,7 +1628,7 @@ idt_handler22 proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(02h*4))
+           mov  eax,[(irq_handlers+(02h*4))]
            call eax
            
            ; interrupt done
@@ -1658,7 +1658,7 @@ idt_handler23 proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(03h*4))
+           mov  eax,[(irq_handlers+(03h*4))]
            call eax
            
            ; interrupt done
@@ -1688,7 +1688,7 @@ idt_handler24 proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(04h*4))
+           mov  eax,[(irq_handlers+(04h*4))]
            call eax
            
            ; interrupt done
@@ -1718,7 +1718,7 @@ idt_handler25 proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(05h*4))
+           mov  eax,[(irq_handlers+(05h*4))]
            call eax
            
            ; interrupt done
@@ -1748,7 +1748,7 @@ idt_handler26 proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(06h*4))
+           mov  eax,[(irq_handlers+(06h*4))]
            call eax
            
            ; interrupt done
@@ -1778,7 +1778,7 @@ idt_handler27 proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(07h*4))
+           mov  eax,[(irq_handlers+(07h*4))]
            call eax
            
            ; interrupt done
@@ -1808,7 +1808,7 @@ idt_handler28 proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(08h*4))
+           mov  eax,[(irq_handlers+(08h*4))]
            call eax
            
            ; interrupt done
@@ -1842,7 +1842,7 @@ idt_handler29 proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(09h*4))
+           mov  eax,[(irq_handlers+(09h*4))]
            call eax
            
            ; interrupt done
@@ -1876,7 +1876,7 @@ idt_handler2A proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(0Ah*4))
+           mov  eax,[(irq_handlers+(0Ah*4))]
            call eax
            
            ; interrupt done
@@ -1910,7 +1910,7 @@ idt_handler2B proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(0Bh*4))
+           mov  eax,[(irq_handlers+(0Bh*4))]
            call eax
            
            ; interrupt done
@@ -1944,7 +1944,7 @@ idt_handler2C proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(0Ch*4))
+           mov  eax,[(irq_handlers+(0Ch*4))]
            call eax
            
            ; interrupt done
@@ -1978,7 +1978,7 @@ idt_handler2D proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(0Dh*4))
+           mov  eax,[(irq_handlers+(0Dh*4))]
            call eax
            
            ; interrupt done
@@ -2012,7 +2012,7 @@ idt_handler2E proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(0Eh*4))
+           mov  eax,[(irq_handlers+(0Eh*4))]
            call eax
            
            ; interrupt done
@@ -2046,7 +2046,7 @@ idt_handler2F proc near
            ; simply returns.
            ; you would typically assign a handler to this pointer when
            ; you detect the hardware that uses this handler.
-           mov  eax,(irq_handlers+(0Fh*4))
+           mov  eax,[(irq_handlers+(0Fh*4))]
            call eax
            
            ; interrupt done
@@ -2172,6 +2172,13 @@ idt_handlerXX proc near
 idt_handlerXX endp
 
 ; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+; INT handler MT ** A dummy routine that just returns
+;
+idt_handlerMT proc near
+              ret
+idt_handlerMT endp
+
+; =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ; This is called by the idt_handler80 above.
 ; it is not reenterant
 ; it uses the values in user_regs
@@ -2197,6 +2204,4 @@ not_print:
            ret
 task_int80h   endp
 
-
-
-.end                                                                                                                            
+.end                                                                                                                         
