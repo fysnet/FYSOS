@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -57,22 +57,21 @@
  */
 
 /*
- *  Last updated: 20 July 2020
+ *  Last updated: 7 Aug 2026
  */
 
-// set it to 1 (align on byte)
-#pragma pack (1)
-
-char strtstr[] = "\nMTOOLS   Make GPT Part  v00.10.00    Forever Young Software 1984-2020\n";
+char strtstr[] = "\nMake GPT Part   v00.11.00    Forever Young Software 1984-2026\n";
 char usage_str[] = "\n Usage:\n   mgptpart /s:source_file_name /t:target_file_name\n";
 
+// set it to 1 (align on byte)
+#pragma pack(push, 1)
 
 #define MAX_LINE_LEN 1024
 
 // 1 for the header
-// (512 bytes per sector / 128 bytes per entry) * max entries)
+// (128 bytes per entry * max entries) / 512 bytes per sector
 #define MAX_ENTRIES   128   // must be an even divisor of 512 (i.e.: must evenly divide into 512)
-#define GPT_SIZE      (1 + ((512 / 128) * MAX_ENTRIES))
+#define GPT_SIZE      (1 + ((128 * MAX_ENTRIES) / 512))
 
 struct S_PARTITION {
   char   filename[128];
@@ -137,13 +136,15 @@ struct S_GPT_ENTRY {
   bit16u name[36];  // if entry is 128.  Could be more, though we don't allow for it in the code
 };
 
+#pragma pack(pop)
+
 int  parse_command_line(const int argc, char *argv[]);
 int  get_a_line(FILE *fp, char *line, int *linenum);
 int  get_filename(char *src, char *targ);
 int  get_value(char *src, void *targ, const int size);
 void lba_to_chs(const bit32u lba, bit8u *cyl, bit8u *head, bit8u *sector);
-void create_header(const bit32u, const bit32u, const bit32u, const int, const bit32u, const bit32u, FILE *);
+void create_header(const bit32u, const bit32u, const bit32u, const int, const bit32u, const bit32u, struct S_GUID *guid, FILE *);
 void create_partition(struct S_PARTITION *, FILE *);
-bit32u create_entry(const bit32u, const int, struct S_PARTITION *, const bit32u, bit16u *, FILE *);
+bit32u create_entry(const bit32u, const int, struct S_PARTITION *, const bit32u, bit16u *, struct S_GUID *guid0, struct S_GUID *guid1, FILE *);
 
 int check_image(const char *);

@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -63,10 +63,14 @@
  *  Assumptions/prerequisites:
  *  
  *
- *  Last updated: 20 July 2020
+ *  Last updated: 7 Aug 2026
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *    gcc -Os mgptpart.c -o mgptpart.exe -s
+ * 
+ *  Compile using VS2019
+ *    cl mgptpart.c /TP /W3 /Zc:wchar_t- /O2 /Zc:inline /fp:precise /D "NDEBUG" /errorReport:prompt
+ *        /WX- /Zc:forScope /FC /EHsc /nologo /diagnostics:classic /link /OUT:".\mgptpart.exe"
  *
  *  Usage:
  *    mgptpart /s:filename.txt /t:filename.bin
@@ -75,6 +79,8 @@
  *   See samples.txt for a few samples and instructions
  *  Where filename.bin (optional) is the image file name to create  
  */
+
+#define _CRT_SECURE_NO_WARNINGS
 
 #include <ctype.h>
 #include <stdio.h>
@@ -118,6 +124,7 @@ int part_cnt = 0;
 int main(int argc, char *argv[]) {
   int linelen, linenum = 0, pos, errors = 0;
   char tempstr[128];
+  struct S_GUID guid0, guid1;
   
   // print start string
   printf(strtstr);
@@ -130,7 +137,7 @@ int main(int argc, char *argv[]) {
   
   // initialize the crc32 stuff
   crc32_initialize();
-  srand(time(NULL));
+  srand((unsigned int) time(NULL));
   
   // if /c given on command line, we are checking an existing image
   if (checking)
@@ -322,7 +329,7 @@ int main(int argc, char *argv[]) {
     mbr.part_entry[0].size = last_lba + 1 - 1;  // + 1 to get 1 based, - 1 to not count MBR
     mbr.part_entry[0].start.cylinder = 0;  // the start CHS must be 0,0,1 even though we have LBA 2
     mbr.part_entry[0].start.head = 0;      //
-    mbr.part_entry[0].start.sector = 1;    //
+    mbr.part_entry[0].start.sector = 2;    //
     mbr.part_entry[0].end.cylinder = 0xFF; // the end CHS must be 0xFF, 0xFE, 0xFF no matter the ending LBA
     mbr.part_entry[0].end.head = 0xFE;     //
     mbr.part_entry[0].end.sector = 0xFF;   //
@@ -339,20 +346,23 @@ int main(int argc, char *argv[]) {
   // create the partition entries
   crc_entries = 0xFFFFFFFF;
   for (pos=0; pos<MAX_ENTRIES; pos++) {
+    calc_guid(&guid0, rand());
+    calc_guid(&guid1, rand());
     create_name(wname, pos);
     if (pos < part_cnt) {
-      crc_entries = create_entry(2, pos, &partitions[pos], crc_entries, wname, targ);
-      create_entry(last_lba - GPT_SIZE, pos, &partitions[pos], 0, wname, targ);
+      crc_entries = create_entry(2, pos, &partitions[pos], crc_entries, wname, &guid0, &guid1, targ);
+      create_entry(last_lba - GPT_SIZE, pos, &partitions[pos], 0, wname, &guid0, &guid1, targ);
     } else {
-      create_entry(2, pos, NULL, 0, wname, targ);
-      create_entry(last_lba - GPT_SIZE, pos, NULL, 0, wname, targ);
+      create_entry(2, pos, NULL, 0, wname, &guid0, &guid1, targ);
+      create_entry(last_lba - GPT_SIZE, pos, NULL, 0, wname, &guid0, &guid1, targ);
     }
   }
   crc_entries ^= 0xFFFFFFFF;
   
   // create partition header
-  create_header(1, last_lba, 2, part_cnt, last_lba + 1, crc_entries, targ);
-  create_header(last_lba, 1, last_lba - GPT_SIZE, part_cnt, last_lba + 1, crc_entries, targ);
+  calc_guid(&guid0, rand());
+  create_header(1, last_lba, 2, part_cnt, last_lba, crc_entries, &guid0, targ);
+  create_header(last_lba, 1, last_lba - GPT_SIZE, part_cnt, last_lba, crc_entries, &guid0, targ);
   
   // close the image file
   fclose(targ);  
@@ -608,7 +618,7 @@ void crc32_partial(bit32u *crc, void *ptr, bit32u len) {
  * This creates a gpt header at current "base"
  */
 void create_header(const bit32u base, const bit32u backup, const bit32u entry_offset, const int count, 
-                   const bit32u size, const bit32u crc_entries, FILE *out) {
+                   const bit32u size, const bit32u crc_entries, struct S_GUID *guid, FILE *out) {
   struct S_GPT_HDR hdr;
   
   memset(&hdr, 0, sizeof(struct S_GPT_HDR));
@@ -617,9 +627,9 @@ void create_header(const bit32u base, const bit32u backup, const bit32u entry_of
   hdr.hdr_size = 92;
   hdr.primary_lba = base;
   hdr.backup_lba = backup;
-  hdr.first_usable = GPT_SIZE;
+  hdr.first_usable = 1 + GPT_SIZE;
   hdr.last_usable = size - GPT_SIZE;
-  calc_guid(&hdr.guid, rand());
+  memcpy(&hdr.guid, guid, sizeof(struct S_GUID));
   hdr.entry_offset = entry_offset;
   hdr.entries = count;
   hdr.entry_size = 128;
@@ -639,7 +649,7 @@ void create_name(bit16u *wname, const int pos) {
   memset(name, 0, 35);
   memset(wname, 0, 36 * sizeof(bit16u));
   sprintf(name, "partition #%i", pos);
-  wname[0] = strlen(name);
+  wname[0] = (bit16u) strlen(name);
   for (i=0; i<35; i++)
     wname[i+1] = name[i];
 }
@@ -647,7 +657,7 @@ void create_name(bit16u *wname, const int pos) {
 /*
  * This creates a partition entry at current "base[pos]"
  */
-bit32u create_entry(const bit32u base, const int pos, struct S_PARTITION *part, const bit32u crc_entries, bit16u *wname, FILE *out) {
+bit32u create_entry(const bit32u base, const int pos, struct S_PARTITION *part, const bit32u crc_entries, bit16u *wname, struct S_GUID *guid0, struct S_GUID *guid1, FILE *out) {
   struct S_GPT_ENTRY entry;
   bit32u crc = crc_entries;
   
@@ -658,11 +668,11 @@ bit32u create_entry(const bit32u base, const int pos, struct S_PARTITION *part, 
                                // little-endian   little-endian  little-endian  little-endian     single bytes (a string)
       memcpy(&entry.guid_type, "\x28\x73\x2A\xC1"   "\x1F\xF8"     "\xD2\x11"    "\xBA\x4B"     "\x00\xA0\xC9\x3E\xC9\x3B", 16);
     else
-      calc_guid(&entry.guid_type, rand());
+      memcpy(&entry.guid_type, guid0, sizeof(struct S_GUID));
     entry.attribute = (((part->type.system) ? (1 << 0) : 0) |
                        ((part->type.hidden) ? (1 << 1) : 0) |
                        ((part->type.legacy) ? (1 << 2) : 0));
-    calc_guid(&entry.guid, rand());
+    memcpy(&entry.guid, guid1, sizeof(struct S_GUID));
     entry.first_lba = part->base;
     entry.last_lba = part->base + part->size - 1;
     memcpy(entry.name, &wname[1], wname[0] * sizeof(bit16u));
@@ -725,7 +735,7 @@ void print_guid(struct S_GUID *guid) {
 // check an existing image for correctness.
 
 int check_image(const char *filename) {
-  int i, j;
+  unsigned int i, j;
   bit32u dword0, dword1, last_lba, last_usable;
   bit8u  buffer[512];
   struct S_MBR mbr;
@@ -768,7 +778,7 @@ int check_image(const char *filename) {
   memcpy(buffer, hdr.sig, 8);
   buffer[8] = 0;
   printf("        Signature: '%s'", buffer);
-  if (strcmp(buffer, "EFI PART"))
+  if (strcmp((const char *) buffer, "EFI PART"))
     puts(" <-- Should be 'EFI PART'.");
   else
     puts("");
@@ -801,20 +811,20 @@ int check_image(const char *filename) {
   else
     puts("");
   
-  printf("      Primary LBA: %i", hdr.primary_lba);
+  printf("      Primary LBA: %" LL64BIT "i", hdr.primary_lba);
   if (hdr.primary_lba != 1)
     puts(" <-- Should be 1.");
   else
     puts("");
   
-  printf("       Backup LBA: %i", hdr.backup_lba);
+  printf("       Backup LBA: %" LL64BIT "i", hdr.backup_lba);
   if (hdr.backup_lba != last_lba)
     printf(" <-- Should be %i.\n", last_lba);
   else
     puts("");
   
-  printf(" First Usable LBA: %i\n", hdr.first_usable);
-  printf("  Last Usable LBA: %i", hdr.last_usable);
+  printf(" First Usable LBA: %" LL64BIT "i\n", hdr.first_usable);
+  printf("  Last Usable LBA: %" LL64BIT "i", hdr.last_usable);
   if (hdr.last_usable > last_usable)
     printf(" <-- Should be %i.\n", last_usable);
   else
@@ -822,7 +832,7 @@ int check_image(const char *filename) {
   
   printf("               GUID: "); print_guid(&hdr.guid);
   
-  printf("        Entry LBA: %i", hdr.entry_offset);
+  printf("        Entry LBA: %" LL64BIT "i", hdr.entry_offset);
   if (hdr.entry_offset != 2)
     puts(" <-- Should be 2.");
   else
@@ -861,10 +871,10 @@ int check_image(const char *filename) {
     printf("          GUID Type: "); print_guid(&entry[i].guid_type);
     printf("               GUID: "); print_guid(&entry[i].guid);
     
-    printf("       Starting LBA: %lli\n", entry[i].first_lba);
-    printf("         Ending LBA: %lli\n", entry[i].last_lba);
+    printf("       Starting LBA: %" LL64BIT "i\n", entry[i].first_lba);
+    printf("         Ending LBA: %" LL64BIT "i\n", entry[i].last_lba);
 
-    printf("          Attribute: %lli\n", entry[i].attribute);
+    printf("          Attribute: %" LL64BIT "i\n", entry[i].attribute);
     
     printf("               Name: '");
     for (j=0; j<36; j++) {
