@@ -16,9 +16,9 @@
 # If you don't give the /E parameter on the command line, this app will
 #  create an image that contains a MBR and the 1+ sector boot code, specified
 #  by the parameters below.
-# If you do give the /E parameter, the mbrfile and bootfile parameters are
+# If you do give the /E parameter, the mbrfile parameter is
 #  ignored, and the first sector written is the BPB.
-imgfile=  D:\fysos\main\fysos\main\filesys\images\fat12.img
+imgfile=  C:\projects\books\fysos\main\filesys\images\fat12.img
 
 # When /E is used:
 #   Base_lba is the LBA with in the existing image to write the BPB to.

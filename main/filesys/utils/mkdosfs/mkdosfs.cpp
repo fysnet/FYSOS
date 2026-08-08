@@ -75,11 +75,16 @@
  *   - Since the FAT FS won't allow file sizes larger than 32-bit, no
  *     need to use the 64-bit forms of FSEEK() and FTELL()
  *
- *  Last updated: 14 June 2026
+ *  Last updated: 6 Aug 2026
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *  gcc -Os mkdosfs.cpp -o mkdosfs.exe -s
  *
+ *  Compile using VS2019
+ *   cl mkdosfs.cpp /permissive- /GS /GL /W3 /Gy /Zc:wchar_t /O2 /sdl /Zc:inline /fp:precise 
+ *     /D "NDEBUG" /D "_CONSOLE" /D "_UNICODE" /D "UNICODE" /errorReport:prompt /WX- 
+ *     /Zc:forScope /Gd /Oi /MD /FC /EHsc /nologo /diagnostics:classic
+ * 
  *  Usage:
  *    mkdosfs filename.txt /E /v /1
  */
@@ -140,8 +145,8 @@ int main(int argc, char *argv[]) {
   
   // do we need to add sectors to end on a cylinder boundary?
   unsigned cylinders = (unsigned) (resources->tot_sectors + ((16*63)-1)) / (16*63);    // cylinders used
-  unsigned add = (unsigned) (((bit64u) cylinders * (16*63)) - resources->tot_sectors); // sectors to add to boundary on cylinder
-  if (add && (resources->tot_sectors > 2880)) {  // don't add if floppy image
+  int add = (int) (((bit64u) cylinders * (16*63)) - resources->tot_sectors - resources->base_lba); // sectors to add to boundary on cylinder
+  if ((add > 0) && (resources->tot_sectors > 2880)) {  // don't add if floppy image
     printf(" Total Sectors does not end on cylinder boundary. Expand to %" LL64BIT "i? [Y|N] ", resources->tot_sectors + add);
     if (toupper(getche()) == 'Y') {
       resources->tot_sectors += add;
@@ -175,7 +180,7 @@ int main(int argc, char *argv[]) {
       printf("Error opening target file: '%s'\n", resources->targ_filename);
       return -1;
     }
-    fseek(targ, (bit32u) (resources->base_lba + 1) * SECT_SIZE, SEEK_SET);
+    fseek(targ, (bit32u) resources->base_lba * SECT_SIZE, SEEK_SET);
   }
   
   buffer = (bit8u *) calloc(SECT_RES32 * SECT_SIZE, 1); // at least SECT_RES32 * SECT_SIZE
@@ -192,7 +197,8 @@ int main(int argc, char *argv[]) {
         return -2;
       }
       fread(buffer, SECT_SIZE, 1, src);
-    
+      fclose(src);
+
       // create and write the Disk Indentifier
       srand((unsigned int) time(NULL));  // seed the randomizer
       // We call rand() multiple times because rand() usually is set for 0 -> 32768 only.
@@ -222,35 +228,34 @@ int main(int argc, char *argv[]) {
       memset(buffer, 0, SECT_SIZE);
       i = 1;
     }
-    if (i<(bit32u) resources->base_lba)
+    if (i < (bit32u) resources->base_lba)
       puts(" Writing Padding between MBR and Base LBA...");
-    for (; i<(int) resources->base_lba; i++)
+    for (; i < (int) resources->base_lba; i++)
       fwrite(buffer, SECT_SIZE, 1, targ);
     resources->tot_sectors -= resources->base_lba;
-    tot_sects -= resources->base_lba;
-    
-    // create the boot sectors (1+)
-    if (strlen(resources->boot_filename)) {
-      if ((src = fopen(resources->boot_filename, "rb")) == NULL) {
-        puts("Error opening boot file.");
-        fclose(targ);
-        free(buffer);
-        return -3;
-      }
-      
-      // read in the boot sector(s)
-      fseek(src, 0, SEEK_END);
-      boot_size = (ftell(src) + (SECT_SIZE-1)) / SECT_SIZE;
-      if (FAT_TYPE == 32) boot_size = SECT_RES32; // if FAT32, is always 32
-      if (boot_size > SECT_RES32) boot_size = SECT_RES32;  // don't let it be more than SECT_RES32
-      rewind(src);
-      fread(buffer, SECT_SIZE, boot_size, src);
-      fclose(src);
-    } else {
-      memset(buffer, 0, SECT_SIZE);
-      boot_size = (FAT_TYPE == 32) ? SECT_RES32 : 1;
-    }
   } // !existing_image
+  
+  // create the boot sectors (1+)
+  if (strlen(resources->boot_filename)) {
+    if ((src = fopen(resources->boot_filename, "rb")) == NULL) {
+      puts("Error opening boot file.");
+      fclose(targ);
+      free(buffer);
+      return -3;
+    }
+    
+    // read in the boot sector(s)
+    fseek(src, 0, SEEK_END);
+    boot_size = (ftell(src) + (SECT_SIZE-1)) / SECT_SIZE;
+    if (FAT_TYPE == 32) boot_size = SECT_RES32; // if FAT32, is always 32
+    if (boot_size > SECT_RES32) boot_size = SECT_RES32;  // don't let it be more than SECT_RES32
+    rewind(src);
+    fread(buffer, SECT_SIZE, boot_size, src);
+    fclose(src);
+  } else {
+    memset(buffer, 0, SECT_SIZE);
+    boot_size = (FAT_TYPE == 32) ? SECT_RES32 : 1;
+  }
   
   switch (FAT_TYPE) {
     case 12:
@@ -356,9 +361,9 @@ int main(int argc, char *argv[]) {
   //  sig       dword  (unique id for partition/disk)
   //  base_lba  qword  (0 for floppy, could be 63 for partitions)
   //  boot sig  word   (0xAA55)
-  * (bit32u *) &buffer[498] = ((rand() & 0xFFFF) << 16) | (rand() & 0xFFFF);
-  //if (* (bit64u *) &buffer[502] == 0)  // we only update the base if the .bin file had it as zeros already.
-  * (bit64u *) &buffer[502] = (ftell(targ) / SECT_SIZE);
+  * (bit32u *) &buffer[496] = ((rand() & 0xFFFF) << 16) | (rand() & 0xFFFF);
+  * (bit64u *) &buffer[500] = resources->base_lba;
+  * (bit16u *) &buffer[508] = 0;
   
   // write the first sectors.  We will come back and write the BPB later
   buffer[510] = 0x55; buffer[511] = 0xAA;
