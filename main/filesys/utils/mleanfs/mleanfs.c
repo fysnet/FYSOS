@@ -77,7 +77,7 @@
  *  Assumptions/prerequisites:
  *   - requires 64-bit integers
  *
- *  Last updated: 14 June 2026
+ *  Last updated: 8 Aug 2026
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *   gcc -Os mleanfs.c -o mleanfs.exe -s
@@ -667,7 +667,7 @@ void create_root_entry(const size_t folder, char *filename, const size_t pos, ui
     memcpy(name, filename, (p - filename));
     name[(p - filename)] = '\0';
 
-    // now see if we have already made this folders block
+    // now see if we have already made this folder's block
     for (i = 0; i < cur_folder; i++) {
       if (strcmp(folders[i].name, name) == 0) {
         fnd = TRUE;
@@ -705,8 +705,8 @@ void create_root_entry(const size_t folder, char *filename, const size_t pos, ui
     const size_t rec_len = ((strlen(name) + 12 + 15) / 16);
     // if we are near the end of the buffer, we need to add to the buffer size
     if (((folders[folder].cur_rec + rec_len) * sizeof(struct S_LEAN_DIRENTRY)) > (folders[folder].buf_size * block_size)) {
-      folders[i].buf_size += FOLDER_SIZE;
-      folders[folder].root = (void *) realloc(folders[folder].root, (folders[i].buf_size * block_size));
+      folders[folder].buf_size += FOLDER_SIZE;
+      folders[folder].root = (void *) realloc(folders[folder].root, (folders[folder].buf_size * block_size));
     }
     struct S_LEAN_DIRENTRY *entry = (struct S_LEAN_DIRENTRY *)
       ((uint8_t *) folders[folder].root + (folders[folder].cur_rec * sizeof(struct S_LEAN_DIRENTRY)));
