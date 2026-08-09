@@ -83,6 +83,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <ctype.h>
+#include <conio.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -91,6 +92,8 @@
 #include "..\include\ctype.h"
 #include "..\include\mbr.h"
 #include "mgptpart.h"
+
+#pragma warning(disable: 4996)  // disable the _s warning for sprintf(), etc.
 
 /* Buffers to hold filenames.
  * Be careful not to exceed 128 bytes.
@@ -107,7 +110,7 @@ bool use_legacy_mbr = TRUE;  // if true, use Legacy MBR, else use Protected MBR
 bool checking = FALSE;
 
 // default values for CHS conversion
-bit32u spt = 63, numheads = 16, last_lba = 0, crc_entries;
+bit32u spt = 63, numheads = 16, tot_lbas = 0, crc_entries;
 
 /* Buffer to hold a single line from source file.
  * Be careful not to exceed the given length limit.
@@ -267,32 +270,46 @@ int main(int argc, char *argv[]) {
   }
   
   // now that we have all of the information, we can now print it to make sure
-  printf("    Create image file: %s\n", targ_filename);
-  if (strlen(mbr_filename))
-    printf(" Using mbr image file: %s\n", mbr_filename);
-  else  
-    puts(" Writing nulls to mbr code area.");
-  printf(" Writing %i partitions:\n", part_cnt);
+  printf(" Create image file: %s ", targ_filename);
   
   // create the out file
+  // first try to open for read only
+  if ((targ = fopen(targ_filename, "r+b")) != NULL) {
+    fclose(targ);
+    printf("** File already exists.  Overwrite? [Y] ");
+    int i = getch();
+    if ((i != 'Y') && (i != 13))
+      return -1;
+    putch('Y');
+  }
+  puts("");
+  
+  // either filename didn's exist, or it did exist and user said okay to overwrite.
   if ((targ = fopen(targ_filename, "w+b")) == NULL) {
     printf(" Could not create target file: %s\n", targ_filename);
     return -3;
   }
   
+  // use predified MBR?
+  if (strlen(mbr_filename))
+    printf(" Using mbr image file: %s\n", mbr_filename);
+  else  
+    puts(" Writing nulls to mbr code area.");
+  
   // write the partitions
+  printf(" Writing %i partitions:\n", part_cnt);
   for (pos=0; pos<part_cnt; pos++) {
     printf("  %i: base = %i, size = %i, system = %i, hidden = %i, legacy = %i\n", pos,
       partitions[pos].base, partitions[pos].size, partitions[pos].type.system, partitions[pos].type.hidden, partitions[pos].type.legacy);
     if (strlen(partitions[pos].filename))
       printf("       Writing image file: %s\n", partitions[pos].filename);
     create_partition(&partitions[pos], targ);
-    if (((partitions[pos].base + partitions[pos].size)) > last_lba)
-      last_lba = ((partitions[pos].base + partitions[pos].size));
+    if (((partitions[pos].base + partitions[pos].size)) > tot_lbas)
+      tot_lbas = ((partitions[pos].base + partitions[pos].size));
   }
   
   // we need to add enough sectors to the out file to hold the backup header and entries
-  last_lba += GPT_SIZE;
+  tot_lbas += GPT_SIZE;
   
   // now we can start to write the partition entries
   struct S_MBR mbr;
@@ -326,7 +343,7 @@ int main(int argc, char *argv[]) {
     mbr.part_entry[0].boot_id = 0x00;      // boot ID must be 0x00;
     mbr.part_entry[0].sys_id = 0xEE;       // sys ID is 0xEE
     mbr.part_entry[0].start_lba = 1;       // start LBA is the GPT Header (LBA 1)
-    mbr.part_entry[0].size = last_lba + 1 - 1;  // + 1 to get 1 based, - 1 to not count MBR
+    mbr.part_entry[0].size = tot_lbas + 1 - 1;  // + 1 to get 1 based, - 1 to not count MBR
     mbr.part_entry[0].start.cylinder = 0;  // the start CHS must be 0,0,1 even though we have LBA 2
     mbr.part_entry[0].start.head = 0;      //
     mbr.part_entry[0].start.sector = 2;    //
@@ -351,18 +368,18 @@ int main(int argc, char *argv[]) {
     create_name(wname, pos);
     if (pos < part_cnt) {
       crc_entries = create_entry(2, pos, &partitions[pos], crc_entries, wname, &guid0, &guid1, targ);
-      create_entry(last_lba - GPT_SIZE, pos, &partitions[pos], 0, wname, &guid0, &guid1, targ);
+      create_entry(tot_lbas - GPT_SIZE, pos, &partitions[pos], 0, wname, &guid0, &guid1, targ);
     } else {
       create_entry(2, pos, NULL, 0, wname, &guid0, &guid1, targ);
-      create_entry(last_lba - GPT_SIZE, pos, NULL, 0, wname, &guid0, &guid1, targ);
+      create_entry(tot_lbas - GPT_SIZE, pos, NULL, 0, wname, &guid0, &guid1, targ);
     }
   }
   crc_entries ^= 0xFFFFFFFF;
   
   // create partition header
   calc_guid(&guid0, rand());
-  create_header(1, last_lba, 2, part_cnt, last_lba, crc_entries, &guid0, targ);
-  create_header(last_lba, 1, last_lba - GPT_SIZE, part_cnt, last_lba, crc_entries, &guid0, targ);
+  create_header(1, tot_lbas, 2, part_cnt, tot_lbas, crc_entries, &guid0, targ);
+  create_header(tot_lbas, 1, tot_lbas - GPT_SIZE, part_cnt, tot_lbas, crc_entries, &guid0, targ);
   
   // close the image file
   fclose(targ);  
