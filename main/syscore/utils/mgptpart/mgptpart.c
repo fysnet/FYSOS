@@ -63,7 +63,7 @@
  *  Assumptions/prerequisites:
  *  
  *
- *  Last updated: 7 Aug 2026
+ *  Last updated: 9 Aug 2026
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *    gcc -Os mgptpart.c -o mgptpart.exe -s
@@ -287,8 +287,8 @@ int main(int argc, char *argv[]) {
     if (strlen(partitions[pos].filename))
       printf("       Writing image file: %s\n", partitions[pos].filename);
     create_partition(&partitions[pos], targ);
-    if (((partitions[pos].base + partitions[pos].size) - 1) > last_lba)
-      last_lba = ((partitions[pos].base + partitions[pos].size) - 1);
+    if (((partitions[pos].base + partitions[pos].size)) > last_lba)
+      last_lba = ((partitions[pos].base + partitions[pos].size));
   }
   
   // we need to add enough sectors to the out file to hold the backup header and entries

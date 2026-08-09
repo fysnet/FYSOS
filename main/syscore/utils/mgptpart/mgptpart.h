@@ -57,10 +57,10 @@
  */
 
 /*
- *  Last updated: 7 Aug 2026
+ *  Last updated: 9 Aug 2026
  */
 
-char strtstr[] = "\nMake GPT Part   v00.11.00    Forever Young Software 1984-2026\n";
+char strtstr[] = "\nMake GPT Part   v00.11.01    Forever Young Software 1984-2026\n";
 char usage_str[] = "\n Usage:\n   mgptpart /s:source_file_name /t:target_file_name\n";
 
 // set it to 1 (align on byte)
