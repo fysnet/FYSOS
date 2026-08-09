@@ -75,7 +75,7 @@
  *   - Since the FAT FS won't allow file sizes larger than 32-bit, no
  *     need to use the 64-bit forms of FSEEK() and FTELL()
  *
- *  Last updated: 6 Aug 2026
+ *  Last updated: 8 Aug 2026
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *  gcc -Os mkdosfs.cpp -o mkdosfs.exe -s
@@ -105,25 +105,30 @@
 
 #include "mkdosfs.h"   // our include
 
+struct S_FOLDERS *folders = NULL;
+unsigned cur_folder = 0;
+unsigned cur_folder_size = 0;
+bit32u this_pos, cur_clust = 2; // FAT12/16 -> first available cluster, FAT32 -> first ROOT Cluster
+
+struct S_RESOURCE *resources;
+
+FILE *src, *targ;
+
 int main(int argc, char *argv[]) {
-  FILE *src, *targ;
   bool existing_image = FALSE;
   bool one_fat = FALSE;
-  struct S_RESOURCE *resources;
   char filename[NAME_LEN_MAX];
   char label[NAME_LEN_MAX] = "This is a default label";
   char strbuff[16];
   
-  unsigned i, j, k, spfat, num_fats = 2;
+  unsigned i, j, k, u, spfat, num_fats = 2;
   int    boot_size = 1;  // boot sector size in sectors (default = 1)
   int    root_size;      // default root size in sectors (default = ROOT_SIZE)
   int    last_cnt;
-  bit32u this_pos, cur_clust = 2; // FAT12/16 -> first available cluster, FAT32 -> first ROOT Cluster
   bit64u tot_sects;
   
   bit8u *buffer;
   bit8u *fat_buf;
-  struct S_FAT_ROOT *root;
   struct S_FAT1216_BPB *bpb;
   struct S_FAT32_BPB *bpb32;
   
@@ -236,25 +241,20 @@ int main(int argc, char *argv[]) {
   } // !existing_image
   
   // create the boot sectors (1+)
+  memset(buffer, 0, SECT_SIZE);
+  boot_size = (FAT_TYPE == 32) ? SECT_RES32 : 1;
   if (strlen(resources->boot_filename)) {
-    if ((src = fopen(resources->boot_filename, "rb")) == NULL) {
-      puts("Error opening boot file.");
-      fclose(targ);
-      free(buffer);
-      return -3;
-    }
-    
-    // read in the boot sector(s)
-    fseek(src, 0, SEEK_END);
-    boot_size = (ftell(src) + (SECT_SIZE-1)) / SECT_SIZE;
-    if (FAT_TYPE == 32) boot_size = SECT_RES32; // if FAT32, is always 32
-    if (boot_size > SECT_RES32) boot_size = SECT_RES32;  // don't let it be more than SECT_RES32
-    rewind(src);
-    fread(buffer, SECT_SIZE, boot_size, src);
-    fclose(src);
-  } else {
-    memset(buffer, 0, SECT_SIZE);
-    boot_size = (FAT_TYPE == 32) ? SECT_RES32 : 1;
+    if ((src = fopen(resources->boot_filename, "rb")) != NULL) {
+      // read in the boot sector(s)
+      fseek(src, 0, SEEK_END);
+      boot_size = (ftell(src) + (SECT_SIZE-1)) / SECT_SIZE;
+      if (FAT_TYPE == 32) boot_size = SECT_RES32; // if FAT32, is always 32
+      if (boot_size > SECT_RES32) boot_size = SECT_RES32;  // don't let it be more than SECT_RES32
+      rewind(src);
+      fread(buffer, SECT_SIZE, boot_size, src);
+      fclose(src);
+    } else
+      puts("Error opening boot file. Using Default values.");
   }
   
   switch (FAT_TYPE) {
@@ -440,14 +440,24 @@ int main(int argc, char *argv[]) {
    *  clusters we use so that we can update the fat(s).
    */
   if ((FAT_TYPE == 12) || (FAT_TYPE == 16))
-    fseek(targ, (bit32u) ((resources->base_lba + boot_size + (num_fats * spfat) + root_size) * SECT_SIZE), SEEK_SET);
+    FSEEK(targ, (bit32u) ((resources->base_lba + boot_size + (num_fats * spfat) + root_size) * SECT_SIZE), SEEK_SET);
   else {
     k = (root_size + (SPCLUST - 1)) & ~(SPCLUST - 1); // must be cluster aligned
-    fseek(targ, (bit32u) ((resources->base_lba + boot_size + (num_fats * spfat) + k) * SECT_SIZE), SEEK_SET);
+    FSEEK(targ, (bit32u) ((resources->base_lba + boot_size + (num_fats * spfat) + k) * SECT_SIZE), SEEK_SET);
   }
-  size_t read;
-  bit32u root_pos = 0, file_size;
-  root = (struct S_FAT_ROOT *) calloc(root_size * SECT_SIZE, 1); 
+  
+  // allocate the folders data
+  folders = (struct S_FOLDERS *) calloc(DEF_FOLDER_CNT * sizeof(struct S_FOLDERS), 1);
+  cur_folder_size = DEF_FOLDER_CNT;
+  
+  // create the root
+  strcpy(folders[0].name, "/");
+  folders[0].root = calloc(root_size * SECT_SIZE, 1); 
+  folders[0].root_pos = 0;
+  folders[0].buf_size = root_size;
+  folders[0].start = 2;
+  folders[0].parent = NULL;
+  ++cur_folder;
   
   /* Create the Volume Label entry.
    *  We would first remove the quotes from the given label, if any
@@ -455,22 +465,26 @@ int main(int argc, char *argv[]) {
    *  ** Please note that Windows will automatically remove the quotes from
    *     the parameter if found.  I don't know what Unix boxes do.
    */
-  create_root_entry(root, label, 0, &root_pos, NULL, NULL, 0x08, FAT_TYPE, 0);
+  create_root_entry(0, label, 0, 0, 0, NULL, FAT_ATTRIB_VOL, FAT_TYPE, 0);
   
   // Now insert the specified files
+  size_t read;
+  bit32u file_size;
   for (i=0; i<resources->file_cnt; i++) {
     // get the file to write to the image
     if ((src = fopen(resources->files[i].path_filename, "rb")) == NULL) {
-      printf("Error opening %s file.\n", resources->files[i].path_filename);
+      printf("* Error: opening %s\n  Press a key to continue...", resources->files[i].path_filename);
+      getch();
       continue;
     }
-    fseek(src, 0, SEEK_END);
-    file_size = ftell(src);
+    FSEEK(src, 0, SEEK_END);
+    file_size = (bit32u) FTELL(src);
     rewind(src);
-    
+
     // create the root entry(s)
-    create_root_entry(root, resources->files[i].filename, file_size, &root_pos, fat_buf, &cur_clust, 0x20, FAT_TYPE, SPCLUST);
-    printf(" % 2i: Writing %s to LBA %i\n", i, resources->files[i].filename, ftell(targ) / SECT_SIZE);
+    create_root_entry(0, resources->files[i].filename, 0, file_size, cur_clust, fat_buf, FAT_ATTRIB_ARCH, FAT_TYPE, SPCLUST);
+    
+    printf(" % 2i: Writing %s to LBA %" LL64BIT "i\n", i, resources->files[i].filename, FTELL(targ) / SECT_SIZE);
     do {
       // by clearing the buffer first, we make sure that the "padding" bytes are all zeros
       memset(buffer, 0, SPCLUST * SECT_SIZE);
@@ -479,10 +493,29 @@ int main(int argc, char *argv[]) {
         break;
       fwrite(buffer, SECT_SIZE, SPCLUST, targ);
       tot_sects -= SPCLUST;
+      cur_clust++;
     } while (read == (SPCLUST * SECT_SIZE));
     fclose(src);
   }
-  this_pos = ftell(targ);  // save current position
+
+  // save the position after all of the files have been written
+  this_pos = ftell(targ);
+
+  // write the folders
+  for (u = 0; u < cur_folder; u++) {
+    unsigned start = (unsigned) (resources->base_lba + boot_size + (num_fats * spfat));
+    if (u > 0) {
+      if ((FAT_TYPE == 12) || (FAT_TYPE == 16))
+        start += root_size;
+      start += ((folders[u].start - 2) * SPCLUST);
+    }
+    printf(" Writing folder '%s' to lba %i\n", folders[u].name, start);
+    FSEEK(targ, start * SECT_SIZE, SEEK_SET);
+    fwrite(folders[u].root, folders[u].buf_size, SECT_SIZE, targ);
+    tot_sects -= folders[u].buf_size;
+    free(folders[u].root);
+  }
+  free(folders);
   
   // if fat32, write the info sector
   if (FAT_TYPE == 32) {
@@ -493,7 +526,7 @@ int main(int argc, char *argv[]) {
     fsInfo.free_clust_cnt = (bit32u) ((resources->tot_sectors / SPCLUST) - cur_clust);
     fsInfo.next_free_clust = cur_clust;
     fsInfo.trail_sig = 0xAA550000;
-    fseek(targ, (bit32u) ((resources->base_lba + FS_INFO_SECT) * SECT_SIZE), SEEK_SET);
+    FSEEK(targ, (bit32u) ((resources->base_lba + FS_INFO_SECT) * SECT_SIZE), SEEK_SET);
     fwrite(&fsInfo, SECT_SIZE, 1, targ);
   }
   
@@ -501,21 +534,15 @@ int main(int argc, char *argv[]) {
   tot_sects -= boot_size;
   
   // write the FAT(s)
-  fseek(targ, (bit32u) (resources->base_lba + boot_size) * SECT_SIZE, SEEK_SET);
+  FSEEK(targ, (bit32u) (resources->base_lba + boot_size) * SECT_SIZE, SEEK_SET);
   printf(" Writing FAT(s) to LBA %i\n", ftell(targ) / SECT_SIZE);
   for (i=0; i<num_fats; i++)
     fwrite(fat_buf, SECT_SIZE, spfat, targ);
   tot_sects -= (spfat * num_fats);
-  
-  // write the root
-  fseek(targ, (bit32u) (resources->base_lba + boot_size + (spfat * num_fats)) * SECT_SIZE, SEEK_SET);
-  printf(" Writing Root to LBA %i\n", ftell(targ) / SECT_SIZE);
-  fwrite(root, SECT_SIZE, root_size, targ);
-  tot_sects -= root_size;
-  
+
   // write remaining sectors (as zeros)
-  fseek(targ, this_pos, SEEK_SET);
-  printf(" Writing rest of partition to LBA %i, %" LL64BIT "i sectors.", ftell(targ) / SECT_SIZE, tot_sects);
+  FSEEK(targ, this_pos, SEEK_SET);
+  printf(" Writing rest of partition to LBA %" LL64BIT "i, %" LL64BIT "i sectors.", FTELL(targ) / SECT_SIZE, tot_sects);
   memset(buffer, 0, SECT_SIZE);
   while (tot_sects) {
     fwrite(buffer, SECT_SIZE, 1, targ);
@@ -524,11 +551,10 @@ int main(int argc, char *argv[]) {
     tot_sects--;
   }
   puts("");
-  
+    
   // free the buffers
   free(buffer);
   free(fat_buf);
-  free(root);
   
   // close the file
   fclose(targ);
@@ -657,114 +683,217 @@ void format_name(const bit8u *lname, bit8u *name, bit8u *ext) {
 }
 
 // Creates a new LFN (& SFN) root entry.
-void create_root_entry(struct S_FAT_ROOT *root, char *filename, const bit32u file_size, bit32u *root_pos, 
-                       bit8u *fat_buf, bit32u *cur_clust, const bit8u attribute, const int type, const int spc) {
-
-  int slots, i, j, k, l, len, index;
-  unsigned sfn_name_len = 0, sfn_ext_len = 0;
+void create_root_entry(size_t folder, char *filename, unsigned pos, bit32u file_size, bit32u cur_cluster, bit8u *fat_buf, const bit8u attribute, const int type, const int spc) {
+  char name[512], *p;
+  bit32u filesize = file_size;
+  bool is_folder = FALSE, fnd = FALSE;
+  int i;
+  unsigned slots, j, k, l, len, index;
   bit8u *s, new_crc;
   bit16u *t;
   char sfn_name[8], sfn_ext[3];
-  char illegal[] = "\"*+,/:;<=>?[\\]| ";
-  struct S_FAT_LFN_ROOT *f_root = (struct S_FAT_LFN_ROOT *) root;
+  //char illegal[] = "\"*+,/:;<=>?[\\]| ";
+  struct S_FAT_LFN_ROOT *f_root = (struct S_FAT_LFN_ROOT *) folders[folder].root;
+  struct S_FAT_ROOT *root = (struct S_FAT_ROOT *) folders[folder].root;
   bit32u dword, value;
   struct tm *tmptr;
   time_t lt;
-  
-  lt = time(NULL);
-  tmptr = localtime(&lt);
-  
-  // generate short filename
-  format_name((const bit8u *) filename, (bit8u *) sfn_name, (bit8u *) sfn_ext);
-  
-  // calculate crc
-  s = (bit8u *) sfn_name;
-  new_crc = *s++;
-  for (i=1; i<11; i++) {
-    if (i==8) s = (bit8u *) sfn_ext;
-    new_crc = ror_byte(new_crc);
-    new_crc += *s++;
-  }
-  
-  // create the lfn entries
-  index = *root_pos;
-  len = (unsigned) strlen(filename);
-  slots = (unsigned int) ((len + 12) / 13);
-  k = 0;
-  l = 1;
-  for (i=slots-1; i >= 0; i--) {
-    f_root[index + i].sequ_flags = ((i==0) ? 0x40 : 0x00) | l++;
-    f_root[index + i].attrb = 0x0F;
-    f_root[index + i].resv = 0x00;
-    f_root[index + i].clust_zero = 0x0000;
-    f_root[index + i].sfn_crc = new_crc;
-    t = f_root[index + i].name0;
-    for (j=0; j<13; j++, t++) {
-      if (j==5) t = f_root[index + i].name1;
-      if (j==11) t = f_root[index + i].name2;
-      if (k < len) *t = filename[k];
-      else if (k == len) *t = 0x0000;
-      else *t = 0xFFFF;
-      k++;
-    }
-  }
-  index += slots;
-  
-  // create the SFN slot
-  memcpy(root[index].name, sfn_name, 8);
-  memcpy(root[index].ext, sfn_ext, 3);
-  root[index].attrb = attribute;
-  root[index].time = fat_time_word(tmptr);
-  root[index].date = fat_date_word(tmptr);
-  root[index].strtclst = (bit16u) ((cur_clust) ? *cur_clust : 0);
-  root[index].filesize = file_size;
-  if (type != 32)
-    memset(root[index].type.resv, 0, 10);
-  else {  // FAT32 entries.
-    root[index].type.fat32.nt_resv = 0;
-    root[index].type.fat32.crt_time_tenth = 0;
-    root[index].type.fat32.crt_time = fat_time_word(tmptr);
-    root[index].type.fat32.crt_date = fat_date_word(tmptr);
-    root[index].type.fat32.last_acc = fat_date_word(tmptr);
-    root[index].type.fat32.strtclst32 = (bit16u) ((cur_clust) ? (*cur_clust >> 16) : 0);
-  }
-  index++;
-  
-  // update root position
-  *root_pos = index;
-  
-  // update the fat(s)
-  if (file_size > 0) {
-    i = (file_size + ((SECT_SIZE * spc) - 1)) / (SECT_SIZE * spc);
-    while (i--) {
-      value = (i == 0) ? 0x0FFFFFFF : (*cur_clust + 1);
-      switch (type) {
-      case 12:
-        s = fat_buf + *cur_clust;
-        s += (*cur_clust / 2);
-        dword = * ((bit16u *) s);
-        if (*cur_clust & 1)
-          * ((bit16u *) s) = (bit16u) ((dword & ~0xFFF0) | ((value & 0xFFF)<<4));
-        else
-          * ((bit16u *) s) = (bit16u) ((dword & ~0x0FFF) | (value & 0xFFF));
+
+  // check to see if the file name given is part of a path (i.e.: has directory names first)
+  if (p = strchr(filename + pos, '/')) {
+    memcpy(name, filename, (p - filename));
+    name[(p - filename)] = '\0';
+    
+    // now see if we have already made this folder's block
+    for (j = 0; j < cur_folder; j++) {
+      if (strcmp(folders[j].name, name) == 0) {
+        fnd = TRUE;
         break;
-      case 16:
-        s = fat_buf + (*cur_clust << 1);
-        * ((bit16u *) s) = (bit16u) (value & 0xFFFF);
-        break;
-      case 32:
-        // top 4 bits are reserved and should not be modified
-        s = fat_buf + (*cur_clust << 2);
-        * ((bit32u *) s) = (value & 0x0FFFFFFF);
       }
-      (*cur_clust)++;
+    }
+    
+    // if we didn't find an existing folder, create one
+    if (!fnd) {
+      if (cur_folder == DEF_FOLDER_CNT) {
+        cur_folder_size += DEF_FOLDER_CNT;
+        folders = (struct S_FOLDERS *) realloc(folders, cur_folder_size * sizeof(struct S_FOLDERS));
+      }
+      // j == cur_folder from for() loop above
+      strcpy(folders[j].name, name);
+      folders[j].buf_size = FOLDER_SIZE * SPCLUST;
+      folders[j].root = calloc(FOLDER_SIZE * SPCLUST * SECT_SIZE, 1);
+      folders[j].start = cur_clust;
+      folders[j].root_pos = root_start((struct S_FAT_ROOT *) folders[j].root, cur_clust, folders[folder].start, type);
+      folders[j].parent = &folders[folder];
+
+      // we need to move ahead the size of this directory
+      filesize = FOLDER_SIZE * SPCLUST * SECT_SIZE;
+      cur_cluster = cur_clust;
+      cur_clust += FOLDER_SIZE;
+      FSEEK(targ, FOLDER_SIZE * SPCLUST * SECT_SIZE, SEEK_CUR);
+
+      // mark we are a folder
+      is_folder = TRUE;
+      cur_folder++;
+    }
+    
+    create_root_entry(j, filename, (unsigned) (strlen(name) + 1), file_size, cur_clust, fat_buf, FAT_ATTRIB_ARCH, FAT_TYPE, SPCLUST);
+    strcpy(name, name + pos);
+  }	else
+    strcpy(name, filename + pos);
+
+  // if it was not already found as an existing directory, we need to make the entry
+  if (!fnd) {
+    lt = time(NULL);
+    tmptr = localtime(&lt);
+    
+    // generate short filename
+    format_name((const bit8u *) name, (bit8u *) sfn_name, (bit8u *) sfn_ext);
+    
+    // calculate crc
+    s = (bit8u *) sfn_name;
+    new_crc = *s++;
+    for (i=1; i<11; i++) {
+      if (i==8) s = (bit8u *) sfn_ext;
+      new_crc = ror_byte(new_crc);
+      new_crc += *s++;
+    }
+    
+    // create the lfn entries
+    index = folders[folder].root_pos;
+    len = (unsigned) strlen(name);
+    slots = ((len + 12) / 13);
+
+    // check to make sure we don't over do it.
+    if ((index + slots + 1) >= (folders[folder].buf_size * SECT_SIZE)) {
+      puts("Folder is too full...");
+      abort();
+    }
+
+    k = 0;
+    l = 1;
+    for (i=slots-1; i >= 0; i--) {
+      f_root[index + i].sequ_flags = ((i==0) ? 0x40 : 0x00) | l++;
+      f_root[index + i].attrb = 0x0F;
+      f_root[index + i].resv = 0x00;
+      f_root[index + i].clust_zero = 0x0000;
+      f_root[index + i].sfn_crc = new_crc;
+      t = f_root[index + i].name0;
+      for (j=0; j<13; j++, t++) {
+        if (j==5) t = f_root[index + i].name1;
+        if (j==11) t = f_root[index + i].name2;
+        if (k < len) *t = name[k];
+        else if (k == len) *t = 0x0000;
+        else *t = 0xFFFF;
+        k++;
+      }
+    }
+    index += slots;
+    
+    // create the SFN slot
+    memcpy(root[index].name, sfn_name, 8);
+    memcpy(root[index].ext, sfn_ext, 3);
+    root[index].attrb = (is_folder) ? FAT_ATTRIB_DIR : attribute;
+    root[index].time = fat_time_word(tmptr);
+    root[index].date = fat_date_word(tmptr);
+    root[index].strtclst = (bit16u) cur_cluster;
+    root[index].filesize = (is_folder) ? 0 : filesize;
+    if (type != 32)
+      memset(root[index].type.resv, 0, 10);
+    else {  // FAT32 entries.
+      root[index].type.fat32.nt_resv = 0;
+      root[index].type.fat32.crt_time_tenth = 0;
+      root[index].type.fat32.crt_time = fat_time_word(tmptr);
+      root[index].type.fat32.crt_date = fat_date_word(tmptr);
+      root[index].type.fat32.last_acc = fat_date_word(tmptr);
+      root[index].type.fat32.strtclst32 = (bit16u) (cur_cluster >> 16);
+    }
+    index++;
+    
+    // update root position
+    folders[folder].root_pos = index;
+    
+    // update the fat(s)
+    if (filesize > 0) {
+      i = (filesize + ((SECT_SIZE * spc) - 1)) / (SECT_SIZE * spc);
+      while (i--) {
+        value = (i == 0) ? 0x0FFFFFFF : (cur_cluster + 1);
+        switch (type) {
+          case 12:
+            s = fat_buf + cur_cluster;
+            s += (cur_cluster / 2);
+            dword = * ((bit16u *) s);
+            if (cur_cluster & 1)
+              * ((bit16u *) s) = (bit16u) ((dword & ~0xFFF0) | ((value & 0xFFF)<<4));
+            else
+              * ((bit16u *) s) = (bit16u) ((dword & ~0x0FFF) | (value & 0xFFF));
+            break;
+          case 16:
+            s = fat_buf + (cur_cluster << 1);
+            * ((bit16u *) s) = (bit16u) (value & 0xFFFF);
+            break;
+          case 32:
+            // top 4 bits are reserved and should not be modified
+            s = fat_buf + (cur_cluster << 2);
+            * ((bit32u *) s) = (value & 0x0FFFFFFF);
+        }
+        cur_cluster++;
+      }
     }
   }
 }
 
+// create the first two entries of a root directory
+unsigned root_start(struct S_FAT_ROOT *root, const bit32u current, const bit32u parent, const int type) {
+  struct tm *tmptr;
+  time_t lt;
+
+  lt = time(NULL);
+  tmptr = localtime(&lt);
+
+  // The "." entry
+  memcpy(root[0].name, ".       ", 8);
+  memcpy(root[0].ext, "   ", 3);
+  root[0].attrb = FAT_ATTRIB_DIR;
+  root[0].time = fat_time_word(tmptr);
+  root[0].date = fat_date_word(tmptr);
+  root[0].strtclst = (bit16u) current;
+  root[0].filesize = 0;
+  if (type != 32)
+    memset(root[0].type.resv, 0, 10);
+  else {  // FAT32 entries.
+    root[0].type.fat32.nt_resv = 0;
+    root[0].type.fat32.crt_time_tenth = 0;
+    root[0].type.fat32.crt_time = fat_time_word(tmptr);
+    root[0].type.fat32.crt_date = fat_date_word(tmptr);
+    root[0].type.fat32.last_acc = fat_date_word(tmptr);
+    root[0].type.fat32.strtclst32 = (bit16u) (current >> 16);
+  }
+
+  // The ".." entry
+  memcpy(root[1].name, "..      ", 8);
+  memcpy(root[1].ext, "   ", 3);
+  root[1].attrb = FAT_ATTRIB_DIR;
+  root[1].time = fat_time_word(tmptr);
+  root[1].date = fat_date_word(tmptr);
+  root[1].strtclst = (bit16u) parent;
+  root[1].filesize = 0;
+  if (type != 32)
+    memset(root[1].type.resv, 0, 10);
+  else {  // FAT32 entries.
+    root[1].type.fat32.nt_resv = 0;
+    root[1].type.fat32.crt_time_tenth = 0;
+    root[1].type.fat32.crt_time = fat_time_word(tmptr);
+    root[1].type.fat32.crt_date = fat_date_word(tmptr);
+    root[1].type.fat32.last_acc = fat_date_word(tmptr);
+    root[1].type.fat32.strtclst32 = (bit16u) (parent >> 16);
+  }
+
+  return 2;
+}
+
 // this simply places a space trailing 11 byte label into the BPB style label entry
 void create_label_entry(char *targ, const char *label) {
-  
   int i;
   
   memset(targ, 0x20, 11);

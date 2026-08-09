@@ -57,23 +57,30 @@
  */
 
 /*
- *  Last updated: 6 Aug 2026
+ *  Last updated: 8 Aug 2026
  */
 
 // set it to 1 (align on byte)
 #pragma pack (push, 1)
 
-char strtstr[] = "\nMake DOS Image  v02.11.00    Forever Young Software 1984-2026\n";
+char strtstr[] = "\nMake DOS Image  v02.15.00    Forever Young Software 1984-2026\n";
 
 #define SECT_SIZE  512
 
 #define FS_INFO_SECT    1
 #define FS_BACKUP_SECT  6
 
-#define ROOT_SIZE       7   // default root size in sectors
+#define ROOT_SIZE       14   // default root size in sectors
 
 #define FAT_TYPE resources->param0
 #define SPCLUST  resources->param1
+
+#define FAT_ATTRIB_RO    0x01
+#define FAT_ATTRIB_HID   0x02
+#define FAT_ATTRIB_SYS   0x04
+#define FAT_ATTRIB_VOL   0x08
+#define FAT_ATTRIB_DIR   0x10
+#define FAT_ATTRIB_ARCH  0x20
 
 struct S_FAT1216_BPB {
   bit8u  jmps[2];       // The jump short instruction
@@ -176,10 +183,23 @@ struct S_FAT_LFN_ROOT {
 
 #pragma pack (pop)
 
+#define FOLDER_SIZE  16  // default clusters per sub folder
+
+#define DEF_FOLDER_CNT  32
+
+struct S_FOLDERS {
+  char name[256];     // folder name
+  void *root;         // pointer to memory holding root data
+  unsigned buf_size;  // size of this buffer (in sectors)
+  unsigned root_pos;  // record index of next available (last free) entry
+  unsigned start;     // starting cluster to write to
+  struct S_FOLDERS *parent;
+};
+
 void parse_command(int, char *[], char *, bool *, bool *, char *);
 bit8u media_descriptor(const bool, const int, const int, const int);
-void create_root_entry(struct S_FAT_ROOT *, char *, const bit32u, bit32u *, bit8u *, bit32u *, const bit8u, 
-                       const int, const int);
+void create_root_entry(size_t folder, char *filename, unsigned pos, bit32u file_size, bit32u cur_cluster, bit8u *fat_buf, const bit8u attribute, const int type, const int spc);
+unsigned root_start(struct S_FAT_ROOT *root, const bit32u current, const bit32u parent, const int type);
 void create_label_entry(char *, const char *);
 bit8u ror_byte(bit8u);
 bit32u fat_build_serial_num();

@@ -10,15 +10,16 @@
 #  param1=8           - Sectors Per Cluster
 #  heads=16           - heads per cylinder
 #  spt=63             - sectors per track
-#   path_to_source_file0, filename_to_use0, 0
-#   path_to_source_file1, filename_to_use1, 0
+#   path_to_source_file0, filename_to_use0, 0   # filename_to_use0 may include path names
+#   path_to_source_file1, filename_to_use1, 0   #  (must use the forward slash)
+#   path_to_source_file2, subdir/filename_to_use2, 0   # will create a subdirectory named "subdir"
 
 # If you don't give the /E parameter on the command line, this app will
 #  create an image that contains a MBR and the 1+ sector boot code, specified
 #  by the parameters below.
-# If you do give the /E parameter, the mbrfile parameter is
+# If you do give the /E parameter, the mbrfile and bootfile parameters are
 #  ignored, and the first sector written is the BPB.
-imgfile=  D:\fysos\main\fysos\main\filesys\images\fat16.img
+imgfile=  D:\fysos\main\filesys\images\fat16.img
 
 # When /E is used:
 #   Base_lba is the LBA with in the existing image to write the BPB to.
