@@ -153,26 +153,30 @@ void CFat::OnFatCheck() {
     fcErrorCount++;
   }
   
-  // Cluster Count
+  // Check Cluster Count
   // A Fat-12 must be less than 4085 clusters
   // A Fat-16 must be at least 4085 and less than 65525 clusters
   // A Fat-32 must be at least 65525 clusters
+  unsigned RootDirSectors = ((bpb12->root_entrys * 32) + (bpb12->bytes_per_sect - 1)) / bpb12->bytes_per_sect;
+  unsigned total_sectors = (bpb12->sectors > 0) ? bpb12->sectors : bpb12->sect_extnd;
+  unsigned DataSectors = total_sectors - (bpb12->sect_reserved + (bpb12->fats * sect_per_fat) + RootDirSectors);
+  unsigned CountOfClusters = DataSectors / bpb12->sect_per_clust;
   if (m_fat_size == FS_FAT12) {
-    if (cluster_count >= 4085) {
-      cs.Format("FAT-12 should have a cluster count less than 4085. Has %u\r\n", cluster_count);
+    if (CountOfClusters >= 4085) {
+      cs.Format("* FAT-12 should have a cluster count less than 4085. Has %u\r\n", CountOfClusters);
       fcInfo += cs;
       fcErrorCount++;
     }
   } else if (m_fat_size == FS_FAT16) {
-    if ((cluster_count < 4085) || (cluster_count >= 65525)) {
-      cs.Format("FAT-16 should have a cluster count of at least 4085\r\n"
-                "  and less than 65525. Has %u\r\n", cluster_count);
+    if ((CountOfClusters < 4085) || (CountOfClusters >= 65525)) {
+      cs.Format("* FAT-16 should have a cluster count of at least 4085\r\n"
+                "  and less than 65525. Has %u\r\n", CountOfClusters);
       fcInfo += cs;
       fcErrorCount++;
     }
   } else {
-    if (cluster_count < 65525) {
-      cs.Format("FAT-32 should have a cluster count of at least 65525. Has %u\r\n", cluster_count);
+    if (CountOfClusters < 65525) {
+      cs.Format("* FAT-32 should have a cluster count of at least 65525. Has %u\r\n", CountOfClusters);
       fcInfo += cs;
       fcErrorCount++;
     }
