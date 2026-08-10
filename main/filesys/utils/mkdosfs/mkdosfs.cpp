@@ -75,7 +75,7 @@
  *   - Since the FAT FS won't allow file sizes larger than 32-bit, no
  *     need to use the 64-bit forms of FSEEK() and FTELL()
  *
- *  Last updated: 8 Aug 2026
+ *  Last updated: 9 Aug 2026
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *  gcc -Os mkdosfs.cpp -o mkdosfs.exe -s
@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
   char label[NAME_LEN_MAX] = "This is a default label";
   char strbuff[16];
   
-  unsigned i, j, k, u, spfat, num_fats = 2;
+  unsigned i, j, k, u, num_fats = 2;
   int    boot_size = 1;  // boot sector size in sectors (default = 1)
   int    root_size;      // default root size in sectors (default = ROOT_SIZE)
   int    last_cnt;
@@ -129,8 +129,6 @@ int main(int argc, char *argv[]) {
   
   bit8u *buffer;
   bit8u *fat_buf;
-  struct S_FAT1216_BPB *bpb;
-  struct S_FAT32_BPB *bpb32;
   
   // print start string
   printf(strtstr);
@@ -257,37 +255,22 @@ int main(int argc, char *argv[]) {
       puts("Error opening boot file. Using Default values.");
   }
   
-  switch (FAT_TYPE) {
-    case 12:
-      if ((resources->tot_sectors / (bit64u) SPCLUST) > 4086L) {
-        puts(" *** Illegal Size disk with FAT 12 ***");
-        free(buffer);
-        return -1;
-      }
-      spfat = ((unsigned) ((bit32u) resources->tot_sectors * 1.5)) / (SECT_SIZE * SPCLUST);
-      if (((spfat * SECT_SIZE) / 1.5) < ((bit32u) resources->tot_sectors / SPCLUST)) spfat++;
-      break;
-    case 16:
-      if ((resources->tot_sectors / (bit64u) SPCLUST) > 65526L) {
-        puts(" *** Illegal Size disk with FAT 16 *** ");
-        free(buffer);
-        return -1;
-      }
-      spfat = ((bit32u) resources->tot_sectors * 2) / (SECT_SIZE * SPCLUST);
-      if (((spfat * SECT_SIZE) / 2) < ((bit32u) resources->tot_sectors / SPCLUST)) spfat++;
-      break;
-    default:
-      spfat = ((bit32u) resources->tot_sectors * 4) / (SECT_SIZE * SPCLUST);
-      if (((spfat * SECT_SIZE) / 4) < ((bit32u) resources->tot_sectors / SPCLUST)) spfat++;
-  }
-  
   // calculate a good root size
   // use the default size, but round up to a multiple of SPC
   // SPCLUST will always be a power of two, so this calculation works just fine.
   root_size = (ROOT_SIZE + (SPCLUST - 1)) & ~(SPCLUST - 1);
   
-  bpb = (struct S_FAT1216_BPB *) buffer;
-  bpb32 = (struct S_FAT32_BPB *) buffer;
+  // calculate sectors per fat
+  // (this is straight from the specification)
+  unsigned TmpVal1 = (unsigned) (resources->tot_sectors - (boot_size + root_size));
+  unsigned TmpVal2 = (256 * SPCLUST) + num_fats;
+  if (FAT_TYPE == 32)
+    TmpVal2 = TmpVal2 / 2;
+  unsigned spfat = (TmpVal1 + (TmpVal2 - 1)) / TmpVal2;
+
+  // our bpb pointers
+  struct S_FAT1216_BPB *bpb = (struct S_FAT1216_BPB *) buffer;
+  struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) buffer;
   
   // buffer[] still holds the first sector of the boot code (if any)
   // create BPB/boot block
@@ -352,6 +335,35 @@ int main(int argc, char *argv[]) {
       create_label_entry(bpb32->VolName, label); // Volume Label
       memcpy(bpb32->FSType, "FAT32   ", 8);    // File system type
       break;
+  }
+
+  // Check Cluster Count
+  // A Fat-12 must be less than 4085 clusters
+  // A Fat-16 must be at least 4085 and less than 65525 clusters
+  // A Fat-32 must be at least 65525 clusters
+  unsigned RootDirSectors = ((bpb->nRootEnts * 32) + (bpb->nBytesPerSec - 1)) / bpb->nBytesPerSec;
+  unsigned total_sectors = (bpb->nSecs > 0) ? bpb->nSecs : bpb->nSecsExt;
+  unsigned DataSectors = total_sectors - (bpb->nSecRes + (bpb->nFATs * bpb->nSecPerFat) + RootDirSectors);
+  unsigned CountOfClusters = DataSectors / bpb->nSecPerClust;
+  if (FAT_TYPE == 12) {
+    if (CountOfClusters >= 4085) {
+      printf("* FAT-12 should have a cluster count less than 4085. Has %u\r\n", CountOfClusters);
+      free(buffer);
+      return -1;
+    }
+  } else if (FAT_TYPE == 16) {
+    if ((CountOfClusters < 4085) || (CountOfClusters >= 65525)) {
+      printf("* FAT-16 should have a cluster count of at least 4085\r\n"
+                "  and less than 65525. Has %u\r\n", CountOfClusters);
+      free(buffer);
+      return -1;
+    }
+  } else {
+    if (CountOfClusters < 65525) {
+      printf("* FAT-32 should have a cluster count of at least 65525. Has %u\r\n", CountOfClusters);
+      free(buffer);
+      return -1;
+    }
   }
   
   // update the sig and base lba within the given boot code
