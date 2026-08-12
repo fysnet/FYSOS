@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -61,9 +61,9 @@
  *  This is a helper C source file for a demo bootable image for UEFI.
  *
  *  Assumptions/prerequisites:
- *    32-bit only
+ *    64-bit and/or 32-bit
  *
- *  Last updated: 23 Aug 2020
+ *  Last updated: 11 Aug 2026
  *
  *  To Build:
  *   See BOOT.CPP

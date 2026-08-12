@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2020
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -74,12 +74,24 @@
  *  Assumptions/prerequisites:
  *    32-bit or 64-bit
  *
- *  Last updated: 23 Aug 2020
+ *  Last updated: 11 Aug 2026
  *
  *  To Build:
  *   Use a fairly modern compiler that can generate EFI PE/COFF files.
  *
  *   I use a Windows based compiler set for either 32-bit code or 64-bit code.
+ *
+ *   For 32-bit: (Using a 32-bit build environment)
+ *     cl boot.cpp efi_common.cpp conout.cpp /X /GS- /TP /analyze- /W3 /Zc:wchar_t-
+ *     /I.\ /Zi /Gm- /O2 /Zc:inline /fp:precise /D "NDEBUG" /errorReport:prompt /WX-
+ *     /Zc:forScope /Gd /Oy- /MD /FC /EHsc /nologo /diagnostics:classic
+ *     /link /OUT:".\BOOTIA32.EFI" /ENTRY:"efi_main" /SUBSYSTEM:EFI_APPLICATION /NODEFAULTLIB
+ *
+ *   For 64-bit: (Using a 64-bit build environment)
+ *     cl boot.cpp efi_common.cpp conout.cpp /X /GS- /TP /analyze- /W3 /Zc:wchar_t-
+ *     /I.\ /Zi /Gm- /O2 /Zc:inline /fp:precise /D "NDEBUG" /errorReport:prompt /WX-
+ *     /Zc:forScope /Gd /Oy- /MD /FC /EHsc /nologo /diagnostics:classic
+ *     /link /OUT:".\BOOTx64.EFI" /ENTRY:"efi_main" /SUBSYSTEM:EFI_APPLICATION /NODEFAULTLIB
  *
  */
 
