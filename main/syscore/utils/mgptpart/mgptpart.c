@@ -63,7 +63,7 @@
  *  Assumptions/prerequisites:
  *  
  *
- *  Last updated: 9 Aug 2026
+ *  Last updated: 17 Aug 2026
  *
  *  Compiled using (DJGPP v2.05 gcc v9.3.0) (http://www.delorie.com/djgpp/)
  *    gcc -Os mgptpart.c -o mgptpart.exe -s
@@ -73,11 +73,13 @@
  *        /WX- /Zc:forScope /FC /EHsc /nologo /diagnostics:classic /link /OUT:".\mgptpart.exe"
  *
  *  Usage:
- *    mgptpart /s:filename.txt /t:filename.bin
+ *    mgptpart /s:filename.txt /t:filename.bin /c /o
  *
  *  Where filename.txt is an input text file with a list of partitions.
  *   See samples.txt for a few samples and instructions
  *  Where filename.bin (optional) is the image file name to create  
+ *  Where /c (optional) will simply check the given target file
+ *  Where /o (optional) will overwrite the target file without asking
  */
 
 #define _CRT_SECURE_NO_WARNINGS
@@ -108,6 +110,9 @@ bool use_legacy_mbr = TRUE;  // if true, use Legacy MBR, else use Protected MBR
 // if the /c parameter is used, this code will then take the 'src_filename' file as
 //  an existing GPT image file and check it for correctness.
 bool checking = FALSE;
+
+// if the /o parameter is used, this code won't ask to overwrite the target file.
+bool overwrite = FALSE;
 
 // default values for CHS conversion
 bit32u spt = 63, numheads = 16, tot_lbas = 0, crc_entries;
@@ -274,15 +279,17 @@ int main(int argc, char *argv[]) {
   
   // create the out file
   // first try to open for read only
-  if ((targ = fopen(targ_filename, "r+b")) != NULL) {
-    fclose(targ);
-    printf("** File already exists.  Overwrite? [Y] ");
-    int i = getch();
-    if ((i != 'Y') && (i != 13))
-      return -1;
-    putch('Y');
+  if (!overwrite) {
+    if ((targ = fopen(targ_filename, "r+b")) != NULL) {
+      fclose(targ);
+      printf("** File already exists.  Overwrite? [Y] ");
+      int i = getch();
+      if ((i != 'Y') && (i != 13))
+        return -1;
+      putch('Y');
+    }
+    puts("");
   }
-  puts("");
   
   // either filename didn's exist, or it did exist and user said okay to overwrite.
   if ((targ = fopen(targ_filename, "w+b")) == NULL) {
@@ -403,6 +410,8 @@ int parse_command_line(const int argc, char *argv[]) {
       strncpy(targ_filename, &argv[i][3], 128);
     else if (strcmp(argv[i], "/c") == 0)
       checking = TRUE;
+    else if (strcmp(argv[i], "/o") == 0)
+      overwrite = TRUE;
     else
       printf(" Unknown paramter given on command line: %s\n", argv[i]);
   }
