@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -130,18 +130,18 @@ void CModeless::OnDone() {
 
 // copy the current contents of the string to the Windows clipboard
 void CModeless::OnCopy() {
-
   if (!OpenClipboard())
     return;
-
-  if (!EmptyClipboard())
-    return;
+  EmptyClipboard();
 
   size_t size = m_edit.GetLength();
-  HGLOBAL hGlob = GlobalAlloc(GMEM_FIXED, size);
+  HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, size + 1);
   if (hGlob != NULL) {
-    memcpy(hGlob, m_edit, size);
-    ::SetClipboardData(CF_TEXT, hGlob);
+    TCHAR *ptr = (TCHAR *) GlobalLock(hGlob);
+    memcpy(ptr, m_edit.GetBuffer(), size);
+    ptr[size] = 0;
+    GlobalUnlock(hGlob);
+    SetClipboardData(CF_TEXT, hGlob);
     GlobalFree(hGlob);
   }
 
