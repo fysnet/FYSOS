@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2025
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -774,10 +774,12 @@ DWORD CFat::GetNewColor(int index) {
   return RGB(r, g, b);
 }
 
+static int ben = 0;
+
 void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, const int fs_type, BOOL IsNewTab) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   DWORD rootcluster;
-  
+
   m_lba = lba;
   m_size = size;
   m_index = index;
@@ -791,7 +793,7 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   dlg->ReadFromFile(m_bpb_buffer, lba, 1);
   struct S_FAT32_BPB *bpb32 = (struct S_FAT32_BPB *) m_bpb_buffer;
   struct S_FAT1216_BPB *bpb12 = (struct S_FAT1216_BPB *) m_bpb_buffer;
-  
+
   // number of clusters in Data area
   m_clusters_in_data_area = CalcDataClusters(m_bpb_buffer, fs_type);
 
@@ -805,12 +807,12 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
   m_psp.dwFlags |= PSP_USETITLE;
   m_psp.pszTitle = dlg->m_FatNames[index];
   dlg->m_image_bar.UpdateTitle(dlg->Fat[index].m_draw_index, (char *) (LPCTSTR) dlg->m_FatNames[index]);
-  
+
   // Add the page to the control
   if (IsNewTab)
     dlg->m_TabControl.AddPage(this);
   dlg->m_TabControl.SetActivePage(this);
-  
+
   // if not FAT32, disable the FAT32 specific items
   if (fs_type != FS_FAT32) {
     GetDlgItem(IDC_FAT_SECT_FAT32)->EnableWindow(FALSE);
@@ -839,7 +841,7 @@ void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const
     AfxMessageBox("FAT:\r\nBPB Bytes per Sector doesn't equal specified bytes per sector.\r\n");
     return;
   }
-  
+
   // load the fat and folders
   if (m_isvalid) {
     m_fat_buffer = FatLoadFAT(m_fat_buffer);
@@ -2336,7 +2338,7 @@ void CFat::OnFatDelete() {
 //  then clear all remaining entries to the end.
 void CFat::OnFatOptimize() {
   CString csPath, csName, name;
-  BOOL IsDir = FALSE, IsDot = FALSE, Exit = FALSE;
+  BOOL IsDir = FALSE, IsDot = FALSE;
   int i = 0, j = -1, cnt;
   DWORD start, filesize = 0, ErrorCode;
   BYTE attrb;
@@ -2357,7 +2359,10 @@ void CFat::OnFatOptimize() {
   int EntryCount = m_rootsize / sizeof(struct S_FAT_ROOT);
 
   if (root) {
-    while (i<EntryCount && !Exit) {
+    // we need the buffer to be 1 entry larger than read...(but let's give it a few)
+    root = (struct S_FAT_ROOT *) realloc(root, m_rootsize + (sizeof(struct S_FAT_ROOT) * 10));
+
+    while (i<EntryCount) {
       cnt = 1;
       ErrorCode = CheckRootEntry(&root[i]);
       
@@ -2380,8 +2385,8 @@ void CFat::OnFatOptimize() {
       i += cnt;
     }
     
-    if ((j != -1) && (j < EntryCount)) {
-      for (j; j < EntryCount; j++) {
+    if (j != -1) {
+      for (; j<EntryCount; j++) {
         memset(&root[j], 0, sizeof(struct S_FAT_ROOT));
       }
     }
@@ -2393,7 +2398,7 @@ void CFat::OnFatOptimize() {
     WriteFile(root, &ClusterList, rootsize, IsRoot);
 
     free(root);
-
+    
     // refresh the "system"
     Start(m_lba, m_size, m_color, m_index, m_fat_size, FALSE);
   }

@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -196,11 +196,6 @@ HTREEITEM CMyTreeCtrl::GetFullPath(HTREEITEM hItem, int *IsDir, CString &csName,
       csName = "Root";
       if (IsDir) *IsDir = -1;
     }
-    
-//    CString cs;
-//    cs.Format("%s %s %i", csPath, csName, *IsDir);
-//    AfxMessageBox(cs);
-    
   }
   
   return hName;
