@@ -774,8 +774,6 @@ DWORD CFat::GetNewColor(int index) {
   return RGB(r, g, b);
 }
 
-static int ben = 0;
-
 void CFat::Start(const DWORD64 lba, const DWORD64 size, const DWORD color, const int index, const int fs_type, BOOL IsNewTab) {
   CUltimateDlg *dlg = (CUltimateDlg *) AfxGetApp()->m_pMainWnd;
   DWORD rootcluster;
