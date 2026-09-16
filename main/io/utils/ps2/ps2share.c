@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -59,11 +59,17 @@
 /*
  * Shared with ps2mouse.c and ps2key.c
  *
- *  Last updated: 12 July 2022
+ *  Last updated: 15 Sept 2026
  */
 
 #ifndef FYSOS_PS2SHARE
 #define FYSOS_PS2SHARE
+
+// A Laptop I have, has a PS2 controller (possibly emulated) that doesn't
+//   like the KEY_CMD_TEST_MP command. If a remove that command
+//   (by setting the define below to 1), this code then works just fine
+//   on that laptop.
+#define ISMOUSEPAD  0  // define this to 1 if is laptop mouse pad
 
 #define KEYBOARD_DATA  0x60
 #define KEYBRD_STATUS  0x64
@@ -113,7 +119,7 @@
 #define KEY_SET_SCALE2        0xE7   //  set mouse scale 2:1
 #define KEY_SET_RES           0xE8   //  set mouse resolution
 #define KEY_GET_MOUSE_INFO    0xE9   //  get current status information
-#define KEY_GET_STREAM_MODE   0xEA   //  get stream mode
+#define KEY_SET_STREAM_MODE   0xEA   //  set stream mode
 #define KEY_PACKET            0xEB   // ?packet (in remote mode)
 #define KEY_RESET_WRAP_MODE   0xEC   //  reset wrap mode
 #define KEY_LED_WRITE         0xED   //  set the state of the LED's
@@ -270,6 +276,7 @@ bit8u det_ps2_port(void) {
     first = 0;
   } else
     first = 1;
+#if ISMOUSEPAD == 0
   if (second) {
     keyboard_write(KEYBRD_CMND_64, KEY_CMD_TEST_MP);
     byte = keyboard_read();
@@ -278,6 +285,7 @@ bit8u det_ps2_port(void) {
       second = 0;
     }
   }
+#endif
   
   // check to see if it is a type 1 or type 2 controller
   // Only type 1 controllers will allow us to set the
