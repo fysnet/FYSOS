@@ -17,7 +17,7 @@
  *  Contact:
  *    fys [at] fysnet [dot] net
  *
- * Last update: 24 Feb 2026
+ * Last update: 9 Oct 2026
  *
  */
 
@@ -122,21 +122,26 @@ void remove_bucket(struct S_MEMORY_BUCKET *bucket) {
   }
 }
 
-// run through the bucket and get the (possibly) new largest size
-size_t bucket_update_largest(struct S_MEMORY_BUCKET *bucket) {
-  struct S_MEMORY_PEBBLE *p = bucket->first;
-  size_t ret = 0;
+// this checks the value passed compared against the bucket's largest value
+//  and updates the largest value if the size passed is greater than.
+// if the value passed is zero, we run through all in this bucket.
+void bucket_update_largest(struct S_MEMORY_BUCKET *bucket, const size_t size) {
 
-  while (p != NULL) {
-    if (p->size > ret)
-      ret = p->size;
-    p = p->next;
+  // a size was given, so only check it
+  if (size > 0) {
+    if (size > bucket->largest)
+      bucket->largest = size;
+
+  // a size was not given, so check them all
+  } else {
+    // run through the bucket and get the (possibly) new largest size
+    struct S_MEMORY_PEBBLE *p = (struct S_MEMORY_PEBBLE *) ((bit8u *) bucket + sizeof(struct S_MEMORY_BUCKET));
+    while (p != NULL) {
+      if (p->size > bucket->largest)
+        bucket->largest = p->size;
+      p = p->next;
+    }
   }
-
-  // update the value
-  bucket->largest = ret;
-
-  return ret;
 }
 
 // this takes an already created pebble and tries to place it in a bucket
@@ -151,6 +156,10 @@ struct S_MEMORY_PEBBLE *place_pebble(struct S_MEMORY_BUCKET *bucket, struct S_ME
   struct S_MEMORY_PEBBLE *ret = NULL;
   size_t needed_size, best_size = -1;
 
+  // make sure the first pebble checked is good
+  if (start == NULL)
+    start = (struct S_MEMORY_PEBBLE *) ((bit8u *) bucket + sizeof(struct S_MEMORY_BUCKET));
+
   // calculate the size we need (maybe the ALIGNMENT flag was used)
   needed_size = (pebble->lflags & PEBBLE_FLAG_ALIGNED) ? pebble->size + pebble->alignment + sizeof(struct S_MEMORY_PEBBLE) : pebble->size;
   
@@ -160,7 +169,7 @@ struct S_MEMORY_PEBBLE *place_pebble(struct S_MEMORY_BUCKET *bucket, struct S_ME
     // scroll through all the pebbles until we find a free one
     //  large enough to insert our pebble, but the least sized free
     //  entry that satisfies our request.
-    while (start != NULL) {
+    do {
       if ((PEBBLE_IS_FREE(start) && (start->size >= needed_size))) {
         if (start->size < best_size) {
           best = start;
@@ -168,7 +177,10 @@ struct S_MEMORY_PEBBLE *place_pebble(struct S_MEMORY_BUCKET *bucket, struct S_ME
         }
       }
       start = start->next;
-    }
+      if (start == NULL)
+        start = (struct S_MEMORY_PEBBLE *) ((bit8u *) bucket + sizeof(struct S_MEMORY_BUCKET));
+    } while (start != bucket->first);
+    
     // did we find one? Do we need to split it?
     if (best != NULL) {
       best = split_pebble(best, pebble);
@@ -183,7 +195,7 @@ struct S_MEMORY_PEBBLE *place_pebble(struct S_MEMORY_BUCKET *bucket, struct S_ME
     // FIRST FOUND method
     // scroll through the pebbles until we find a free one
     //  large enough to insert our pebble in.  First one found, we use.
-    while (start != NULL) {
+    do {
       if (PEBBLE_IS_FREE(start) && (start->size >= needed_size)) {
         // we found one to use.  Do we need to split it?
         start = split_pebble(start, pebble);
@@ -195,7 +207,9 @@ struct S_MEMORY_PEBBLE *place_pebble(struct S_MEMORY_BUCKET *bucket, struct S_ME
         break;
       }
       start = start->next;
-    }
+      if (start == NULL)
+        start = (struct S_MEMORY_PEBBLE *) ((bit8u *) bucket + sizeof(struct S_MEMORY_BUCKET));
+    } while (start != bucket->first);
   }
 
   return ret;
@@ -294,7 +308,7 @@ struct S_MEMORY_PEBBLE *absorb_next(struct S_MEMORY_PEBBLE *pebble) {
     pebble->next = pebble->next->next;
     if (pebble->next)
       pebble->next->prev = pebble;
-    bucket_update_largest(pebble->parent);
+    bucket_update_largest(pebble->parent, pebble->size);
   }
   return pebble;
 }
@@ -311,7 +325,7 @@ struct S_MEMORY_PEBBLE *melt_prev(struct S_MEMORY_PEBBLE *pebble) {
     if (pebble->next)
       pebble->next->prev = pebble->prev;
     pebble = pebble->prev;
-    bucket_update_largest(pebble->parent);
+    bucket_update_largest(pebble->parent, pebble->size);
   }
   return pebble;
 }
@@ -395,7 +409,7 @@ void malloc_dump(HANDLE bucket) {
 //     flags = see memory.h
 //      name = a string of characters to "mark" the memory with. (Could be disabled)
 void *kmalloc(size_t size, bit32u alignment, bit32u flags, const char *name) {
-  void *ret = NULL;
+  struct S_MEMORY_PEBBLE *ret = NULL;
 
   // set defaults
   if ((flags & (MALLOC_FLAGS_LOW1MEG | MALLOC_FLAGS_LOW16MEG | MALLOC_FLAGS_LOW4GIG)) == 0)
@@ -482,8 +496,9 @@ void *kmalloc(size_t size, bit32u alignment, bit32u flags, const char *name) {
       pebble.parent = bucket;
       ret = place_pebble(bucket, &pebble);
       if (ret != NULL) {
-        bucket_update_largest(bucket);
-        ret = (bit8u *) ret + sizeof(struct S_MEMORY_PEBBLE);
+        bucket->first = ret->next;
+        bucket_update_largest(bucket, pebble.size);
+        ret = (struct S_MEMORY_PEBBLE *) ((bit8u *) ret + sizeof(struct S_MEMORY_PEBBLE));
         spin_unlock(&bucket->spinlock);
         break;
       }
@@ -509,10 +524,12 @@ void *kmalloc(size_t size, bit32u alignment, bit32u flags, const char *name) {
       spin_lock(&bucket->spinlock);
       pebble.parent = bucket;
       ret = place_pebble(bucket, &pebble);
-      bucket_update_largest(bucket);
+      bucket_update_largest(bucket, pebble.size);
       spin_unlock(&bucket->spinlock);
-      if (ret != NULL)
-        ret = (bit8u *) ret + sizeof(struct S_MEMORY_PEBBLE);
+      if (ret != NULL) {
+        bucket->first = ret->next;
+        ret = (struct S_MEMORY_PEBBLE *) ((bit8u *) ret + sizeof(struct S_MEMORY_PEBBLE));
+      }
     }
   }
 
@@ -593,6 +610,6 @@ void mfree(void *ptr) {
     if (PEBBLE_IS_FREE(bucket->first) && (bucket->first->prev == NULL) && (bucket->first->next == NULL))
       remove_bucket(bucket);
     else
-      bucket_update_largest(bucket);
+      bucket_update_largest(bucket, 0);
   }
 }
