@@ -1,5 +1,5 @@
 /*
- *                             Copyright (c) 1984-2022
+ *                             Copyright (c) 1984-2026
  *                              Benjamin David Lunt
  *                             Forever Young Software
  *                            fys [at] fysnet [dot] net
@@ -603,7 +603,7 @@ void gLBAtoCHS(const DWORD lba, WORD *cyl, BYTE *head, BYTE *sect, const DWORD s
 /////////////////////////////////////////////////////////////////////////////
 // returns TRUE if val is a power of 2
 BOOL power_of_two(DWORD val) {
-  return ((val > 1) && ((val & (val - 1)) == 0));
+  return (val & (val - 1)) == 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////
