@@ -142,6 +142,16 @@ EFI_STATUS GetMemory(UINTN *rMemMapKey, const bool DoDisplay) {
       MemMapSize += (sizeof(struct EFI_MEMORY_DESCRIPTOR) * 16);
     }
   } while (EFI_ERROR(Status));
+
+  /*********************************
+   * Please note that by using printf() *after* getting the MemMapKey value above will modify
+   *  the memory map and when we get to the ExitBootServices call later in our code, it will
+   *  most likely not exit correctly.  You cannot use any service that will modify the
+   *  memory map after getting the MemMapKey above or the ExitBootService call will fail.
+   *
+   * I use the printf() stuff below to show the result of the above service call.
+   *  In your actual code, you will need to comment out the printf() stuff below...
+   *********************************/
   
   if (Buffer != NULL) {
     // We only want to display it once, but we call it twice
