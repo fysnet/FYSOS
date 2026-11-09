@@ -117,6 +117,10 @@ bit16u GetVideoInfo(struct S_MODE_INFO *mode_info) {
 //    printf(L"Found Video Mode:  %i x %i  (%i) (%i %i %i) %i\r\n", gop_mode_info->HorizontalResolution, gop_mode_info->VerticalResolution,
 //      gop_mode_info->PixelFormat, gop_mode_info->PixelInformation.RedMask, gop_mode_info->PixelInformation.GreenMask, gop_mode_info->PixelInformation.GreenMask,
 //      gop_mode_info->PixelsPerScanLine);
+    // Please note that 'gop->Mode->FrameBufferBase' is the frame buffer for the currently
+    //  set mode, not the mode used with the QueryMode() call above.
+    // To get the Frame Buffer for each mode, you will need to set each mode using
+    //  SetMode() and then get the Frame Buffer for that mode.
     mode_info[Cnt].lfb = gop->Mode->FrameBufferBase[0];
     mode_info[Cnt].xres = gop_mode_info->HorizontalResolution;
     mode_info[Cnt].yres = gop_mode_info->VerticalResolution;
